@@ -8,6 +8,11 @@ import {
   type AgentStatus,
   type AgentResult
 } from '../shared/contracts/agent'
+import {
+  moleChannels,
+  type MoleDryRunResult,
+  type MoleDryRunUpdate
+} from '../shared/contracts/mole'
 
 // Custom APIs for renderer
 const api: ArkiveApi = {
@@ -22,6 +27,18 @@ const api: ArkiveApi = {
       ipcRenderer.on(agentChannels.update, handler)
       return () => {
         ipcRenderer.removeListener(agentChannels.update, handler)
+      }
+    }
+  },
+  mole: {
+    dryRun: (runId) => ipcRenderer.invoke(moleChannels.dryRun, runId) as Promise<MoleDryRunResult>,
+    onUpdate: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, update: MoleDryRunUpdate): void => {
+        listener(update)
+      }
+      ipcRenderer.on(moleChannels.update, handler)
+      return () => {
+        ipcRenderer.removeListener(moleChannels.update, handler)
       }
     }
   }

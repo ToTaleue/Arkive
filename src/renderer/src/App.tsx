@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Archive,
   ChevronRight,
@@ -15,12 +15,20 @@ import {
 import { ChatPanel } from './components/ChatPanel'
 import { initialConversations, type Conversation, type PreviewMessage } from './chat-preview'
 import type { AgentStatus } from '../../shared/contracts/agent'
+import type { MoleDryRunResult, MoleOutputBlock } from '../../shared/contracts/mole'
 
 function App(): React.JSX.Element {
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 680)
   const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 960)
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
   const [activeId, setActiveId] = useState('welcome')
+  const [moleRunning, setMoleRunning] = useState(false)
+  const [moleResult, setMoleResult] = useState<MoleDryRunResult | null>(null)
+  const [moleError, setMoleError] = useState<string | null>(null)
+  const [moleBlocks, setMoleBlocks] = useState<MoleOutputBlock[]>([])
+  const [moleStage, setMoleStage] = useState<string | null>(null)
+  const moleRunId = useRef<string | null>(null)
+  const moleAvailable = Boolean(window.api?.mole && Object.hasOwn(window.api.mole, 'onUpdate'))
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(() =>
     window.api?.agent
       ? null
@@ -43,6 +51,24 @@ function App(): React.JSX.Element {
       active = false
     }
   }, [])
+  useEffect(() => {
+    const mole = window.api?.mole
+    // Renderer HMR can run ahead of a restarted preload during development.
+    if (!mole || !Object.hasOwn(mole, 'onUpdate')) return
+    const unsubscribe = mole.onUpdate((update) => {
+      if (update.runId !== moleRunId.current) return
+      if (update.event.type === 'stage') {
+        setMoleStage(update.event.title)
+      } else {
+        const { block } = update.event
+        setMoleBlocks((current) => [...current, block])
+      }
+    })
+    return () => {
+      unsubscribe()
+      moleRunId.current = null
+    }
+  }, [])
   const activeConversation = conversations.find((conversation) => conversation.id === activeId)
   if (!activeConversation) throw new Error('Active conversation is missing')
 
@@ -62,6 +88,30 @@ function App(): React.JSX.Element {
     }
     setConversations((current) => [conversation, ...current])
     setActiveId(conversation.id)
+  }
+
+  async function runMoleDryRun(): Promise<void> {
+    const mole = window.api?.mole
+    if (!mole || !moleAvailable || moleRunId.current) return
+    const runId = crypto.randomUUID()
+    moleRunId.current = runId
+    setMoleRunning(true)
+    setMoleResult(null)
+    setMoleError(null)
+    setMoleBlocks([])
+    setMoleStage(null)
+    try {
+      const result = await mole.dryRun(runId)
+      // The final snapshot also reconciles updates that arrived near process close.
+      setMoleBlocks(result.blocks)
+      setMoleResult(result)
+    } catch (error) {
+      setMoleError(error instanceof Error ? error.message : 'Mole dry run 调用失败。')
+    } finally {
+      moleRunId.current = null
+      setMoleStage(null)
+      setMoleRunning(false)
+    }
   }
 
   const appendMessages = useCallback((id: string, messages: PreviewMessage[]): void => {
@@ -301,9 +351,53 @@ function App(): React.JSX.Element {
               <div className="preview-note">
                 <ShieldCheck size={17} />
                 <p>
-                  当前已接入 Pi 对话<small>文件处理功能尚未接入</small>
+                  当前已接入 Pi 文件工具<small>支持读取、搜索和文本编辑，压缩归档尚未接入</small>
                 </p>
               </div>
+              <section className="mole-demo">
+                <div className="section-eyebrow">二进制调用测试</div>
+                <h3>Mole 清理预览</h3>
+                <p>预览可清理内容，扫描结果会按章节陆续显示，不执行清理。</p>
+                <button
+                  className="mole-demo-button"
+                  onClick={() => void runMoleDryRun()}
+                  disabled={moleRunning || !moleAvailable}
+                >
+                  {moleRunning ? 'Mole dry run 运行中…' : '运行 Mole dry run'}
+                </button>
+                {window.api?.mole && !moleAvailable && <p>请重启 Electron，以加载分段预览功能。</p>}
+                {moleRunning && (
+                  <p role="status">
+                    {moleStage ? `当前阶段：${moleStage}` : '正在启动 Mole…'}
+                    {` · 已收到 ${String(moleBlocks.length)} 段`}
+                  </p>
+                )}
+                {moleError && <p className="mole-demo-error">{moleError}</p>}
+                {moleResult && (
+                  <p className="mole-demo-result" role="status">
+                    {moleResult.exitCode === 0
+                      ? 'Dry run 已结束，未执行清理。'
+                      : `Dry run 未正常完成（${moleResult.signal ?? String(moleResult.exitCode ?? 'unknown')}），以下内容可能不完整。`}
+                  </p>
+                )}
+                {(moleResult?.stdoutTruncated || moleResult?.stderrTruncated) && (
+                  <p className="mole-demo-error">输出较长，已达到保留上限，以下为部分日志。</p>
+                )}
+                {moleBlocks.length > 0 && (
+                  <div className="mole-output" aria-label="Mole 分段输出">
+                    {moleBlocks.map((block) => (
+                      <details key={block.id} className="mole-output-block" open>
+                        <summary>
+                          {block.title}
+                          {block.continued && '（续）'}
+                          {block.partial && ' · 内容可能不完整'}
+                        </summary>
+                        <pre>{block.text}</pre>
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           </aside>
         )}

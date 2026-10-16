@@ -1,3 +1,5 @@
+import type { MoleApi } from './mole'
+
 export const agentChannels = {
   status: 'agent:status',
   send: 'agent:send',
@@ -21,6 +23,7 @@ export interface AgentApi {
 }
 export interface ArkiveApi {
   agent: AgentApi
+  mole: MoleApi
 }
 
 export function isAgentRunId(value: unknown): value is AgentRunId {

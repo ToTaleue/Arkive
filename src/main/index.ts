@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { loadAgentEnvironment } from './modules/agent/config'
 import { registerAgentIpc } from './modules/agent/ipc'
+import { registerMoleIpc } from './modules/mole/ipc'
 
 function createWindow(attachAgent: (contents: Electron.WebContents) => void): void {
   // Create the browser window.
@@ -58,6 +59,7 @@ app
   .then(() => {
     loadAgentEnvironment(app.getAppPath(), app.isPackaged)
     const attachAgent = registerAgentIpc(app.getPath('userData'))
+    registerMoleIpc()
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.electron')
 

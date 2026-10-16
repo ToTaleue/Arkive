@@ -659,6 +659,79 @@ body,
   border-top: 1px solid #30342d;
   color: #7d917a;
 }
+.mole-demo {
+  margin-top: 24px;
+  padding: 14px;
+  border: 1px solid #303b34;
+  border-radius: 10px;
+  background: #222b25;
+}
+.mole-demo h3 {
+  margin-top: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d7e2d9;
+}
+.mole-demo > p {
+  margin-top: 6px;
+  color: #9ca99f;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.mole-demo-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 11px;
+  border: 1px solid #607866;
+  border-radius: 7px;
+  color: #dce9df;
+  background: #35483a;
+  font-size: 12px;
+  text-align: center;
+}
+.mole-demo-button:hover:not(:disabled) {
+  background: #405846;
+}
+.mole-demo-button:disabled {
+  color: #849087;
+  border-color: #48564b;
+  background: #2c352e;
+}
+.mole-demo-error,
+.mole-demo-result {
+  margin-top: 8px !important;
+}
+.mole-demo-error {
+  color: #e0a3a3 !important;
+}
+.mole-demo-result {
+  color: #b8d0bd !important;
+}
+.mole-output {
+  max-height: 360px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+.mole-output-block {
+  border-top: 1px solid #3a473e;
+  padding: 9px 0;
+}
+.mole-output-block summary {
+  cursor: pointer;
+  color: #cadbce;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.mole-output-block pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #a7b8ac;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1.7;
+  user-select: text;
+}
 .preview-note p {
   color: #929f8d;
   font-size: 11px;
