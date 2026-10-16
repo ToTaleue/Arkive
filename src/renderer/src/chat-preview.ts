@@ -1,4 +1,4 @@
-// Local-only UI preview data. No IPC, model requests, or filesystem access.
+// In-memory UI data; seeded examples are read-only and never sent to Pi.
 export type PreviewMessage = { id: string; role: 'user' | 'assistant'; content: string }
 export type Conversation = {
   id: string
@@ -42,11 +42,3 @@ export const initialConversations: Conversation[] = [
     ]
   }
 ]
-
-export function createPreviewReply(input: string): string {
-  if (/视频|压缩|画质/.test(input))
-    return '可以先围绕这批文件确认画质、目标大小和原件保留方式，再比较处理前后的效果。\n\n这是一条本地演示回复，用于预览聊天界面；目前没有读取文件或执行压缩。'
-  if (/微信|归档|整理|资料/.test(input))
-    return '可以先说说想整理哪些资料，以及之后希望怎样找到它们。我们可以从分类、存放位置和原件保留方式开始。\n\n这是一条本地演示回复，目前没有创建归档或修改文件。'
-  return '收到，你的消息已经显示在当前会话中。\n\n你可以继续发送消息、新建或切换会话，也可以收起左右面板，看看更专注的对话布局。\n\n这是一条本地演示回复，尚未连接 AI 服务。'
-}

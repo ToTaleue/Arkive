@@ -4,7 +4,6 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
   useExternalStoreRuntime,
-  type AppendMessage,
   type ThreadMessageLike
 } from '@assistant-ui/react'
 import {
@@ -16,10 +15,13 @@ import {
   FolderArchive,
   Image,
   MessageSquare,
-  ShieldCheck
+  ShieldCheck,
+  Square
 } from 'lucide-react'
-import { createPreviewReply, type Conversation, type PreviewMessage } from '../chat-preview'
+import { type Conversation, type PreviewMessage } from '../chat-preview'
 import { useRef } from 'react'
+import { useAgentChat } from './useAgentChat'
+import type { AgentStatus } from '../../../shared/contracts/agent'
 
 const suggestions = [
   {
@@ -68,7 +70,6 @@ function AssistantMessage(): React.JSX.Element {
       <div className="assistant-identity">
         <Archive size={16} />
         <span>Arkive</span>
-        <span className="demo-label">演示</span>
       </div>
       <div className="assistant-message-content">
         <MessagePrimitive.Parts />
@@ -79,26 +80,31 @@ function AssistantMessage(): React.JSX.Element {
 
 type ChatPanelProps = {
   conversation: Conversation
+  status: AgentStatus | null
   onAppend: (id: string, messages: PreviewMessage[]) => void
+  onUpdate: (id: string, message: PreviewMessage) => void
 }
 
-export function ChatPanel({ conversation, onAppend }: ChatPanelProps): React.JSX.Element {
+export function ChatPanel({
+  conversation,
+  status,
+  onAppend,
+  onUpdate
+}: ChatPanelProps): React.JSX.Element {
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const { isRunning, error, notice, send, stop } = useAgentChat({
+    conversation,
+    status,
+    onAppend,
+    onUpdate
+  })
   const runtime = useExternalStoreRuntime({
     messages: conversation.messages,
     convertMessage,
-    isRunning: false,
-    onNew: async (message: AppendMessage) => {
-      const text = message.content
-        .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-        .join('\n')
-        .trim()
-      if (!text) return
-      onAppend(conversation.id, [
-        { id: crypto.randomUUID(), role: 'user', content: text },
-        { id: crypto.randomUUID(), role: 'assistant', content: createPreviewReply(text) }
-      ])
-    }
+    isRunning,
+    isDisabled: conversation.example || !status?.configured,
+    onNew: send,
+    onCancel: stop
   })
 
   return (
@@ -135,10 +141,36 @@ export function ChatPanel({ conversation, onAppend }: ChatPanelProps): React.JSX
             </div>
           )}
           <div className="message-list" role="log" aria-label="对话消息" aria-live="polite">
-            <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage }} />
+            <ThreadPrimitive.Messages>
+              {({ message }) => {
+                if (message.role === 'user') return <UserMessage />
+                if (message.role === 'assistant') return <AssistantMessage />
+                return null
+              }}
+            </ThreadPrimitive.Messages>
           </div>
         </ThreadPrimitive.Viewport>
         <div className="composer-area">
+          {isRunning && (
+            <p className="chat-notice" role="status">
+              Arkive 正在回复…
+            </p>
+          )}
+          {!isRunning && notice && (
+            <p className="chat-notice" role="status">
+              {notice}
+            </p>
+          )}
+          {error && (
+            <p className="chat-error" role="alert">
+              {error}
+            </p>
+          )}
+          {!conversation.example && status?.error && (
+            <p className="chat-error" role="alert">
+              {status.error}
+            </p>
+          )}
           <ThreadPrimitive.ScrollToBottom
             className="scroll-to-bottom"
             aria-label="滚动到最新消息"
@@ -153,26 +185,44 @@ export function ChatPanel({ conversation, onAppend }: ChatPanelProps): React.JSX
               placeholder="告诉 Arkive，你想整理什么？"
               aria-label="输入消息"
               rows={2}
+              maxLength={32_000}
+              disabled={isRunning || conversation.example || !status?.configured}
               submitMode="enter"
             />
             <div className="composer-toolbar">
               <span className="composer-mode">
                 <ShieldCheck size={14} />
-                演示模式
+                {conversation.example ? '示例对话 · 只读' : 'Pi 对话'}
               </span>
               <div className="composer-actions">
                 <span className="composer-shortcut">Enter 发送 · Shift + Enter 换行</span>
-                <ComposerPrimitive.Send
-                  className="send-button"
-                  aria-label="发送消息"
-                  title="发送消息"
-                >
-                  <ArrowUp size={18} />
-                </ComposerPrimitive.Send>
+                {isRunning ? (
+                  <ComposerPrimitive.Cancel
+                    className="send-button"
+                    aria-label="停止生成"
+                    title="停止生成"
+                  >
+                    <Square size={14} />
+                  </ComposerPrimitive.Cancel>
+                ) : (
+                  <ComposerPrimitive.Send
+                    className="send-button"
+                    aria-label="发送消息"
+                    title="发送消息"
+                  >
+                    <ArrowUp size={18} />
+                  </ComposerPrimitive.Send>
+                )}
               </div>
             </div>
           </ComposerPrimitive.Root>
-          <p className="composer-caption">本地界面预览 · 不连接 AI 服务，不处理真实文件</p>
+          <p className="composer-caption">
+            {conversation.example
+              ? '示例内容不发送给模型，请新建对话开始聊天'
+              : status?.configured
+                ? `${status.model} · 仅对话，消息发送至所配置的模型服务 · 不操作文件`
+                : '填写 .env.local 后重启 Electron 即可开始对话'}
+          </p>
         </div>
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>

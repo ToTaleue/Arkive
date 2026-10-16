@@ -512,6 +512,23 @@ body,
   margin-top: 11px;
   line-height: 1.5;
 }
+.chat-notice,
+.chat-error {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.chat-notice {
+  color: #a4b9a9;
+}
+.chat-error {
+  color: #e0b8a9;
+  background: #392c27;
+  border: 1px solid #63483c;
+  border-radius: 8px;
+}
 .scroll-to-bottom {
   position: absolute;
   left: calc(50% - 16px);

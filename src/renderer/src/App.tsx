@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Archive,
   ChevronRight,
@@ -14,13 +14,37 @@ import {
 } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
 import { initialConversations, type Conversation, type PreviewMessage } from './chat-preview'
+import type { AgentStatus } from '../../shared/contracts/agent'
 
 function App(): React.JSX.Element {
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 680)
   const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 960)
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
   const [activeId, setActiveId] = useState('welcome')
-  const activeConversation = conversations.find((conversation) => conversation.id === activeId)!
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(() =>
+    window.api?.agent
+      ? null
+      : { configured: false, model: '', error: '请在 Electron 桌面应用中使用真实对话。' }
+  )
+  useEffect(() => {
+    let active = true
+    const agent = window.api?.agent
+    if (!agent) return
+    agent
+      .status()
+      .then((status) => {
+        if (active) setAgentStatus(status)
+      })
+      .catch(() => {
+        if (active)
+          setAgentStatus({ configured: false, model: '', error: '无法读取模型配置，请重启应用。' })
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+  const activeConversation = conversations.find((conversation) => conversation.id === activeId)
+  if (!activeConversation) throw new Error('Active conversation is missing')
 
   function newConversation(): void {
     const emptyConversation = conversations.find(
@@ -40,7 +64,7 @@ function App(): React.JSX.Element {
     setActiveId(conversation.id)
   }
 
-  function appendMessages(id: string, messages: PreviewMessage[]): void {
+  const appendMessages = useCallback((id: string, messages: PreviewMessage[]): void => {
     setConversations((current) =>
       current.map((conversation) =>
         conversation.id === id
@@ -55,7 +79,22 @@ function App(): React.JSX.Element {
           : conversation
       )
     )
-  }
+  }, [])
+
+  const updateMessage = useCallback((id: string, message: PreviewMessage): void => {
+    setConversations((current) =>
+      current.map((conversation) => {
+        if (conversation.id !== id) return conversation
+        const exists = conversation.messages.some((item) => item.id === message.id)
+        return {
+          ...conversation,
+          messages: exists
+            ? conversation.messages.map((item) => (item.id === message.id ? message : item))
+            : [...conversation.messages, message]
+        }
+      })
+    )
+  }, [])
 
   return (
     <div className="app-shell">
@@ -69,7 +108,7 @@ function App(): React.JSX.Element {
         </div>
         <span className="preview-badge">
           <span />
-          本地预览
+          {agentStatus?.configured ? 'Pi 对话' : '待配置模型'}
         </span>
       </header>
       <div className="workspace">
@@ -89,7 +128,9 @@ function App(): React.JSX.Element {
             aria-label="切换会话列表"
             aria-controls="conversation-sidebar"
             aria-expanded={leftOpen}
-            onClick={() => setLeftOpen(!leftOpen)}
+            onClick={() => {
+              setLeftOpen(!leftOpen)
+            }}
           >
             <MessageSquare size={21} strokeWidth={1.6} />
           </button>
@@ -99,7 +140,9 @@ function App(): React.JSX.Element {
             aria-label="切换工作区"
             aria-controls="details-sidebar"
             aria-expanded={rightOpen}
-            onClick={() => setRightOpen(!rightOpen)}
+            onClick={() => {
+              setRightOpen(!rightOpen)
+            }}
           >
             <FolderOpen size={21} strokeWidth={1.6} />
           </button>
@@ -117,7 +160,9 @@ function App(): React.JSX.Element {
                 className="icon-button"
                 title="收起会话列表"
                 aria-label="收起会话列表"
-                onClick={() => setLeftOpen(false)}
+                onClick={() => {
+                  setLeftOpen(false)
+                }}
               >
                 <PanelLeft size={18} />
               </button>
@@ -137,7 +182,9 @@ function App(): React.JSX.Element {
                         key={conversation.id}
                         className={`conversation-item ${activeId === conversation.id ? 'selected' : ''}`}
                         aria-current={activeId === conversation.id ? 'page' : undefined}
-                        onClick={() => setActiveId(conversation.id)}
+                        onClick={() => {
+                          setActiveId(conversation.id)
+                        }}
                         title={conversation.title}
                       >
                         <MessageSquare size={15} />
@@ -162,7 +209,9 @@ function App(): React.JSX.Element {
                   className="icon-button"
                   title="展开会话列表"
                   aria-label="展开会话列表"
-                  onClick={() => setLeftOpen(true)}
+                  onClick={() => {
+                    setLeftOpen(true)
+                  }}
                 >
                   <PanelLeft size={18} />
                 </button>
@@ -175,7 +224,9 @@ function App(): React.JSX.Element {
               aria-label={rightOpen ? '收起工作区' : '展开工作区'}
               aria-expanded={rightOpen}
               aria-controls="details-sidebar"
-              onClick={() => setRightOpen(!rightOpen)}
+              onClick={() => {
+                setRightOpen(!rightOpen)
+              }}
             >
               <PanelRight size={18} />
             </button>
@@ -186,7 +237,12 @@ function App(): React.JSX.Element {
               className="conversation-view"
               hidden={conversation.id !== activeId}
             >
-              <ChatPanel conversation={conversation} onAppend={appendMessages} />
+              <ChatPanel
+                conversation={conversation}
+                status={agentStatus}
+                onAppend={appendMessages}
+                onUpdate={updateMessage}
+              />
             </div>
           ))}
         </main>
@@ -201,7 +257,9 @@ function App(): React.JSX.Element {
                 className="icon-button"
                 title="关闭工作区"
                 aria-label="关闭工作区"
-                onClick={() => setRightOpen(false)}
+                onClick={() => {
+                  setRightOpen(false)
+                }}
               >
                 <X size={17} />
               </button>
@@ -243,7 +301,7 @@ function App(): React.JSX.Element {
               <div className="preview-note">
                 <ShieldCheck size={17} />
                 <p>
-                  当前为界面预览<small>不会扫描或修改你的文件</small>
+                  当前已接入 Pi 对话<small>文件处理功能尚未接入</small>
                 </p>
               </div>
             </div>

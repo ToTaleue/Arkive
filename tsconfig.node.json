@@ -1,7 +1,16 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "src/execution/**/*"],
+  "include": [
+    "electron.vite.config.*",
+    "scripts/check-agent.mts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/execution/**/*",
+    "src/shared/**/*"
+  ],
   "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
     "composite": true,
     "types": ["electron-vite/node"]
   }

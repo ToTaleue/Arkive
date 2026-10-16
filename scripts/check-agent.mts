@@ -1,0 +1,205 @@
+// Real Pi SDK + local streaming HTTP fixture; no external key or network needed.
+import assert from 'node:assert/strict'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { build } from 'vite'
+import type { AgentService as Service } from '../src/main/modules/agent/service'
+import type { AgentResult, AgentUpdate } from '../src/shared/contracts/agent'
+
+type FixtureMessage = { role: string; content: string | { type: string; text?: string }[] }
+type FixtureRequest = { stream: boolean; tools?: unknown[]; messages: FixtureMessage[] }
+function messageText(message: FixtureMessage): string {
+  return typeof message.content === 'string'
+    ? message.content
+    : message.content
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text ?? '')
+        .join('')
+}
+
+await mkdir('out', { recursive: true })
+const buildDir = await mkdtemp(resolve('out/agent-check-'))
+const requests: FixtureRequest[] = []
+let serverFailure: unknown
+const server = createServer((request, response) => {
+  void handleRequest(request, response)
+})
+async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  try {
+    assert.equal(request.url, '/v1/chat/completions')
+    assert.equal(request.headers.authorization, 'Bearer local-test-key')
+    const chunks: Buffer[] = []
+    for await (const chunk of request) {
+      assert.ok(Buffer.isBuffer(chunk))
+      chunks.push(chunk)
+    }
+    // The fixture consumes our Pi SDK's Chat Completions request shape.
+    const body = JSON.parse(Buffer.concat(chunks).toString()) as FixtureRequest
+    requests.push(body)
+    assert.equal(body.stream, true)
+    assert.ok(!body.tools?.length, 'No filesystem or shell tools may be sent')
+    const users = body.messages
+      .filter((message) => message.role === 'user')
+      .map((message) => ({
+        ...message,
+        content: messageText(message)
+      }))
+    const last = users.at(-1)?.content
+    if (last === 'FAIL') {
+      response.writeHead(401, { 'Content-Type': 'application/json' })
+      response.end(
+        JSON.stringify({
+          error: { message: 'invalid local-test-key', type: 'authentication_error' }
+        })
+      )
+      return
+    }
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+    const send = (
+      delta: { role?: string; content?: string },
+      finishReason: string | null = null
+    ): void => {
+      response.write(
+        `data: ${JSON.stringify({ id: 'local-completion', object: 'chat.completion.chunk', created: 1, model: 'local-model', choices: [{ index: 0, delta, finish_reason: finishReason }] })}\n\n`
+      )
+    }
+    send({ role: 'assistant', content: '' })
+    if (last === 'SLOW') {
+      send({ content: '部分回复' })
+      const timer = setTimeout(() => {
+        send({}, 'stop')
+        response.end('data: [DONE]\n\n')
+      }, 10_000)
+      response.on('close', () => clearTimeout(timer))
+      return
+    }
+    const answer = `用户轮次=${users.length}；首条=${users[0]?.content}`
+    send({ content: answer.slice(0, 5) })
+    send({ content: answer.slice(5) })
+    send({}, 'stop')
+    response.end('data: [DONE]\n\n')
+  } catch (error) {
+    serverFailure = error
+    response.writeHead(500)
+    response.end('fixture failed')
+  }
+}
+
+let service: Service | undefined
+try {
+  await new Promise<void>((done) => {
+    server.listen(0, '127.0.0.1', done)
+  })
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+  const port = address.port
+  Object.assign(process.env, {
+    ARKIVE_AI_PROVIDER: 'openai-compatible',
+    ARKIVE_AI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+    ARKIVE_AI_MODEL: 'local-model',
+    ARKIVE_AI_API_KEY: 'local-test-key'
+  })
+  await build({
+    configFile: false,
+    logLevel: 'silent',
+    build: {
+      ssr: true,
+      target: 'node22',
+      outDir: buildDir,
+      emptyOutDir: false,
+      rollupOptions: {
+        input: {
+          service: resolve('src/main/modules/agent/service.ts'),
+          contracts: resolve('src/shared/contracts/agent.ts'),
+          config: resolve('src/main/modules/agent/config.ts')
+        },
+        output: { format: 'es', entryFileNames: '[name].mjs' }
+      }
+    }
+  })
+  const { AgentService } = (await import(
+    pathToFileURL(resolve(buildDir, 'service.mjs')).href
+  )) as typeof import('../src/main/modules/agent/service')
+  const { isAgentRequest } = (await import(
+    pathToFileURL(resolve(buildDir, 'contracts.mjs')).href
+  )) as typeof import('../src/shared/contracts/agent')
+  const { agentStatus } = (await import(
+    pathToFileURL(resolve(buildDir, 'config.mjs')).href
+  )) as typeof import('../src/main/modules/agent/config')
+  assert.equal(isAgentRequest({ conversationId: 'a', requestId: 'a1', text: 'hello' }), true)
+  assert.equal(isAgentRequest({ conversationId: '../bad', requestId: 'a1', text: 'hello' }), false)
+  assert.equal(isAgentRequest({ conversationId: 'a', requestId: 'a1', text: ' '.repeat(2) }), false)
+  assert.equal(
+    isAgentRequest({ conversationId: 'a', requestId: 'a1', text: 'x'.repeat(32_001) }),
+    false
+  )
+  assert.equal(JSON.stringify(agentStatus()).includes('local-test-key'), false)
+  const currentService = new AgentService(buildDir)
+  service = currentService
+  const updates: AgentUpdate[] = []
+  const send = (conversationId: string, requestId: string, text: string): Promise<AgentResult> =>
+    currentService.send({ conversationId, requestId, text }, (update) => {
+      updates.push(update)
+    })
+  assert.deepEqual(await send('a', 'a1', '记住：松果'), {
+    status: 'completed',
+    text: '用户轮次=1；首条=记住：松果'
+  })
+  assert.deepEqual(await send('a', 'a2', '我刚才说了什么？'), {
+    status: 'completed',
+    text: '用户轮次=2；首条=记住：松果'
+  })
+  const second = requests[1].messages
+  assert.ok(
+    second.some(
+      (message) => message.role === 'assistant' && messageText(message).includes('用户轮次=1')
+    ),
+    'Previous assistant reply is sent in the next model request'
+  )
+  assert.deepEqual(await send('b', 'b1', '独立会话'), {
+    status: 'completed',
+    text: '用户轮次=1；首条=独立会话'
+  })
+  assert.equal(updates.filter((update) => update.requestId === 'a1').length, 2)
+
+  const slow = currentService.send(
+    { conversationId: 'a', requestId: 'slow', text: 'SLOW' },
+    (update) => {
+      updates.push(update)
+      if (update.text) void currentService.stop({ conversationId: 'a', requestId: 'slow' })
+    }
+  )
+  const duplicate = await send('a', 'duplicate', '不要重复发送')
+  assert.equal(duplicate.status, 'error')
+  assert.equal((await slow).status, 'cancelled')
+  assert.equal((await send('a', 'after-stop', '继续')).status, 'completed')
+
+  const failed = await send('a', 'failed', 'FAIL')
+  assert.ok(failed.status === 'error')
+  assert.equal(failed.error.includes('local-test-key'), false)
+  assert.equal((await send('a', 'after-failure', '再次继续')).status, 'completed')
+
+  const pending = send('new', 'early-stop', '未开始就取消')
+  await currentService.stop({ conversationId: 'new', requestId: 'early-stop' })
+  assert.equal((await pending).status, 'cancelled')
+  delete process.env.ARKIVE_AI_API_KEY
+  assert.equal(agentStatus().configured, false)
+  assert.equal((await send('missing-key', 'no-key', '你好')).status, 'error')
+  currentService.dispose()
+  assert.equal((await send('a', 'closed', '你好')).status, 'error')
+  if (serverFailure) throw serverFailure
+  console.log(
+    'PASS: Pi streaming, multi-turn history, conversation isolation, duplicate sends, cancellation, recovery, missing key, validation and key redaction.'
+  )
+} finally {
+  service?.dispose()
+  server.closeAllConnections()
+  await new Promise<void>((done) => {
+    server.close(() => {
+      done()
+    })
+  })
+  await rm(buildDir, { recursive: true, force: true })
+}
