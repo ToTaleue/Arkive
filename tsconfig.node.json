@@ -3,6 +3,7 @@
   "include": [
     "electron.vite.config.*",
     "scripts/check-agent.mts",
+    "scripts/check-image-compression.mts",
     "src/main/**/*",
     "src/preload/**/*",
     "src/execution/**/*",
