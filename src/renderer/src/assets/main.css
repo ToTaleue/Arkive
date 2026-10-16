@@ -429,6 +429,131 @@ body,
 .assistant-message-content {
   color: #c5c6c3;
 }
+.chat-markdown {
+  min-width: 0;
+  white-space: normal;
+}
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+.chat-markdown p,
+.chat-markdown ul,
+.chat-markdown ol,
+.chat-markdown blockquote,
+.chat-markdown pre,
+.chat-markdown-table {
+  margin: 0 0 14px;
+}
+.chat-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 24px 0 12px;
+  color: #e0e1df;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.chat-markdown h1 {
+  font-size: 1.5em;
+}
+.chat-markdown h2 {
+  font-size: 1.3em;
+}
+.chat-markdown h3 {
+  font-size: 1.15em;
+}
+.chat-markdown :is(h4, h5, h6) {
+  font-size: 1em;
+}
+.chat-markdown :is(ul, ol) {
+  padding-left: 24px;
+}
+.chat-markdown li + li {
+  margin-top: 4px;
+}
+.chat-markdown li > :is(ul, ol) {
+  margin: 4px 0 0;
+}
+.chat-markdown li > p {
+  margin-bottom: 6px;
+}
+.chat-markdown .task-list-item {
+  list-style: none;
+}
+.chat-markdown .task-list-item > input {
+  margin: 0 8px 0 -20px;
+  accent-color: var(--accent);
+}
+.chat-markdown blockquote {
+  border-left: 3px solid #58635b;
+  padding: 2px 0 2px 14px;
+  color: #a1aaa3;
+}
+.chat-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+.chat-markdown strong {
+  color: #e0e1df;
+  font-weight: 600;
+}
+.chat-markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chat-markdown :is(a, .chat-markdown-table):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.chat-markdown code {
+  border-radius: 4px;
+  background: #2b2e2b;
+  padding: 2px 5px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.9em;
+}
+.chat-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #151715;
+  padding: 14px 16px;
+  line-height: 1.65;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.chat-markdown pre code {
+  background: none;
+  padding: 0;
+}
+.chat-markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.chat-markdown table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.chat-markdown :is(th, td) {
+  min-width: 90px;
+  border: 1px solid #3c403a;
+  padding: 8px 12px;
+  text-align: left;
+}
+.chat-markdown th {
+  color: #e0e1df;
+  background: #272b27;
+}
+.chat-markdown hr {
+  margin: 20px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.chat-markdown img {
+  max-width: 100%;
+  height: auto;
+}
 .composer-area {
   width: 100%;
   max-width: 792px;

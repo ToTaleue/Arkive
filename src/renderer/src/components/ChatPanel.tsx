@@ -21,6 +21,7 @@ import {
 import { type Conversation, type PreviewMessage } from '../chat-preview'
 import { useRef } from 'react'
 import { useAgentChat } from './useAgentChat'
+import { MessageMarkdown } from './MessageMarkdown'
 import type { AgentStatus } from '../../../shared/contracts/agent'
 
 const suggestions = [
@@ -72,7 +73,7 @@ function AssistantMessage(): React.JSX.Element {
         <span>Arkive</span>
       </div>
       <div className="assistant-message-content">
-        <MessagePrimitive.Parts />
+        <MessagePrimitive.Parts components={{ Text: MessageMarkdown }} />
       </div>
     </MessagePrimitive.Root>
   )
