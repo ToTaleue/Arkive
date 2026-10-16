@@ -1,0 +1,77 @@
+{
+  "platform": "darwin-arm64",
+  "tools": [
+    {
+      "name": "ffmpeg",
+      "version": "9.0.2",
+      "executable": "ffmpeg",
+      "download": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip",
+      "archiveSha256": "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
+      "checksumUrl": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip.sha256",
+      "license": "GPL-3.0-or-later",
+      "licenseNotice": "licenses/ffmpeg-license.txt",
+      "upstreamSource": "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+      "buildScripts": "https://git.martin-riedl.de/ffmpeg/build-script",
+      "binarySha256": "2e11c6f90993cdb79fff84d3f90044d28316b310e75b3e030cfc9a54f2c9d384",
+      "licenseFile": "licenses/GPL-3.0.txt"
+    },
+    {
+      "name": "ffprobe",
+      "version": "9.0.2",
+      "executable": "ffprobe",
+      "download": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffprobe.zip",
+      "archiveSha256": "fcbe839537485eaee7a7a8bc5cbc0f90d53617e80943e8a5b2e31cb851197ea6",
+      "checksumUrl": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffprobe.zip.sha256",
+      "license": "GPL-3.0-or-later",
+      "licenseNotice": "licenses/ffprobe-license.txt",
+      "upstreamSource": "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+      "buildScripts": "https://git.martin-riedl.de/ffmpeg/build-script",
+      "binarySha256": "2738aa46a7f9acbc8ab09a6715554c90f7de603171ac403726765685df6a0059",
+      "licenseFile": "licenses/GPL-3.0.txt"
+    },
+    {
+      "name": "mole",
+      "version": "1.59.1",
+      "executable": "mole/mo",
+      "runtimeDownload": "https://codeload.github.com/tw93/Mole/tar.gz/refs/tags/V1.59.1",
+      "runtimeArchiveSha256": "6c114193a1f3b61c4cee3910b10b6a91beafbcff6aa300f4e7decc42c272bf27",
+      "binaryDownload": "https://github.com/tw93/Mole/releases/download/V1.59.1/binaries-darwin-arm64.tar.gz",
+      "binaryArchiveSha256": "d3f916c3f8355a06645c458f7b169fc51e6372290f31009bdee62e80344fc3a8",
+      "checksumUrl": "https://github.com/tw93/Mole/releases/download/V1.59.1/SHA256SUMS",
+      "license": "GPL-3.0-only",
+      "licenseFile": "mole/LICENSE",
+      "upstreamSource": "https://github.com/tw93/Mole/tree/V1.59.1",
+      "binarySha256": {
+        "analyze-go": "c16ac20b06813540698fcb8c006ccf813f9043034a2a7a78bf43a1cf62b39519",
+        "status-go": "04c412f3dec65781b9e69e8a20bcdaa2d217f27cf0eda52843aea910ade39ef6"
+      }
+    },
+    {
+      "name": "czkawka_cli",
+      "version": "12.0.2",
+      "executable": "czkawka_cli",
+      "download": "https://github.com/qarmin/czkawka/releases/download/12.0.2/mac_czkawka_cli_arm64",
+      "binarySha256": "3362df5776b209b6365482768bc960e5a853f1b554787954c4a4c64e90bc2c75",
+      "checksumUrl": "https://github.com/qarmin/czkawka/releases/expanded_assets/12.0.2",
+      "license": "MIT",
+      "licenseFile": "licenses/czkawka-cli-MIT.txt",
+      "upstreamSource": "https://github.com/qarmin/czkawka/tree/12.0.2"
+    },
+    {
+      "name": "qpdf",
+      "version": "12.4.2",
+      "executable": "qpdf/bin/qpdf",
+      "download": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-macos-arm64.zip",
+      "archiveSha256": "62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79",
+      "checksumUrl": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2.sha256",
+      "license": "Apache-2.0",
+      "licenseFile": "qpdf/LICENSE.txt",
+      "licenseNotice": "qpdf/NOTICE.md",
+      "upstreamSource": "https://github.com/qpdf/qpdf/tree/v12.4.2",
+      "binarySha256": {
+        "bin/qpdf": "46b699e2560a8c092a07a8a1e7107c59ac72f5cc51939d3f693f3d23e8027e83",
+        "lib/libqpdf.30.4.2.dylib": "216e5544708b39781a2b65f3750adbcee96582e05ea2e47d892201f266b10e8f"
+      }
+    }
+  ]
+}

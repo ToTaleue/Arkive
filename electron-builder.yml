@@ -3,6 +3,7 @@ productName: arkive
 directories:
   buildResources: build
 files:
+  - '!resources/tools/**'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
@@ -19,6 +20,11 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  extraResources:
+    - from: resources/tools/darwin-${arch}
+      to: tools
+      filter:
+        - '**/*'
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.

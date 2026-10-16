@@ -1,1 +1,5 @@
-// FFmpeg 子进程执行封装，暂未实现。
+import { spawnBundledTool, type ToolProcess, type ToolProcessOptions } from './process'
+
+export function spawnFfmpeg(args: readonly string[], options?: ToolProcessOptions): ToolProcess {
+  return spawnBundledTool('ffmpeg', ['-nostdin', ...args], options)
+}
