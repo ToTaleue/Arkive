@@ -8,3 +8,8 @@ export function spawnMoleAnalysis(directory: string, options?: ToolProcessOption
 export function spawnMoleStatus(options?: ToolProcessOptions): ToolProcess {
   return spawnBundledTool('mole', ['status', '--json'], options)
 }
+
+/** Preview Mole's cleanup plan without changing any files. */
+export function spawnMoleCleanDryRun(options?: ToolProcessOptions): ToolProcess {
+  return spawnBundledTool('mole', ['clean', '--dry-run'], options)
+}

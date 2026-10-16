@@ -220,7 +220,7 @@ export function ChatPanel({
             {conversation.example
               ? '示例内容不发送给模型，请新建对话开始聊天'
               : status?.configured
-                ? `${status.model} · 仅对话，消息发送至所配置的模型服务 · 不操作文件`
+                ? `${status.model} · 支持文件工具和 Mole 清理预览 · 消息及工具结果发送至所配置的模型服务`
                 : '填写 .env.local 后重启 Electron 即可开始对话'}
           </p>
         </div>

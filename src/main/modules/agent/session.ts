@@ -1,6 +1,7 @@
 import type { AgentSession, ResourceLoader } from '@earendil-works/pi-coding-agent'
 import { readAgentConfig } from './config'
 import { arkiveSystemPrompt } from './prompt'
+import { createArkiveTools } from './tools'
 
 export async function createChatSession(cwd: string): Promise<AgentSession> {
   const config = readAgentConfig()
@@ -68,8 +69,8 @@ export async function createChatSession(cwd: string): Promise<AgentSession> {
     model,
     modelRuntime,
     resourceLoader,
-    tools: [],
-    noTools: 'all',
+    tools: ['read', 'grep', 'find', 'ls', 'edit', 'write', 'mole_clean_preview'],
+    customTools: await createArkiveTools(),
     thinkingLevel: 'off',
     sessionManager: sdk.SessionManager.inMemory(cwd),
     settingsManager: sdk.SettingsManager.inMemory({

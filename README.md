@@ -39,17 +39,29 @@ apps use runtime environment variables; an end-user credentials UI is not added 
   reset on page reload, window close or restart; durable history is not implemented.
 - Missing configuration and request errors appear in the chat. Provider messages
   may be sent over the network; no API key is exposed by the preload interface.
-- The workspace panel is a placeholder. No files are scanned, compressed, moved,
-  or deleted. On smaller windows, the workspace starts collapsed.
+- The workspace file panel is a placeholder; the agent can read, search and edit
+  files through its tools. Compression, moving and deletion tools are not connected.
+  On smaller windows, the workspace starts collapsed.
 
-Pi has no tools enabled and does not discover local extensions, Skills or project
-instructions. SDK examples: https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/sdk
+Pi enables `read`, `grep`, `find`, `ls`, `edit`, `write` and `mole_clean_preview`.
+The Mole tool shares `runMoleDryRun` with the preview button and runs only
+`clean --dry-run`, with a two-minute timeout and the Agent's cancellation signal.
+It accepts no command arguments and returns bounded stdout/stderr plus exit status
+and truncation flags. Preview results are not actual reclaimed space. Actual cleanup
+is not exposed. The system prompt
+requires user authorization for file access, confirmation before modifying user
+files, and preservation of originals; these are prompt instructions, not a filesystem
+sandbox or an enforced confirmation dialog. Shell tools are disabled. Pi does not
+discover local extensions, Skills or project instructions.
+SDK examples: https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/sdk
 
 Run `rtk proxy node scripts/check-agent.mts` (Node 22.19+ with TypeScript stripping)
 to verify the real Pi SDK against a
-local streaming fixture: multiple turns, isolated conversations, cancellation,
+local streaming fixture: the tool allowlist, actual file tool execution in a
+temporary directory, Mole preview arguments/results/failure/cancellation using a
+temporary executable fixture, multiple turns, isolated conversations, cancellation,
 request errors, configuration validation and key redaction. It does not call a
-real model service or require credentials.
+real model service or require credentials, and does not scan or clean the user's Mac.
 
 ## Bundled tools (macOS Apple Silicon)
 
