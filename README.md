@@ -2,6 +2,20 @@
 
 An Electron application with React and TypeScript
 
+## Chat UI preview
+
+Run `pnpm dev` to open the Arkive desktop preview. The chat uses `@assistant-ui/react`
+primitives with a local React state adapter; it makes no model or backend requests.
+
+- The left rail stays visible. The conversation sidebar and right workspace panel
+  can be collapsed and reopened independently using the panel buttons.
+- Create or switch conversations, fill the composer from a suggestion, and send
+  with Enter or the arrow button. Shift+Enter inserts a newline.
+- Replies and seeded conversations are explicitly marked as demos. Messages and
+  drafts live in memory and reset on reload or restart.
+- The workspace panel is a placeholder. No files are scanned, compressed, moved,
+  or deleted. On smaller windows, the workspace starts collapsed.
+
 ## Bundled tools (macOS Apple Silicon)
 
 FFmpeg, FFprobe, Mole, pngquant, jpegoptim, Ghostscript, qpdf and czkawka_cli are included in
