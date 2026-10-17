@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { homedir } from 'node:os'
 import { setTimeout as delay } from 'node:timers/promises'
 import { app, BrowserWindow } from 'electron'
 import sharp from 'sharp'
@@ -136,8 +137,14 @@ async function check(): Promise<void> {
     if (level >= 3) errors.push(message)
   })
   const evaluate = async <T>(expression: string): Promise<T> => {
-    const result: unknown = await window.webContents.executeJavaScript(expression)
-    return result as T
+    try {
+      const result: unknown = await window.webContents.executeJavaScript(expression)
+      return result as T
+    } catch (error) {
+      throw new Error(`Renderer check failed: ${expression}; console: ${errors.join('\n')}`, {
+        cause: error
+      })
+    }
   }
   const scope = '.conversation-view:not([hidden])'
   async function wait(expression: string): Promise<void> {
@@ -157,7 +164,9 @@ async function check(): Promise<void> {
     )
     await wait(`!document.querySelector('${scope} [aria-label="发送消息"]').disabled`)
     await evaluate(`document.querySelector('${scope} [aria-label="发送消息"]').click()`)
-    await wait(`document.querySelector('${scope} [aria-label="停止生成"]')!==null`)
+    await wait(
+      `document.querySelector('${scope} .message-list').innerText.includes(${JSON.stringify(text)}) && document.querySelector('${scope} [aria-label="输入消息"]').value===''`
+    )
   }
   async function complete(): Promise<void> {
     await wait(`document.querySelector('${scope} [aria-label="停止生成"]')===null`)
@@ -244,14 +253,15 @@ async function check(): Promise<void> {
     try {
       app.getAppPath = () => moleRoot
       await writeFile(moleExecutable, moleScript(0), { mode: 0o755 })
-      await evaluate("document.querySelector('.mole-demo-button').click()")
-      await wait("document.querySelector('.mole-demo-button').disabled")
-      await evaluate("document.querySelector('.mole-demo-button').click()")
+      const cleanButton = '.mole-tabs button:first-child'
+      await evaluate(`document.querySelector('${cleanButton}').click()`)
+      await wait(`document.querySelector('${cleanButton}').disabled`)
+      await evaluate(`document.querySelector('${cleanButton}').click()`)
       await wait(
         "document.querySelector('.mole-demo').innerText.includes('Generated first chapter')"
       )
       assert.equal(
-        await evaluate<boolean>("document.querySelector('.mole-demo-button').disabled"),
+        await evaluate<boolean>(`document.querySelector('${cleanButton}').disabled`),
         true
       )
       await wait("document.querySelector('.mole-demo-result')?.innerText.includes('未执行清理')")
@@ -261,10 +271,8 @@ async function check(): Promise<void> {
         2
       )
       await writeFile(moleExecutable, moleScript(2), { mode: 0o755 })
-      await evaluate("document.querySelector('.mole-demo-button').click()")
-      await wait(
-        "document.querySelector('.mole-demo-result')?.innerText.includes('未正常完成（2）')"
-      )
+      await evaluate(`document.querySelector('${cleanButton}').click()`)
+      await wait("document.querySelector('.mole-demo-error')?.innerText.includes('预览失败')")
       assert.equal(await readFile(calls, 'utf8'), 'run\nrun\n')
       assert.equal(
         await evaluate<boolean>(
@@ -272,12 +280,84 @@ async function check(): Promise<void> {
         ),
         true
       )
-      await evaluate("document.querySelector('.mole-demo-result').scrollIntoView({block:'center'})")
+      await evaluate("document.querySelector('.mole-demo-error').scrollIntoView({block:'center'})")
       await evaluate(
         'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'
       )
       await writeFile(
         join(directory, 'mole-partial.png'),
+        (await window.webContents.capturePage()).toPNG()
+      )
+      const installer = join(directory, 'generated-installer.dmg')
+      const purge = join(directory, 'generated-project/node_modules')
+      const fixtureApp = join(directory, 'Generated Fixture.app')
+      await writeFile(installer, 'disposable generated installer')
+      await mkdir(purge, { recursive: true })
+      await writeFile(join(purge, 'generated.txt'), 'disposable build output')
+      await mkdir(fixtureApp)
+      const config = join(homedir(), '.config/mole')
+      await mkdir(config, { recursive: true })
+      await writeFile(
+        moleExecutable,
+        `#!/bin/sh
+case "$1" in
+clean) printf '=== Fixture ===\\n${installer} # 1KB\\n' > '${join(config, 'clean-list.txt')}'; printf '➤ Fixture\\npreview only\\n';;
+analyze) printf '{"scan_status":"complete","entries":[]}';;
+installer) [ ! -e '${installer}' ] || printf 'Found installer: ${installer}\\n';;
+purge) [ ! -d '${purge}' ] || printf '✓ [DRY RUN] ${purge}, 1KB\\n';;
+uninstall) if [ -d '${fixtureApp}' ]; then printf '%s' '${JSON.stringify([{ name: 'Generated Fixture', bundle_id: 'dev.arkive.fixture', source: 'App', uninstall_name: 'Generated Fixture', path: fixtureApp, size: '1KB' }])}'; else printf '[]'; fi;;
+*) exit 9;;
+esac
+exit 0
+`,
+        { mode: 0o755 }
+      )
+      await evaluate(`document.querySelector('${cleanButton}').click()`)
+      await wait('document.querySelector(\'[aria-label="Mole 候选清单"] input\')!==null')
+      await access(installer)
+      const candidate = '[aria-label="Mole 候选清单"]'
+      assert.equal(
+        await evaluate<boolean>(`document.querySelector('${candidate} button').disabled`),
+        true
+      )
+      await evaluate("document.querySelector('.mole-tabs button:nth-child(3)').click()")
+      await wait(
+        "document.querySelector('.mole-demo-result')?.innerText.includes('安装包预览已结束')"
+      )
+      await evaluate(`document.querySelector('${candidate} input').click()`)
+      await evaluate(`document.querySelector('${candidate} button').click()`)
+      await wait(
+        "document.querySelector('.mole-demo-result')?.innerText.includes('已移入回收站 1 项')"
+      )
+      await assert.rejects(access(installer))
+      await access(purge)
+      await access(fixtureApp)
+      await wait("!document.querySelector('.mole-tabs button:nth-child(4)').disabled")
+      await evaluate("document.querySelector('.mole-tabs button:nth-child(4)').click()")
+      await wait(`document.querySelector('${candidate} input')!==null`)
+      assert.ok(
+        await evaluate<boolean>(
+          "document.querySelector('.mole-demo-note').innerText.includes('联网')"
+        )
+      )
+      await evaluate(`document.querySelector('${candidate} input').click()`)
+      await evaluate(`document.querySelector('${candidate} button').click()`)
+      await wait(`document.querySelector('${candidate}')===null`)
+      await assert.rejects(access(purge))
+      await access(fixtureApp)
+      await wait("!document.querySelector('.mole-tabs button:nth-child(5)').disabled")
+      await evaluate("document.querySelector('.mole-tabs button:nth-child(5)').click()")
+      const apps = '[aria-label="已安装应用清单"]'
+      await wait(`document.querySelector('${apps} input')!==null`)
+      await evaluate(`document.querySelector('${apps} input').click()`)
+      await evaluate(`document.querySelector('${apps} button').click()`)
+      await wait(`document.querySelector('${apps}')===null`)
+      await assert.rejects(access(fixtureApp))
+      await wait("!document.querySelector('.mole-tabs button:nth-child(2)').disabled")
+      await evaluate("document.querySelector('.mole-tabs button:nth-child(2)').click()")
+      await wait("document.querySelector('.mole-analyze-output')?.innerText.includes('complete')")
+      await writeFile(
+        join(directory, 'mole-candidates.png'),
         (await window.webContents.capturePage()).toPNG()
       )
     } finally {
@@ -286,7 +366,7 @@ async function check(): Promise<void> {
     assert.deepEqual(errors, [])
     if (fixtureFailure) throw fixtureFailure
     console.log(
-      `PASS: real chat UI → SDK → 27-tool registration → compression/backup/archive/tags, cross-page catalog, tool success/error, stop/retry, DNS error; Mole UI streaming, double-click guard and partial exit (synthetic process). Evidence: ${directory}`
+      `PASS: real chat UI → SDK → 28-tool registration → compression/backup/archive/tags, cross-page catalog, tool success/error, stop/retry, DNS error; Mole UI streaming, double-click guard and partial exit (synthetic process). Evidence: ${directory}`
     )
   } finally {
     window.destroy()

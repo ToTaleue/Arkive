@@ -101,6 +101,11 @@ await mkdir('out', { recursive: true })
 const buildDir = await mkdtemp(resolve('out/agent-check-'))
 await mkdir('/Users/hu1hui/Desktop/arkive-test', { recursive: true })
 const workspaceDir = await mkdtemp('/Users/hu1hui/Desktop/arkive-test/agent-tools-')
+const osFixture = resolve(buildDir, 'os-fixture.mjs')
+await writeFile(
+  osFixture,
+  `export * from 'os'; export const homedir = () => ${JSON.stringify(workspaceDir)}`
+)
 const moleModeFile = resolve(buildDir, 'mole-mode')
 const moleStartedFile = resolve(buildDir, 'mole-started')
 const moleArgumentsFile = resolve(buildDir, 'mole-arguments.json')
@@ -358,7 +363,10 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
     configFile: false,
     logLevel: 'silent',
     resolve: {
-      alias: [{ find: 'electron', replacement: resolve(buildDir, 'electron-fixture.mjs') }]
+      alias: [
+        { find: 'electron', replacement: resolve(buildDir, 'electron-fixture.mjs') },
+        { find: 'node:os', replacement: osFixture }
+      ]
     },
     build: {
       ssr: true,
