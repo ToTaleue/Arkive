@@ -1,6 +1,24 @@
 # arkive
 
-An Electron application with React and TypeScript
+An Electron + React + TypeScript app for local compression, original backup and archive.
+
+## Compression and archive UI
+
+The left rail opens image, video, document compression and the archive catalog.
+Document compression supports PDF (lossless / balanced / size) and ordinary DOCX /
+PPTX embedded media. Office requires an explicit whole-document replacement check;
+the complete old document goes to Backup before publication at its original path.
+Images and PDFs accept Finder drops through Electron's `webUtils` file-path bridge.
+The document workspace also provides read-only folder duplicate detection, including
+groups, partial-scan warnings and cancellation. It never deletes duplicate files.
+
+Successful results can be archived with optional tags. The catalog's record-state
+selector exposes pending compression results after reload or restart, so later
+archiving does not require the previous chat or another encode. Ordinary compression
+with savings moves the complete original to `~/Arkive Backup`; Archive is an
+additional copy. No-savings leaves the source in place. Folder batch compression,
+APFS clone orchestration, OCR/content classification and persistent chat history
+are not implemented.
 
 ## Pi chat
 
@@ -45,6 +63,11 @@ apps use runtime environment variables; an end-user credentials UI is not added 
 
 Pi enables the native `read`, `grep`, `find` and `ls` tools, plus Arkive's compression,
 archive, tag, file-operation and Mole tools. `edit`, `write` and shell tools are disabled.
+There are 23 enabled tools, including `inspect_image`, `inspect_video`, `inspect_pdf`,
+`inspect_office`, `scan_duplicates` and `open_archive` (open or Finder reveal by archive
+record ID). `search_archives` accepts `state: 'pending'` for later archive/retry.
+Chat shows each tool's running/returned/error state. A returned result can still
+contain partial business failures; stopping generation does not undo committed files.
 Office uses `inspect_office` for read-only package inspection and `compress_office`
 for DOCX/PPTX embedded media compression with whole-original backup and replacement
 at the original path. It accepts `inputPath` and optional `preset`, without a separate
@@ -71,6 +94,35 @@ request errors, configuration validation and key redaction. It also drives Offic
 inspection, actual in-place document replacement, original backup, subsequent archive,
 no-savings and publication failure through the registered tools. It does not call a
 real model service or require credentials, and does not scan or clean the user's Mac.
+
+Additional integration checks (run `rtk proxy pnpm run build` first):
+
+```sh
+rtk proxy node scripts/check-processing-ui.mjs
+rtk proxy node scripts/check-agent-ui.mjs
+rtk proxy node scripts/check-agent-live.mjs
+rtk proxy node scripts/check-packaged-runtime.mjs
+```
+
+The first two use real Electron/preload/IPC/Services and isolated generated files in
+`~/Desktop/arkive-test`; native dialog choices or model HTTP responses are fixtures.
+The Agent UI check also drives Mole's actual UI/IPC/parser against a synthetic
+external process, checking streamed chapters, duplicate clicks and abnormal exit.
+`ARKIVE_NATIVE_UI_CHECK=1` on the processing UI script instead leaves a visible window
+for a bounded native open/save/compress/archive check. The live Agent script uses the
+configured model and records its prompts, tool activity and generated-file results;
+it requires a reachable configured endpoint and may incur model usage. It fails if
+model selection or any scenario fails, rather than falling back to fixture responses.
+As of 2026-10-17 the configured model host fails DNS resolution; the live-model
+scenarios remain unverified. No credentials are written to the test report.
+
+The packaged runtime check requires an existing `dist/mac-arm64/arkive.app` and runs
+its binary in Electron's Node mode: SQLite, Sharp, Finder tags, seven tool binaries
+and Pi SDK loading. To test the packaged renderer/preload/resources with isolated
+business state, run `ARKIVE_PACKAGED_RESOURCES="$PWD/dist/mac-arm64/arkive.app/Contents/Resources"`
+with the processing UI check. Build, package and then test sequentially; do not
+write to `out` while Electron Builder is constructing the ASAR. These checks do
+not certify signing, notarization, installation or production-entry GUI startup.
 
 ## Bundled tools (macOS Apple Silicon)
 
@@ -113,8 +165,8 @@ These entry points are internal to the main process. Renderer and product Agent
 access should go through business operations, which enforce confirmation, path
 protection and original-file preservation. The generic runner does not enforce
 those policies or interpret destructive tool options. No generic execution IPC or
-Agent tool is exposed. sharp is a Node library, not a bundled CLI; its adapter
-remains unimplemented.
+Agent tool is exposed. sharp is a Node library used by the image Service, not a
+bundled CLI.
 
 ## Recommended IDE Setup
 
