@@ -12,6 +12,10 @@ import { registerImageCompressionIpc } from './modules/image-compression/ipc'
 import { registerProcessingIpc } from './modules/processing/ipc'
 import { registerTasksIpc } from './tasks/ipc'
 import { tasks } from './tasks/service'
+import {
+  closeCloneDeduplication,
+  recoverCloneDeduplication
+} from './modules/clone-deduplication/service'
 
 function createWindow(attachWindow: (contents: Electron.WebContents) => void): void {
   // Create the browser window.
@@ -64,6 +68,8 @@ function createWindow(attachWindow: (contents: Electron.WebContents) => void): v
 app
   .whenReady()
   .then(async () => {
+    const cloneRecovery = await recoverCloneDeduplication()
+    if (cloneRecovery.failed.length) console.error('APFS 去重恢复需要核对：', cloneRecovery)
     const catalog = new Catalog({ databasePath: join(app.getPath('userData'), 'arkive.db') })
     setCatalog(catalog)
     await catalog.start()
@@ -80,6 +86,7 @@ app
       closing = true
       void tasks
         .close()
+        .then(() => closeCloneDeduplication())
         .then(() => catalog.close())
         .catch((error: unknown) => {
           console.error('Failed to close application resources', error)

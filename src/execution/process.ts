@@ -13,6 +13,7 @@ const toolFiles = {
   ghostscript: 'gs',
   qpdf: 'qpdf/bin/qpdf',
   czkawka_cli: 'czkawka_cli',
+  apfs_dedupe: 'arkive-apfs-dedupe',
   ssimulacra2: 'ssimulacra2'
 } as const
 

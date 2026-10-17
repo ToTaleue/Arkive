@@ -14,7 +14,7 @@ const result = await scanDuplicates({ directoryPath: '/absolute/folder' }, signa
 - 返回按逻辑冗余体积降序排列的重复组、各文件路径、重复副本数和 `redundantBytes`。它不代表实际释放量，已有 APFS 克隆或快照会影响磁盘收益。
 - 上游报告读取失败等警告时返回 `partial` 和诊断，不能将部分结果展示成完整扫描。启动、异常退出或报告无效时抛错；取消通过 `AbortSignal` 抛出。
 
-文档压缩工作区已通过 `processing` IPC 接入文件夹选择、分组、部分扫描警告和取消；Agent 通过 `scan_duplicates` 调用同一个 Service。没有独立去重页面、批量压缩调用或任务队列；APFS 克隆、重复内容只压缩一次与原件处理仍待后续压缩归档流程接入。扫描结果是候选分组，不是文件修改授权或稳定快照；执行前仍需重新核对内容、文件状态和各路径的元数据，不能直接以第一项为“保留原件”。
+文档压缩工作区已通过 `processing` IPC 接入文件夹选择、分组、部分扫描警告和取消；Agent 通过 `scan_duplicates` 调用同一个 Service。APFS 克隆执行已单独接入[无损去重 Service 与 Tool](../clone-deduplication/README.md)，需要对明确路径另有执行授权；本扫描接口仍只读。没有独立去重页面、批量压缩调用或任务队列；重复内容只压缩一次与压缩归档编排仍待接入。扫描结果是候选分组，不是文件修改授权或稳定快照；执行前仍需重新核对内容、文件状态和各路径的元数据，不能直接以第一项为“保留原件”。
 
 ## 验证
 

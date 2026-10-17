@@ -29,16 +29,28 @@ const resources=${JSON.stringify(resources)}, directory=${JSON.stringify(directo
   const tags=(request)=>JSON.parse(cp.execFileSync('/usr/bin/osascript',['-l','JavaScript',script,JSON.stringify(request)],{encoding:'utf8',timeout:20000}));
   assert.deepEqual(tags({path:image,tags:['打包验证']}),['打包验证']);
   assert.deepEqual(tags({path:image}),['打包验证']);
-  for(const [name,flag] of [['ffmpeg','-version'],['ffprobe','-version'],['gs','-version'],['qpdf/bin/qpdf','--version'],['pngquant','--version'],['ab-av1','--version'],['czkawka_cli','--version']]){
+  for(const [name,flag] of [['ffmpeg','-version'],['ffprobe','-version'],['gs','-version'],['qpdf/bin/qpdf','--version'],['pngquant','--version'],['ab-av1','--version'],['czkawka_cli','--version'],['arkive-apfs-dedupe','--version']]){
     const result=cp.spawnSync(path.join(resources,'tools',name),[flag],{encoding:'utf8',timeout:20000});
     assert.equal(result.status,0,name+': '+(result.error?.message||result.stderr));
   }
+  const source=path.join(directory,'clone-source'), target=path.join(directory,'clone-target');
+  fs.writeFileSync(source,Buffer.alloc(1024*1024,'generated packaged clone fixture'));
+  fs.writeFileSync(target,fs.readFileSync(source));
+  const transaction=fs.mkdtempSync(path.join(directory,'.arkive-dedupe-'));
+  const helper=(...args)=>JSON.parse(cp.execFileSync(path.join(resources,'tools/arkive-apfs-dedupe'),args,{encoding:'utf8',timeout:20000}));
+  assert.equal(helper('prepare',source,target,transaction).status,'prepared');
+  assert.equal(helper('commit',source,target,transaction).status,'deduplicated');
+  const clones=helper('inspect',source,target);
+  assert.notEqual(clones.sourceCloneId,'0'); assert.equal(clones.sourceCloneId,clones.targetCloneId);
+  fs.writeFileSync(target,'independent edit');
+  assert.equal(fs.statSync(source).size,1024*1024);
+  fs.rmdirSync(transaction);
   const sdkRoot=path.join(asar,'node_modules/@earendil-works/pi-coding-agent');
   const sdkPackage=JSON.parse(fs.readFileSync(path.join(sdkRoot,'package.json'),'utf8'));
   const entry=path.join(sdkRoot,sdkPackage.exports['.'].import);
   const sdk=await import(pathToFileURL(entry).href);
   assert.equal(typeof sdk.createAgentSession,'function');
-  console.log('PASS: packaged arm64 Electron '+process.versions.electron+', valid ASAR metadata, SQLite reopen, Sharp image, Finder tags, 7 tool binaries and Pi SDK import; no .env or temporary check artifacts. Evidence: '+directory);
+  console.log('PASS: packaged arm64 Electron '+process.versions.electron+', valid ASAR metadata, SQLite reopen, Sharp image, Finder tags, 8 tool binaries, real APFS clone/independent writes and Pi SDK import; no .env or temporary check artifacts. Evidence: '+directory);
 })().catch(error=>{console.error(error);process.exitCode=1});
 `
 )

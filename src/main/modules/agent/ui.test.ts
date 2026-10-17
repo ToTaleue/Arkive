@@ -44,7 +44,7 @@ async function check(): Promise<void> {
         messages: Message[]
         tools: { function: { name: string } }[]
       }
-      assert.equal(body.tools.length, 26)
+      assert.equal(body.tools.length, 27)
       assert.ok(!body.tools.some((t) => ['bash', 'write', 'edit'].includes(t.function.name)))
       const user = body.messages.filter((m) => m.role === 'user').at(-1)
       assert.ok(user)
@@ -286,7 +286,7 @@ async function check(): Promise<void> {
     assert.deepEqual(errors, [])
     if (fixtureFailure) throw fixtureFailure
     console.log(
-      `PASS: real chat UI → SDK → 26-tool registration → compression/backup/archive/tags, cross-page catalog, tool success/error, stop/retry, DNS error; Mole UI streaming, double-click guard and partial exit (synthetic process). Evidence: ${directory}`
+      `PASS: real chat UI → SDK → 27-tool registration → compression/backup/archive/tags, cross-page catalog, tool success/error, stop/retry, DNS error; Mole UI streaming, double-click guard and partial exit (synthetic process). Evidence: ${directory}`
     )
   } finally {
     window.destroy()

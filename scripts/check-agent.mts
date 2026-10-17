@@ -67,6 +67,7 @@ const enabledTools = [
   'inspect_video',
   'inspect_pdf',
   'scan_duplicates',
+  'clone_duplicates',
   'open_archive'
 ]
 const toolFile = 'agent-tool-check.txt'
@@ -308,7 +309,8 @@ if (mode === 'slow') {
     'qpdf',
     'pngquant',
     'ssimulacra2',
-    'czkawka_cli'
+    'czkawka_cli',
+    'arkive-apfs-dedupe'
   ]) {
     await symlink(
       resolve('resources/tools/darwin-arm64', name),
@@ -328,7 +330,7 @@ app.whenReady().then(async () => {
     resolve(buildDir, 'electron-fixture.mjs'),
     `import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-export const app = { isPackaged: false, getAppPath: () => ${JSON.stringify(buildDir)} }
+export const app = { isPackaged: false, getAppPath: () => ${JSON.stringify(buildDir)}, getPath: () => ${JSON.stringify(resolve(workspaceDir, 'user-data'))} }
 export const shell = { openPath: async () => '', showItemInFolder: () => {}, trashItem: async (path) => {
   if (path.endsWith('trash-failure.txt')) throw new Error('simulated recycle-bin failure')
   const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
@@ -1023,6 +1025,23 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   )
   assert.ok(
     updates.some(
+  const cloned = await callTool('clone_duplicates', {
+    sourcePath: resolve(duplicatesDirectory, 'a.txt'),
+    duplicatePaths: [resolve(duplicatesDirectory, 'b.txt')]
+  })
+  assert.match(cloned, /"status":"deduplicated"/)
+  assert.match(cloned, /"diskSpaceReclaimedBytes":null/)
+  assert.deepEqual(await readdir(duplicatesDirectory), ['a.txt', 'b.txt'])
+  assert.equal(await readFile(resolve(duplicatesDirectory, 'b.txt'), 'utf8'), 'duplicate content')
+  await writeFile(resolve(duplicatesDirectory, 'b.txt'), 'independent modification')
+  assert.equal(await readFile(resolve(duplicatesDirectory, 'a.txt'), 'utf8'), 'duplicate content')
+  assert.match(
+    await callTool('clone_duplicates', {
+      sourcePath: resolve(duplicatesDirectory, 'a.txt'),
+      duplicatePaths: ['/System/test.txt']
+    }),
+    /系统关键路径受保护/
+  )
       (update) => update.tool?.name === 'scan_duplicates' && update.tool.status === 'error'
     )
   )

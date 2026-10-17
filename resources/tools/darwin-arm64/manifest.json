@@ -147,6 +147,17 @@
       "licenseNoticeSource": "https://raw.githubusercontent.com/ArtifexSoftware/ghostpdl/master/LICENSE",
       "upstreamSource": "https://github.com/ArtifexSoftware/ghostpdl",
       "notes": "Clop-provided prerelease build. Resources and NimbusSans font loaded from %rom% during isolated PDF smoke checks."
+    },
+    {
+      "name": "apfs_dedupe",
+      "version": "1",
+      "executable": "arkive-apfs-dedupe",
+      "source": "native/apfs-dedupe.c",
+      "buildScript": "scripts/build-apfs-dedupe.mjs",
+      "binarySha256": "63515272a6ce00843a46fe83bf714f79c5b19427f9ec7c41445a82e1c518b249",
+      "architecture": "arm64",
+      "minimumMacOSFromMachO": "13.0",
+      "notes": "First-party fixed helper; APFS fclonefileat, metadata verification, atomic exchange and recovery. Links only system libraries. No ordinary-copy fallback."
     }
   ]
 }

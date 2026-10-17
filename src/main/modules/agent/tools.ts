@@ -24,6 +24,7 @@ import { inspectVideo } from '../video-compression/service'
 import { inspectPdf } from '../pdf-compression/service'
 import { scanDuplicates } from '../duplicate-detection/service'
 import { trashPaths } from '../file-operations/service'
+import { cloneDuplicates } from '../clone-deduplication/service'
 
 function isWithin(root: string, path: string): boolean {
   const child = relative(root, path)
@@ -100,6 +101,23 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       }
     }),
     defineTool({
+    defineTool({
+      name: 'clone_duplicates',
+      label: 'APFS 无损去重',
+      description:
+        '仅在用户明确授权这些路径进行 APFS 克隆替换后调用。sourcePath 为用户方案中选定的源，duplicatePaths 为已展示并获授权的重复副本，最多 100 个；不扫描目录。重新逐字节比对，在同一 APFS 卷上保留全部路径、内容及各副本元数据，后续修改互不影响。旧存储副本在验证后移除，不另存一份完整备份或进入回收站。硬链接、符号链接、不支持或变化中的文件不处理；items 可能部分失败，recoveryPath 表示保留了需恢复的事务文件。logicalBytesShared 不是实测释放空间；diskSpaceReclaimedBytes=null，不得承诺绝对安全或固定收益。',
+      parameters: Type.Object(
+        {
+          sourcePath: Type.String({ description: '明确选定且已获授权的源文件绝对路径。' }),
+          duplicatePaths: Type.Array(Type.String(), { minItems: 1, maxItems: 100 })
+        },
+        { additionalProperties: false }
+      ),
+      execute: async (_toolCallId, request, signal) => {
+        const result = await cloneDuplicates(request, signal)
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+      }
+    }),
       name: 'open_archive',
       label: '打开或定位归档文件',
       description:
