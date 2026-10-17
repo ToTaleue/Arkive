@@ -16,7 +16,17 @@ export interface VideoCompressionResult {
 }
 
 export type VideoCompressionStage = 'probing' | 'encoding' | 'validating'
-export interface SelectedVideo {
+export interface VideoCompressionProgress {
+  stage: VideoCompressionStage
+  /** Progress and ETA apply to the current stage, not the whole task. */
+  percent: number | null
+  elapsedSeconds: number
+  remainingSeconds: number | null
+}
+export interface VideoInspection {
+  removedContents: string[]
+}
+export interface SelectedVideo extends VideoInspection {
   id: string
   name: string
   path: string
@@ -40,7 +50,7 @@ export const videoChannels = {
   reveal: 'video:reveal'
 } as const
 
-export type VideoCompressionUpdate = { runId: string; stage: VideoCompressionStage }
+export type VideoCompressionUpdate = VideoCompressionProgress & { runId: string }
 export interface VideoApi {
   select: () => Promise<SelectedVideo | null>
   compress: (request: VideoStartRequest) => Promise<VideoCompressionOutcome>

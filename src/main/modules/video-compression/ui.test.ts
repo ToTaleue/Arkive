@@ -55,7 +55,7 @@ async function check(): Promise<void> {
   async function click(selector: string): Promise<void> {
     await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`)
   }
-  async function fixture(path: string, duration: number): Promise<void> {
+  async function fixture(path: string, duration: number, size = '640x480'): Promise<void> {
     const result = await runBundledTool('ffmpeg', [
       '-nostdin',
       '-hide_banner',
@@ -64,11 +64,13 @@ async function check(): Promise<void> {
       '-f',
       'lavfi',
       '-i',
-      `testsrc2=size=640x480:rate=30:duration=${String(duration)}`,
+      `testsrc2=size=${size}:rate=30:duration=${String(duration)}`,
       '-c:v',
       'mpeg4',
       '-q:v',
       '2',
+      '-timecode',
+      '01:02:03:00',
       path
     ])
     assert.equal(result.exitCode, 0, result.stderr)
@@ -94,6 +96,18 @@ async function check(): Promise<void> {
       'sample.mov'
     )
     assert.equal(await evaluate('document.querySelector("input[value=balanced]").checked'), true)
+    assert.equal(
+      await evaluate(
+        'document.querySelector("[role=note]").textContent.includes("仅保留主视频和音频")'
+      ),
+      true
+    )
+    assert.equal(
+      await evaluate(
+        'document.querySelector("[role=note]").textContent.includes("将移除：时间码")'
+      ),
+      true
+    )
     await delay(100)
     await writeFile(
       resolve('out/video-compression-preview.png'),
@@ -131,21 +145,19 @@ async function check(): Promise<void> {
     const invalid = join(directory, 'invalid.mp4')
     await writeFile(invalid, 'not a video')
     selectedPath = invalid
-    outputPath = join(directory, 'invalid-output.mp4')
     await click('.video-selected-file button')
-    await waitFor(
-      'document.querySelector(".video-selected-file strong").textContent === "invalid.mp4"'
-    )
-    await click('.video-primary-button')
     await waitFor('Boolean(document.querySelector(".video-error[role=alert]"))')
     assert.equal(await evaluate('document.querySelector(".video-primary-button").disabled'), false)
-    await assert.rejects(stat(outputPath), { code: 'ENOENT' })
+    assert.equal(
+      await evaluate('document.querySelector(".video-selected-file strong").textContent'),
+      'sample.mov'
+    )
     console.log(
       'PASS: forged selection rejected and invalid media errors shown with retry available'
     )
 
     const long = join(directory, 'long.mov')
-    await fixture(long, 30)
+    await fixture(long, 30, '1280x720')
     selectedPath = long
     outputPath = join(directory, 'cancelled.mp4')
     await click('.video-selected-file button')
@@ -154,14 +166,31 @@ async function check(): Promise<void> {
     )
     await click('.video-primary-button')
     await waitFor('document.querySelector(".video-running")?.textContent.includes("正在压缩视频")')
+    await waitFor(
+      'document.querySelector(".video-progress-details")?.textContent.includes("本阶段预计还需约")'
+    )
+    assert.equal(
+      await evaluate(
+        'document.querySelector(".video-running progress").value > 0 && document.querySelector(".video-running progress").value < 100'
+      ),
+      true
+    )
+    await writeFile(
+      resolve('out/video-compression-progress.png'),
+      (await window.webContents.capturePage()).toPNG()
+    )
     await click('button[aria-label="切换会话列表"]')
     await click('button[aria-label="视频压缩"]')
     await click('.video-running button')
     await waitFor('document.querySelector(".video-feedback")?.textContent.includes("已取消")')
+    assert.equal(
+      await evaluate('Boolean(document.querySelector(".video-progress-details"))'),
+      false
+    )
     await assert.rejects(stat(outputPath), { code: 'ENOENT' })
     assert.ok(!(await readdir(directory)).some((name) => name.startsWith('.arkive-video-')))
     console.log(
-      'PASS: navigation retains the running task; UI cancellation removes temporary output'
+      'PASS: real percentage/ETA displayed; navigation retains task; cancellation clears progress and temporary output'
     )
   } finally {
     window.destroy()

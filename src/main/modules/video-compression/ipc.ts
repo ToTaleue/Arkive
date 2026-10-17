@@ -17,7 +17,7 @@ import {
   type VideoCompressionUpdate,
   type VideoStartRequest
 } from '../../../shared/contracts/video'
-import { compressVideo } from './service'
+import { compressVideo, inspectVideo } from './service'
 
 interface WindowState {
   selection?: SelectedVideo
@@ -95,7 +95,15 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
       await assertAllowedPath(path)
       const info = await stat(path)
       if (!info.isFile()) throw new Error('请选择普通视频文件。')
-      state.selection = { id: randomUUID(), name: basename(path), path, sizeBytes: info.size }
+      const inspection = await inspectVideo(path)
+      if (windows.get(event.sender.id) !== state) return null
+      state.selection = {
+        id: randomUUID(),
+        name: basename(path),
+        path,
+        sizeBytes: info.size,
+        ...inspection
+      }
       state.outputPath = undefined
       return state.selection
     } finally {
@@ -133,13 +141,13 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
         const result = await compressVideo(
           { inputPath: input, outputPath: output, preset: request.preset },
           controller.signal,
-          (stage) => {
+          (progress) => {
             if (
               !event.sender.isDestroyed() &&
               event.sender.mainFrame === frame &&
               windows.get(event.sender.id) === state
             ) {
-              const update: VideoCompressionUpdate = { runId: request.runId, stage }
+              const update: VideoCompressionUpdate = { runId: request.runId, ...progress }
               event.sender.send(videoChannels.update, update)
             }
           }

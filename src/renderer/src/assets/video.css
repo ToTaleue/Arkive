@@ -253,6 +253,22 @@
   font-size: 12px;
   line-height: 1.8;
 }
+.video-progress-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+  line-height: 1.7;
+}
+.video-progress-details strong {
+  color: #c3dfcc;
+  font-weight: 500;
+}
+.video-progress-details p {
+  flex-basis: 100%;
+  color: #93a399;
+  font-size: 11px;
+}
 .video-error {
   color: #edb4ad;
   white-space: pre-wrap;

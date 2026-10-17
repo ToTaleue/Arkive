@@ -3,6 +3,7 @@ import { ArrowDown, CheckCircle2, FileVideo, FolderOpen, LoaderCircle, Upload } 
 import type {
   SelectedVideo,
   VideoCompressionPreset,
+  VideoCompressionProgress,
   VideoCompressionResult,
   VideoCompressionStage
 } from '../../../shared/contracts/video'
@@ -31,10 +32,20 @@ function message(error: unknown): string {
     : '操作失败，请重试。'
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 1) return '不足 1 秒'
+  const rounded = Math.max(1, Math.ceil(seconds))
+  if (rounded < 60) return `${String(rounded)} 秒`
+  if (rounded < 3600) return `${String(Math.ceil(rounded / 60))} 分钟`
+  const minutes = Math.ceil(rounded / 60)
+  return `${String(Math.floor(minutes / 60))} 小时 ${String(minutes % 60)} 分钟`
+}
+
 export function VideoCompressionPage(): React.JSX.Element {
   const [selected, setSelected] = useState<SelectedVideo | null>(null)
   const [preset, setPreset] = useState<VideoCompressionPreset>('balanced')
   const [phase, setPhase] = useState<Phase>('idle')
+  const [progress, setProgress] = useState<VideoCompressionProgress | null>(null)
   const [result, setResult] = useState<VideoCompressionResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -50,6 +61,7 @@ export function VideoCompressionPage(): React.JSX.Element {
     const unsubscribe = video?.onUpdate((update) => {
       if (update.runId === runId.current) {
         setPhase((current) => (current === 'cancelling' ? current : update.stage))
+        setProgress(update)
       }
     })
     return () => {
@@ -84,6 +96,7 @@ export function VideoCompressionPage(): React.JSX.Element {
     const id = crypto.randomUUID()
     runId.current = id
     setPhase('saving')
+    setProgress(null)
     setResult(null)
     setError(null)
     setNotice(null)
@@ -181,6 +194,14 @@ export function VideoCompressionPage(): React.JSX.Element {
           </div>
         )}
         <p className="video-hint">文件仅在本机处理，始终保留原视频。</p>
+        {selected && (
+          <p className="video-hint" role="note">
+            仅保留主视频和音频。
+            {selected.removedContents.length > 0 &&
+              `将移除：${selected.removedContents.join('、')}。`}
+            原文件保留。
+          </p>
+        )}
         {!api && (
           <p role="alert" className="video-error">
             请在 Electron 桌面应用中打开；开发中更新后请重启应用。
@@ -236,7 +257,33 @@ export function VideoCompressionPage(): React.JSX.Element {
         {status && (
           <div className="video-running" role="status">
             <p>{status}</p>
-            {phase !== 'selecting' && <progress aria-label="视频处理进度" />}
+            {phase !== 'selecting' && (
+              <progress
+                aria-label={phase === 'validating' ? '校验进度' : '视频处理进度'}
+                max={100}
+                value={
+                  phase === 'encoding' || phase === 'validating'
+                    ? (progress?.percent ?? undefined)
+                    : undefined
+                }
+              />
+            )}
+            {(phase === 'encoding' || phase === 'validating') && progress && (
+              <div className="video-progress-details">
+                <span>
+                  {phase === 'encoding' ? '压缩' : '校验'}进度 {progress.percent ?? 0}%
+                </span>
+                <span>本阶段已用 {formatDuration(progress.elapsedSeconds)}</span>
+                <strong>
+                  {progress.percent !== null && progress.percent >= 99
+                    ? '正在收尾…'
+                    : progress.remainingSeconds === null
+                      ? '正在估算剩余时间…'
+                      : `本阶段预计还需约 ${formatDuration(progress.remainingSeconds)}`}
+                </strong>
+                {phase === 'encoding' && <p>压缩后还会校验文件；预计时间随实际处理速度更新。</p>}
+              </div>
+            )}
             {phase !== 'saving' && phase !== 'selecting' && (
               <button
                 className="video-text-button"

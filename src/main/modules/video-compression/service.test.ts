@@ -6,7 +6,9 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { app } from 'electron'
 import { runBundledTool } from '../../../execution/process'
-import { compressVideo } from './service'
+import { compressVideo, inspectVideo } from './service'
+import type { VideoCompressionProgress } from '../../../shared/contracts/video'
+import { checkProgressEstimates } from './progress.test'
 
 async function ffmpeg(args: string[]): Promise<void> {
   const result = await runBundledTool('ffmpeg', [
@@ -40,6 +42,7 @@ async function timestamps(path: string): Promise<number[]> {
 
 async function check(): Promise<void> {
   await app.whenReady()
+  checkProgressEstimates()
   const directory = await mkdtemp(join(tmpdir(), 'arkive-video-check-'))
   try {
     const source = join(directory, 'source $ [clip].mov')
@@ -65,7 +68,25 @@ async function check(): Promise<void> {
       .digest('hex')
     for (const preset of ['quality', 'balanced', 'size'] as const) {
       const outputPath = join(directory, `${preset}.mp4`)
-      const result = await compressVideo({ inputPath: source, outputPath, preset })
+      const updates: VideoCompressionProgress[] = []
+      const result = await compressVideo(
+        { inputPath: source, outputPath, preset },
+        undefined,
+        (update) => updates.push(update)
+      )
+      for (const stage of ['encoding', 'validating'] as const) {
+        const reports = updates.filter((update) => update.stage === stage)
+        assert.ok(reports.length >= 2, `Expected real FFmpeg progress for ${stage}`)
+        assert.ok(
+          reports.some((update) => update.percent !== null && update.percent > 0),
+          `No processed frames reported: ${JSON.stringify({ stage, reports })}`
+        )
+        assert.ok(
+          reports.every(
+            (update) => update.percent === null || (update.percent >= 0 && update.percent < 100)
+          )
+        )
+      }
       assert.equal(result.outputBytes, (await stat(outputPath)).size)
       assert.equal(
         result.status,
@@ -74,6 +95,58 @@ async function check(): Promise<void> {
       assert.equal(result.savedBytes, Math.max(0, result.inputBytes - result.outputBytes))
     }
     console.log('PASS: all three HEVC presets with real VideoToolbox, AAC and output decoding')
+
+    const cover = join(directory, 'cover.jpg')
+    await ffmpeg(['-i', source, '-frames:v', '1', '-update', '1', cover])
+    const camera = join(directory, 'camera-10bit.mp4')
+    await ffmpeg([
+      '-i',
+      source,
+      '-i',
+      cover,
+      '-map',
+      '0:v',
+      '-map',
+      '0:a',
+      '-map',
+      '0:a',
+      '-map',
+      '1:v',
+      '-c:v:0',
+      'hevc_videotoolbox',
+      '-allow_sw',
+      '0',
+      '-pix_fmt:v:0',
+      'p010le',
+      '-profile:v:0',
+      'main10',
+      '-tag:v:0',
+      'hvc1',
+      '-c:a',
+      'copy',
+      '-c:v:1',
+      'copy',
+      '-disposition:v:1',
+      'attached_pic',
+      '-timecode',
+      '01:02:03:00',
+      camera
+    ])
+    assert.deepEqual((await inspectVideo(camera)).removedContents, ['时间码', '封面／缩略图'])
+    const cameraOutput = join(directory, 'camera-compressed.mp4')
+    await compressVideo({ inputPath: camera, outputPath: cameraOutput })
+    assert.deepEqual((await inspectVideo(cameraOutput)).removedContents, [])
+    const tracks = await runBundledTool('ffprobe', [
+      '-v',
+      'error',
+      '-show_entries',
+      'stream=codec_type,pix_fmt',
+      '-of',
+      'csv=p=0',
+      cameraOutput
+    ])
+    assert.equal(tracks.stdout.trim(), 'video,yuv420p10le\naudio\naudio')
+    console.log('PASS: 10bit camera fixture retains both AAC tracks and removes cover/timecode')
 
     const variable = join(directory, 'variable.mov')
     await ffmpeg([
@@ -153,9 +226,9 @@ async function check(): Promise<void> {
     await ffmpeg(['-i', source, '-an', '-c:v', 'prores_ks', '-pix_fmt', 'yuv422p10le', highDepth])
     await assert.rejects(
       compressVideo({ inputPath: highDepth, outputPath: join(directory, '10bit.mp4') }),
-      /8bit SDR/
+      /4:2:0/
     )
-    console.log('PASS: existing files protected; unresolved compatibility/audio/10bit rejected')
+    console.log('PASS: existing files protected; unresolved compatibility/audio/4:2:2 rejected')
 
     // Wait until the private output directory exists: cancellation must reach active FFmpeg,
     // rather than only exercising an already-aborted request.

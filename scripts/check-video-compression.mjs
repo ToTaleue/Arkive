@@ -20,7 +20,9 @@ try {
         input: resolve(
           process.argv.includes('--ui')
             ? 'src/main/modules/video-compression/ui.test.ts'
-            : 'src/main/modules/video-compression/service.test.ts'
+            : process.argv.includes('--dji')
+              ? 'src/main/modules/video-compression/dji.test.ts'
+              : 'src/main/modules/video-compression/service.test.ts'
         ),
         external: ['electron'],
         output: { format: 'cjs', entryFileNames: 'checks.cjs' }
