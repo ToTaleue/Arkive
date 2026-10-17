@@ -47,6 +47,7 @@ const enabledTools = [
   'find',
   'ls',
   'mole_clean_preview',
+  'mole_authorize_system',
   'mole_analyze',
   'mole_installer_preview',
   'mole_purge_preview',

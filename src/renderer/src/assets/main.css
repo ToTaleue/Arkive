@@ -928,6 +928,17 @@ body,
 .mole-action-button:disabled {
   opacity: 0.45;
 }
+.mole-authorization {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.mole-authorization small {
+  color: #899b8c;
+  font-size: 10px;
+}
 .mole-demo-note {
   color: #899b8c !important;
   font-size: 10px !important;

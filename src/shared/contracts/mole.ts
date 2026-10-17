@@ -3,6 +3,7 @@ export const moleChannels = {
   analyze: 'mole:analyze',
   installerPreview: 'mole:installer-preview',
   purgePreview: 'mole:purge-preview',
+  authorize: 'mole:authorize',
   uninstallList: 'mole:uninstall-list',
   trash: 'mole:trash',
   update: 'mole:update'
@@ -69,11 +70,17 @@ export type MoleAnalyzeResult = {
   stderrTruncated: boolean
 }
 
+export type MoleAuthorizationResult = {
+  authorized: boolean
+  method: 'cached' | 'password-dialog'
+}
+
 export interface MoleApi {
   dryRun: (runId: string) => Promise<MolePreviewResult>
   analyze: (path?: string) => Promise<MoleAnalyzeResult>
   installerPreview: (runId: string) => Promise<MolePreviewResult>
   purgePreview: (runId: string) => Promise<MolePreviewResult>
+  authorize: () => Promise<MoleAuthorizationResult>
   uninstallList: () => Promise<MoleInstalledApp[]>
   trash: (paths: string[]) => Promise<MoleTrashResult>
   onUpdate: (listener: (update: MoleDryRunUpdate) => void) => () => void

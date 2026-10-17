@@ -3,6 +3,7 @@ import { moleChannels, type MoleDryRunUpdate } from '../../../shared/contracts/m
 import {
   listMoleApps,
   analyzeMole,
+  authorizeMoleSystem,
   runMoleDryRun,
   runMoleInstallerPreview,
   runMolePurgePreview,
@@ -11,6 +12,17 @@ import {
 
 export function registerMoleIpc(): void {
   let running = false
+  let authorizing = false
+  ipcMain.handle(moleChannels.authorize, async (event) => {
+    if (event.senderFrame !== event.sender.mainFrame) throw new Error('无效的 Mole 授权请求。')
+    if (authorizing) throw new Error('正在等待管理员授权，请完成当前授权。')
+    authorizing = true
+    try {
+      return await authorizeMoleSystem()
+    } finally {
+      authorizing = false
+    }
+  })
   ipcMain.handle(moleChannels.analyze, async (event, path: unknown) => {
     if (
       event.senderFrame !== event.sender.mainFrame ||

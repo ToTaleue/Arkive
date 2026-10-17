@@ -8,7 +8,7 @@ import {
   spawnMolePurgeDryRun,
   spawnMoleUninstallList
 } from '../../../execution/mole'
-import { runBundledTool } from '../../../execution/process'
+import { runBundledTool, runSudoValidation, runSystemTool } from '../../../execution/process'
 import type { ToolProcess } from '../../../execution/process'
 import { MoleOutputParser } from '../../../execution/mole-output'
 import { trashPaths } from '../file-operations/service'
@@ -251,4 +251,31 @@ export function trashMolePaths(
   signal?: AbortSignal
 ): Promise<MoleTrashResult> {
   return trashPaths(paths, signal)
+}
+
+export async function authorizeMoleSystem(): Promise<{
+  authorized: boolean
+  method: 'cached' | 'password-dialog'
+}> {
+  const cached = await runSudoValidation()
+  if (cached.exitCode === 0 && !cached.signal) return { authorized: true, method: 'cached' }
+
+  const dialog = await runSystemTool('osascript', [
+    '-e',
+    'display dialog "Arkive 需要管理员权限来检查系统级清理项。密码只交给 macOS，不会发送给 Agent。" default answer "" with hidden answer with title "Arkive" with icon caution',
+    '-e',
+    'text returned of result'
+  ])
+  if (dialog.exitCode !== 0 || dialog.signal) throw new Error('管理员授权已取消。')
+
+  let password = dialog.stdout.replace(/\r?\n$/, '')
+  dialog.stdout = ''
+  if (!password) throw new Error('没有收到管理员凭据。')
+  try {
+    const result = await runSudoValidation(password)
+    if (result.exitCode !== 0 || result.signal) throw new Error('管理员授权失败，请重试。')
+    return { authorized: true, method: 'password-dialog' }
+  } finally {
+    password = ''
+  }
 }

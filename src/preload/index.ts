@@ -21,6 +21,7 @@ import {
   moleChannels,
   type MoleAnalyzeResult,
   type MoleInstalledApp,
+  type MoleAuthorizationResult,
   type MolePreviewResult,
   type MoleTrashResult,
   type MoleDryRunUpdate
@@ -142,6 +143,7 @@ const api: ArkiveApi = {
       ipcRenderer.invoke(moleChannels.installerPreview, runId) as Promise<MolePreviewResult>,
     purgePreview: (runId) =>
       ipcRenderer.invoke(moleChannels.purgePreview, runId) as Promise<MolePreviewResult>,
+    authorize: () => ipcRenderer.invoke(moleChannels.authorize) as Promise<MoleAuthorizationResult>,
     uninstallList: () =>
       ipcRenderer.invoke(moleChannels.uninstallList) as Promise<MoleInstalledApp[]>,
     trash: (paths) => ipcRenderer.invoke(moleChannels.trash, paths) as Promise<MoleTrashResult>,

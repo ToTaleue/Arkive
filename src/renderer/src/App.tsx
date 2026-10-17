@@ -47,6 +47,9 @@ function App(): React.JSX.Element {
   const [moleSelectedPaths, setMoleSelectedPaths] = useState<string[]>([])
   const [moleAnalyzeResult, setMoleAnalyzeResult] = useState<unknown>(null)
   const [moleActionMessage, setMoleActionMessage] = useState<string | null>(null)
+  const [moleAuthorization, setMoleAuthorization] = useState<
+    'unknown' | 'authorizing' | 'authorized'
+  >('unknown')
   const [moleError, setMoleError] = useState<string | null>(null)
   const [moleBlocks, setMoleBlocks] = useState<MoleOutputBlock[]>([])
   const [moleStage, setMoleStage] = useState<string | null>(null)
@@ -137,6 +140,23 @@ function App(): React.JSX.Element {
       moleRunId.current = null
       setMoleStage(null)
       setMoleRunning(false)
+    }
+  }
+
+  async function authorizeMoleSystem(): Promise<void> {
+    const mole = window.api?.mole
+    if (!mole || moleAuthorization === 'authorizing') return
+    setMoleAuthorization('authorizing')
+    setMoleError(null)
+    setMoleActionMessage(null)
+    try {
+      const result = await mole.authorize()
+      setMoleAuthorization(result.authorized ? 'authorized' : 'unknown')
+      setMoleActionMessage('系统级权限已授权，正在重新生成 Clean 预览。')
+      await runMoleDryRun()
+    } catch (error) {
+      setMoleAuthorization('unknown')
+      setMoleError(error instanceof Error ? error.message : '系统级权限授权失败。')
     }
   }
 
@@ -563,6 +583,20 @@ function App(): React.JSX.Element {
                 <div className="section-eyebrow">Mole 受控操作</div>
                 <h3>先预览，再选择处理</h3>
                 <p>Agent 和按钮都先拿到候选清单；移入回收站只处理你勾选并确认的项目。</p>
+                <div className="mole-authorization">
+                  <button
+                    className="mole-action-button"
+                    onClick={() => void authorizeMoleSystem()}
+                    disabled={!moleAvailable || moleAuthorization === 'authorizing'}
+                  >
+                    {moleAuthorization === 'authorizing'
+                      ? '等待系统授权…'
+                      : moleAuthorization === 'authorized'
+                        ? '已授权系统级清理'
+                        : '授权系统级清理'}
+                  </button>
+                  <small>只在需要检查系统缓存时授权；密码由 macOS 原生对话框处理。</small>
+                </div>
                 <div className="mole-tabs" role="tablist" aria-label="Mole 功能">
                   <button
                     className={moleMode === 'clean' ? 'active' : ''}

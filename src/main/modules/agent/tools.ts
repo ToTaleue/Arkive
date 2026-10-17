@@ -9,6 +9,7 @@ import {
   compressVideoAndBackup as compressVideo
 } from '../catalog/compression'
 import {
+  authorizeMoleSystem,
   listMoleApps,
   runMoleDryRun,
   runMoleInstallerPreview,
@@ -253,6 +254,19 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
           throw new Error(`Mole 清理预览失败：${JSON.stringify(details)}`)
         }
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
+      }
+    },
+    {
+      name: 'mole_authorize_system',
+      label: 'Mole 系统权限授权',
+      description:
+        '仅在用户明确要求检查或清理系统级 Mole 项目后调用。弹出 macOS 原生隐藏密码对话框，用 sudo -S -v 建立当前用户的短期授权；密码不会返回给 Agent，也不会执行删除。授权成功后重新调用 mole_clean_preview 获取系统级候选。用户取消或失败时继续使用用户级结果。',
+      parameters: Type.Object({}, { additionalProperties: false }),
+      execute: async (_toolCallId, _params, signal) => {
+        signal?.throwIfAborted()
+        const result = await authorizeMoleSystem()
+        signal?.throwIfAborted()
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
       }
     },
     {

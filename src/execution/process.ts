@@ -150,3 +150,43 @@ export function runSystemTool(
   const child = spawn(`/usr/bin/${tool}`, args, { shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
   return collectProcess(child, 65_536)
 }
+
+/** Validate the current user's sudo session without exposing credentials to a renderer. */
+export function runSudoValidation(password?: string): Promise<ToolRunResult> {
+  if (process.platform !== 'darwin') throw new Error('系统管理员授权仅支持 macOS。')
+  const withPassword = password !== undefined
+  const child = spawn('/usr/bin/sudo', withPassword ? ['-S', '-p', '', '-v'] : ['-n', '-v'], {
+    shell: false,
+    stdio: [withPassword ? 'pipe' : 'ignore', 'ignore', 'pipe']
+  })
+  if (withPassword) {
+    if (!child.stdin) throw new Error('无法打开 sudo 授权输入。')
+    const secret = Buffer.from(`${password}\n`, 'utf8')
+    child.stdin.write(secret)
+    secret.fill(0)
+    child.stdin.end()
+  }
+  return new Promise((resolve, reject) => {
+    let stderr = ''
+    let processError: Error | undefined
+    child.stderr?.setEncoding('utf8')
+    child.stderr?.on('data', (chunk: string) => {
+      stderr += chunk.slice(0, 65_536 - stderr.length)
+    })
+    child.once('error', (error) => {
+      processError = error
+    })
+    child.once('close', (exitCode, signal) => {
+      if (processError) reject(processError)
+      else
+        resolve({
+          exitCode,
+          signal,
+          stdout: '',
+          stderr,
+          stdoutTruncated: false,
+          stderrTruncated: false
+        })
+    })
+  })
+}
