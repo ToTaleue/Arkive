@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, parse, relative, sep } from 'node:path'
+import { basename, dirname, join, parse } from 'node:path'
 import {
-  app,
   BrowserWindow,
   dialog,
   ipcMain,
@@ -17,6 +16,7 @@ import {
   type VideoCompressionUpdate,
   type VideoStartRequest
 } from '../../../shared/contracts/video'
+import { assertSystemWriteAllowed } from '../../system-paths'
 import { compressVideo, inspectVideo } from './service'
 
 interface WindowState {
@@ -39,29 +39,6 @@ function isStartRequest(value: unknown): value is VideoStartRequest {
     typeof value.preset === 'string' &&
     ['quality', 'balanced', 'size'].includes(value.preset)
   )
-}
-
-async function assertAllowedPath(path: string): Promise<void> {
-  const protectedPaths = [
-    app.getPath('documents'),
-    join(app.getPath('home'), 'Library', 'Keychains'),
-    join(app.getPath('home'), 'Library', 'Mail'),
-    join(app.getPath('home'), 'Library', 'Mobile Documents')
-  ]
-  for (const protectedPath of protectedPaths) {
-    const root = await realpath(protectedPath).catch(() => protectedPath)
-    const child = relative(root, path)
-    if (child === '' || (!child.startsWith(`..${sep}`) && child !== '..' && !isAbsolute(child))) {
-      throw new Error('该位置受文件保护规则限制，请选择保护目录以外的视频或输出位置。')
-    }
-  }
-  const parts = path.toLowerCase().split(sep)
-  if (
-    parts.some((part) => part.endsWith('.photoslibrary') || part.endsWith('.photolibrary')) ||
-    (parts.includes('com.tencent.xinwechat') && parts.includes('db_storage'))
-  ) {
-    throw new Error('照片图库及微信数据库受保护，不能用于视频压缩。')
-  }
 }
 
 export function registerVideoCompressionIpc(): (contents: WebContents) => void {
@@ -92,7 +69,6 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
       if (selected.canceled || !selected.filePaths[0] || windows.get(event.sender.id) !== state)
         return null
       const path = await realpath(selected.filePaths[0])
-      await assertAllowedPath(path)
       const info = await stat(path)
       if (!info.isFile()) throw new Error('请选择普通视频文件。')
       const inspection = await inspectVideo(path)
@@ -136,8 +112,7 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
           await realpath(dirname(destination.filePath)),
           basename(destination.filePath)
         )
-        await assertAllowedPath(input)
-        await assertAllowedPath(output)
+        await assertSystemWriteAllowed(output)
         const result = await compressVideo(
           { inputPath: input, outputPath: output, preset: request.preset },
           controller.signal,

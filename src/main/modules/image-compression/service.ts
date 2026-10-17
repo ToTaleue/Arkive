@@ -1,7 +1,7 @@
 import { copyFile, link, lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
+import { assertSystemWriteAllowed } from '../../system-paths'
 import { encodeImage, readImageMetadata, validateImage } from '../../../execution/sharp'
 import { runBundledTool } from '../../../execution/process'
 import type {
@@ -24,45 +24,6 @@ const defaultQuality = 80
 const outputExtensions = { webp: ['.webp'], jpeg: ['.jpg', '.jpeg'], png: ['.png'] }
 const supportedInputs = ['jpeg', 'png', 'webp', 'tiff', 'gif', 'heif']
 
-function isWithin(path: string, root: string): boolean {
-  const suffix = relative(root, path)
-  return suffix === '' || (!isAbsolute(suffix) && suffix !== '..' && !suffix.startsWith(`..${sep}`))
-}
-
-async function checkProtectedPath(path: string): Promise<void> {
-  const home = homedir()
-  const protectedRoots = [
-    join(home, 'Documents'),
-    join(home, 'Library', 'Keychains'),
-    join(home, 'Library', 'Mail'),
-    join(home, 'Library', 'Mobile Documents'),
-    join(home, 'Library', 'CloudStorage')
-  ]
-  for (const root of protectedRoots) {
-    const resolvedRoot = await realpath(root).catch((error: unknown) => {
-      if (
-        error instanceof Error &&
-        'code' in error &&
-        ['ENOENT', 'EACCES', 'EPERM'].includes(String(error.code))
-      )
-        return root
-      throw error
-    })
-    if (isWithin(path, root) || isWithin(path, resolvedRoot)) {
-      throw new Error('命中受保护目录，不处理该路径。')
-    }
-  }
-  const parts = path.toLowerCase().split(sep)
-  if (
-    parts.some((part) => /\.(photoslibrary|photolibrary)$/.test(part)) ||
-    (parts.some((part) => part === 'xwechat_files' || part.includes('com.tencent.xinwechat')) &&
-      parts.some((part) => ['db', 'db_storage', 'database'].includes(part))) ||
-    extname(path).toLowerCase() === '.dat'
-  ) {
-    throw new Error('照片图库、微信数据库和加密图片不处理。')
-  }
-}
-
 async function inspectInput(
   inputPath: string,
   signal?: AbortSignal
@@ -74,9 +35,7 @@ async function inspectInput(
   if (typeof inputPath !== 'string' || !isAbsolute(inputPath)) {
     throw new Error('输入须为本地绝对路径。')
   }
-  await checkProtectedPath(inputPath)
   const input = await realpath(inputPath)
-  await checkProtectedPath(input)
   const inputStat = await stat(input)
   if (!inputStat.isFile()) throw new Error('输入须为普通图片文件。')
   const metadata = await readImageMetadata(input)
@@ -183,9 +142,8 @@ export async function compressImage(
   ) {
     throw new Error('输出须为本地绝对路径，扩展名须与输出格式一致。')
   }
-  await checkProtectedPath(request.outputPath)
+  await assertSystemWriteAllowed(request.outputPath)
   const directory = await realpath(dirname(request.outputPath))
-  await checkProtectedPath(directory)
   const outputPath = join(directory, basename(request.outputPath))
   const existing = await lstat(outputPath).catch((error: unknown) => {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined

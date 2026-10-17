@@ -1,17 +1,16 @@
-// Real Sharp + bundled pngquant/jpegoptim. Only generated fixtures under out/ are processed.
+// Real Sharp + bundled pngquant/jpegoptim. Only dedicated generated test fixtures are processed.
 // Run: rtk proxy node scripts/check-image-compression.mts
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { watch } from 'node:fs'
 import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import sharp, { type Sharp } from 'sharp'
 import { build } from 'vite'
 
-await mkdir('out', { recursive: true })
-const directory = await mkdtemp(resolve('out/image-check-'))
+await mkdir('/Users/hu1hui/Desktop/arkive-test', { recursive: true })
+const directory = await mkdtemp('/Users/hu1hui/Desktop/arkive-test/image-check-')
 const path = (name: string): string => join(directory, name)
 const hash = async (file: string): Promise<string> =>
   createHash('sha256')
@@ -37,6 +36,7 @@ for (let y = 0; y < height; y++) {
 const fixture = (): Sharp => sharp(raw, { raw: { width, height, channels: 4 } })
 
 try {
+  await symlink(resolve('node_modules'), path('node_modules'), 'dir')
   // Only Electron's app paths are adapted. Native Sharp, process.ts and both binaries are real.
   await writeFile(
     path('electron-fixture.mjs'),
@@ -254,19 +254,28 @@ try {
     compressImage({ inputPath: path('corrupt.png'), outputPath: path('corrupt.webp') })
   )
   assert.equal(await exists(path('corrupt.webp')), false)
-  await assert.rejects(
-    inspectImage({ inputPath: join(homedir(), 'Documents', 'not-read.png') }),
-    /受保护/
-  )
   await mkdir(path('private.photoslibrary'))
   await symlink(png, path('private.photoslibrary/photo.png'))
+  const libraryImage = await inspectImage({ inputPath: path('private.photoslibrary/photo.png') })
+  assert.equal(libraryImage.format, 'png')
+  await compressImage({
+    inputPath: path('private.photoslibrary/photo.png'),
+    outputPath: path('private.photoslibrary/out.webp')
+  })
+  assert.equal((await sharp(path('private.photoslibrary/out.webp')).metadata()).format, 'webp')
+  await symlink(png, path('valid-image.dat'))
+  assert.equal((await inspectImage({ inputPath: path('valid-image.dat') })).format, 'png')
   await assert.rejects(
-    inspectImage({ inputPath: path('private.photoslibrary/photo.png') }),
-    /照片图库/
+    compressImage({ inputPath: png, outputPath: '/System/arkive-test-must-not-create.webp' }),
+    /系统关键路径受保护/
   )
+  await symlink('/System', path('system-link'))
   await assert.rejects(
-    compressImage({ inputPath: png, outputPath: path('private.photoslibrary/out.webp') }),
-    /照片图库/
+    compressImage({
+      inputPath: png,
+      outputPath: path('system-link/arkive-test-must-not-create.webp')
+    }),
+    /系统关键路径受保护/
   )
   assert.deepEqual(
     await Promise.all([hash(png), hash(jpeg)]),
@@ -278,7 +287,7 @@ try {
     'All task temp directories are removed'
   )
   console.log(
-    'PASS: Real Sharp/pngquant/jpegoptim routes, transparent pixels, explicit JPEG background, JPEG lossless pixels, EXIF/ICC/XMP, no-savings output, validation, cancellation, protected paths, no-overwrite race and source preservation.'
+    'PASS: Real Sharp/pngquant/jpegoptim routes, transparent pixels, explicit JPEG background, JPEG lossless pixels, EXIF/ICC/XMP, no-savings output, validation, cancellation, unrestricted user directories and critical system path protection, no-overwrite race and source preservation.'
   )
 } finally {
   await rm(directory, { recursive: true, force: true })

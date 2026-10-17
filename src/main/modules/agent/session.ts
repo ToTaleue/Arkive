@@ -63,14 +63,15 @@ export async function createChatSession(cwd: string): Promise<AgentSession> {
     },
     reload: () => Promise.resolve()
   }
+  const customTools = await createArkiveTools(cwd)
   const { session } = await sdk.createAgentSession({
     cwd,
     agentDir: cwd,
     model,
     modelRuntime,
     resourceLoader,
-    tools: ['read', 'grep', 'find', 'ls', 'edit', 'write', 'mole_clean_preview'],
-    customTools: await createArkiveTools(),
+    tools: ['read', 'grep', 'find', 'ls', ...customTools.map((tool) => tool.name)],
+    customTools,
     thinkingLevel: 'off',
     sessionManager: sdk.SessionManager.inMemory(cwd),
     settingsManager: sdk.SettingsManager.inMemory({
