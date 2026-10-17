@@ -104,6 +104,10 @@ export async function runBundledTool(
   }
 
   const child = spawnBundledTool(tool, args, processOptions)
+  return collectProcess(child, maxOutputChars)
+}
+
+function collectProcess(child: ToolProcess, maxOutputChars: number): Promise<ToolRunResult> {
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
@@ -134,4 +138,14 @@ export async function runBundledTool(
       }
     })
   })
+}
+
+/** Only fixed macOS executables needed by the catalog; never invokes a shell. */
+export function runSystemTool(
+  tool: 'osascript' | 'ditto',
+  args: readonly string[]
+): Promise<ToolRunResult> {
+  if (process.platform !== 'darwin') throw new Error('Finder 标签和原件备份仅支持 macOS。')
+  const child = spawn(`/usr/bin/${tool}`, args, { shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
+  return collectProcess(child, 65_536)
 }

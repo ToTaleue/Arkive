@@ -1,11 +1,14 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { Catalog, setCatalog } from './modules/catalog/service'
+import { registerCatalogIpc } from './modules/catalog/ipc'
 import icon from '../../resources/icon.png?asset'
 import { loadAgentEnvironment } from './modules/agent/config'
 import { registerAgentIpc } from './modules/agent/ipc'
 import { registerMoleIpc } from './modules/mole/ipc'
 import { registerVideoCompressionIpc } from './modules/video-compression/ipc'
+import { registerImageCompressionIpc } from './modules/image-compression/ipc'
 
 function createWindow(attachWindow: (contents: Electron.WebContents) => void): void {
   // Create the browser window.
@@ -57,14 +60,33 @@ function createWindow(attachWindow: (contents: Electron.WebContents) => void): v
 // Some APIs can only be used after this event occurs.
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
+    const catalog = new Catalog({ databasePath: join(app.getPath('userData'), 'arkive.db') })
+    setCatalog(catalog)
+    await catalog.start()
+    const attachCatalog = registerCatalogIpc(catalog)
+    app.on('browser-window-focus', () => {
+      catalog.scheduleRefresh()
+    })
+    let closing = false
+    app.on('before-quit', (event) => {
+      if (closing) return
+      event.preventDefault()
+      closing = true
+      void catalog.close().finally(() => {
+        app.quit()
+      })
+    })
     loadAgentEnvironment(app.getAppPath(), app.isPackaged)
     const attachAgent = registerAgentIpc(app.getPath('userData'))
     registerMoleIpc()
     const attachVideo = registerVideoCompressionIpc()
+    const attachImage = registerImageCompressionIpc()
     const attachWindow = (contents: Electron.WebContents): void => {
+      attachCatalog(contents)
       attachAgent(contents)
       attachVideo(contents)
+      attachImage(contents)
     }
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.electron')

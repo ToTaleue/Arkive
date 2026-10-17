@@ -1,0 +1,17 @@
+// Fixed JXA bridge. User data arrives as arguments, never executable source.
+function run(argv) {
+  ObjC.import('Foundation')
+  var request = JSON.parse(argv[0])
+  var url = $.NSURL.fileURLWithPath(request.path)
+  var error = Ref()
+  if (request.tags !== undefined) {
+    if (!url.setResourceValueForKeyError($(request.tags), $.NSURLTagNamesKey, error)) {
+      throw new Error(ObjC.unwrap(error[0].localizedDescription))
+    }
+  }
+  var value = Ref()
+  if (!url.getResourceValueForKeyError(value, $.NSURLTagNamesKey, error)) {
+    throw new Error(ObjC.unwrap(error[0].localizedDescription))
+  }
+  return JSON.stringify(ObjC.deepUnwrap(value[0]) || [])
+}

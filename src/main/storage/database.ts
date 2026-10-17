@@ -1,1 +1,17 @@
-// SQLite 数据库占位：负责 userData 下 arkive.db 的连接、事务和连接生命周期，暂未实现。
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+import { migrateDatabase } from './migrations'
+
+export function openDatabase(path: string): DatabaseSync {
+  mkdirSync(dirname(path), { recursive: true })
+  const db = new DatabaseSync(path)
+  try {
+    db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
+    migrateDatabase(db)
+    return db
+  } catch (error) {
+    db.close()
+    throw error
+  }
+}

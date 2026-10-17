@@ -2,7 +2,18 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import {
+  access,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -11,6 +22,7 @@ import sharp from 'sharp'
 import { build } from 'vite'
 import type { AgentService as Service } from '../src/main/modules/agent/service'
 import type { AgentResult, AgentUpdate } from '../src/shared/contracts/agent'
+import type { Catalog as CatalogService } from '../src/main/modules/catalog/service'
 
 type FixtureMessage = { role: string; content: string | { type: string; text?: string }[] }
 type FixtureRequest = {
@@ -41,7 +53,10 @@ const enabledTools = [
   'copy',
   'mkdir',
   'trash',
-  'compress_pdf'
+  'compress_pdf',
+  'archive_file',
+  'search_archives',
+  'tag_archives'
 ]
 const toolFile = 'agent-tool-check.txt'
 const toolCalls = [
@@ -97,7 +112,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     assert.deepEqual(
       body.tools?.map((tool) => tool.function.name).sort(),
       [...enabledTools].sort(),
-      'Only the selected Pi tools, Arkive tools and explicit placeholders may be sent'
+      'Only the selected Pi tools and Arkive tools may be sent'
     )
     const users = body.messages
       .filter((message) => message.role === 'user')
@@ -228,6 +243,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 }
 
 let service: Service | undefined
+let catalog: CatalogService | undefined
 try {
   // Exercise the real process/adapter/service/tool chain without scanning the user's Mac.
   const moleDir = resolve(buildDir, 'resources/tools/darwin-arm64/mole')
@@ -258,7 +274,7 @@ if (mode === 'slow') {
 `,
     { mode: 0o755 }
   )
-  for (const name of ['ffmpeg', 'ffprobe', 'ab-av1']) {
+  for (const name of ['ffmpeg', 'ffprobe', 'ab-av1', 'gs', 'qpdf', 'pngquant', 'ssimulacra2']) {
     await symlink(
       resolve('resources/tools/darwin-arm64', name),
       resolve(buildDir, 'resources/tools/darwin-arm64', name)
@@ -284,6 +300,10 @@ export const shell = { trashItem: async (path) => {
   await promisify(execFile)(${JSON.stringify(resolve('node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'))}, [${JSON.stringify(electronTrashRunner)}, path], { env, timeout: 20000 })
 } }`
   )
+  await symlink(
+    resolve('resources/finder-tags.jxa'),
+    resolve(buildDir, 'resources/finder-tags.jxa')
+  )
   await new Promise<void>((done) => {
     server.listen(0, '127.0.0.1', done)
   })
@@ -299,7 +319,9 @@ export const shell = { trashItem: async (path) => {
   await build({
     configFile: false,
     logLevel: 'silent',
-    resolve: { alias: { electron: resolve(buildDir, 'electron-fixture.mjs') } },
+    resolve: {
+      alias: [{ find: 'electron', replacement: resolve(buildDir, 'electron-fixture.mjs') }]
+    },
     build: {
       ssr: true,
       target: 'node22',
@@ -309,7 +331,8 @@ export const shell = { trashItem: async (path) => {
         input: {
           service: resolve('src/main/modules/agent/service.ts'),
           contracts: resolve('src/shared/contracts/agent.ts'),
-          config: resolve('src/main/modules/agent/config.ts')
+          config: resolve('src/main/modules/agent/config.ts'),
+          catalog: resolve('src/main/modules/catalog/service.ts')
         },
         output: { format: 'es', entryFileNames: '[name].mjs' }
       }
@@ -324,6 +347,38 @@ export const shell = { trashItem: async (path) => {
   const { agentStatus } = (await import(
     pathToFileURL(resolve(buildDir, 'config.mjs')).href
   )) as typeof import('../src/main/modules/agent/config')
+  const { Catalog, setCatalog } = (await import(
+    pathToFileURL(resolve(buildDir, 'catalog.mjs')).href
+  )) as typeof import('../src/main/modules/catalog/service')
+  catalog = new Catalog({
+    databasePath: resolve(workspaceDir, 'catalog.db'),
+    archiveRoot: resolve(workspaceDir, 'Archive'),
+    backupRoot: resolve(workspaceDir, 'Backup')
+  })
+  setCatalog(catalog)
+  await catalog.start()
+  const currentCatalog = catalog
+  async function checkPreservedOriginal(
+    source: string,
+    output: string,
+    bytes: Buffer
+  ): Promise<string> {
+    const row = currentCatalog.repo.db
+      .prepare('SELECT id FROM catalog_items WHERE output_path = ? ORDER BY rowid DESC LIMIT 1')
+      .get(output)
+    assert.ok(row)
+    const record = currentCatalog.get(String(row.id))
+    assert.notEqual(record.backupStatus, 'error', record.backupError ?? '')
+    const keptPath = record.backupStatus === 'ready' ? record.backupPath : source
+    assert.ok(keptPath)
+    assert.deepEqual(await readFile(keptPath), bytes)
+    if (keptPath !== source) {
+      await assert.rejects(access(source))
+      // Restore only this generated fixture for subsequent codec variations.
+      await copyFile(keptPath, source)
+    }
+    return record.id
+  }
   assert.equal(isAgentRequest({ conversationId: 'a', requestId: 'a1', text: 'hello' }), true)
   assert.equal(isAgentRequest({ conversationId: '../bad', requestId: 'a1', text: 'hello' }), false)
   assert.equal(isAgentRequest({ conversationId: 'a', requestId: 'a1', text: ' '.repeat(2) }), false)
@@ -529,18 +584,45 @@ export const shell = { trashItem: async (path) => {
   )
   assert.match(await callTool('mkdir', { path: 'relative' }), /绝对路径/)
 
+  const pdfPostScript = resolve(workspaceDir, 'source.ps')
+  await writeFile(
+    pdfPostScript,
+    '%!PS-Adobe-3.0\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Arkive Agent PDF fixture) show\nshowpage\n'
+  )
+  const pdfInput = resolve(workspaceDir, 'source.pdf')
+  await promisify(execFile)(resolve('resources/tools/darwin-arm64/gs'), [
+    '-dBATCH',
+    '-dNOPAUSE',
+    '-sDEVICE=pdfwrite',
+    `-sOutputFile=${pdfInput}`,
+    pdfPostScript
+  ])
+  const pdfBytes = await readFile(pdfInput)
+  const pdfOutput = resolve(workspaceDir, 'compressed.pdf')
+  const pdfResult = await callTool('compress_pdf', {
+    inputPath: pdfInput,
+    outputPath: pdfOutput,
+    preset: 'lossless',
+    archive: true,
+    tags: ['参考']
+  })
+  assert.ok(pdfResult.includes('"outputBytes":'), pdfResult)
+  await access(pdfOutput)
+  const pdfId = await checkPreservedOriginal(pdfInput, pdfOutput, pdfBytes)
+  assert.ok(currentCatalog.get(pdfId).archivePath)
+  assert.ok(pdfResult.includes('"archive":{"status":"ready"'), pdfResult)
   assert.match(
     await callTool('compress_pdf', {
-      inputPath: resolve(workspaceDir, toolFile),
-      outputPath: resolve(workspaceDir, 'output.pdf')
+      inputPath: pdfInput,
+      outputPath: pdfOutput,
+      preset: 'lossless'
     }),
-    /NOT_IMPLEMENTED/
+    /已存在/
   )
-  await assert.rejects(access(resolve(workspaceDir, 'output.pdf')))
 
   const imageInput = resolve(workspaceDir, 'image with spaces.png')
   await sharp({ create: { width: 96, height: 64, channels: 4, background: '#00998880' } })
-    .png()
+    .png({ compressionLevel: 0 })
     .toFile(imageInput)
   const imageBytes = await readFile(imageInput)
   const imageOutput = resolve(workspaceDir, 'compressed.webp')
@@ -550,6 +632,34 @@ export const shell = { trashItem: async (path) => {
     )
   )
   assert.equal((await sharp(imageOutput).metadata()).format, 'webp')
+  const imageId = await checkPreservedOriginal(imageInput, imageOutput, imageBytes)
+  assert.equal(currentCatalog.get(imageId).archivePath, null, 'Compression alone does not archive')
+  assert.ok(
+    (await callTool('archive_file', { id: imageId, tags: ['旅行'] })).includes('"archivePath":')
+  )
+  const imageArchivePath = currentCatalog.get(imageId).archivePath
+  await callTool('archive_file', { id: imageId })
+  assert.equal(currentCatalog.get(imageId).archivePath, imageArchivePath)
+  await callTool('tag_archives', { ids: [imageId, pdfId], add: ['公共标签'] })
+  assert.equal(currentCatalog.query({ tags: ['公共标签'] }).total, 2)
+  const search = await callTool('search_archives', { tags: ['公共标签', '旅行'] })
+  assert.ok(search.includes(imageId))
+  assert.ok(!search.includes(pdfId), 'Multiple tag filters are AND')
+  assert.ok(search.includes('演唱会'), 'Search exposes preset labels for future AI tagging')
+  await callTool('tag_archives', { ids: [imageId], add: ['素材'], remove: ['旅行'] })
+  assert.ok(!currentCatalog.get(imageId).tags.includes('旅行'))
+  assert.ok(currentCatalog.get(imageId).tags.includes('素材'))
+  assert.match(await callTool('archive_file', { id: '/tmp/not-a-record' }), /id|pattern|invalid/i)
+  const invalidOutput = resolve(workspaceDir, 'tags-without-archive.webp')
+  assert.match(
+    await callTool('compress_image', {
+      inputPath: imageInput,
+      outputPath: invalidOutput,
+      tags: ['旅行']
+    }),
+    /archive=true/
+  )
+  await assert.rejects(access(invalidOutput))
   const jpegOutput = resolve(workspaceDir, 'compatible.jpg')
   await callTool('compress_image', {
     inputPath: imageInput,
@@ -560,6 +670,7 @@ export const shell = { trashItem: async (path) => {
     jpegBackground: '#ffffff'
   })
   assert.equal((await sharp(jpegOutput).metadata()).format, 'jpeg')
+  await checkPreservedOriginal(imageInput, jpegOutput, imageBytes)
   assert.match(
     await callTool('compress_image', { inputPath: imageInput, outputPath: imageOutput }),
     /已存在/
@@ -588,18 +699,28 @@ export const shell = { trashItem: async (path) => {
     videoInput
   ])
   const videoBytes = await readFile(videoInput)
+  const unavailableArchive = `${currentCatalog.archiveRoot}.offline`
+  await rename(currentCatalog.archiveRoot, unavailableArchive)
+  await writeFile(currentCatalog.archiveRoot, 'simulate an unavailable archive root')
   const videoResult = await callTool('compress_video', {
     inputPath: videoInput,
     outputPath: videoOutput,
     preset: 'size',
-    compatibility: false
+    compatibility: false,
+    archive: true,
+    tags: ['演唱会']
   })
   assert.ok(videoResult.includes('"outputBytes":'), videoResult)
   await access(videoOutput)
-  assert.deepEqual(
-    await readFile(videoInput),
-    videoBytes,
-    'Agent video compression preserves source bytes'
+  const videoId = await checkPreservedOriginal(videoInput, videoOutput, videoBytes)
+  assert.ok(videoResult.includes('"archive":{"status":"error"'), videoResult)
+  assert.equal(currentCatalog.get(videoId).archivePath, null)
+  await rm(currentCatalog.archiveRoot)
+  await rename(unavailableArchive, currentCatalog.archiveRoot)
+  await callTool('archive_file', { id: videoId, tags: ['演唱会'] })
+  assert.ok(
+    currentCatalog.get(videoId).archivePath,
+    'Retry archives the existing output without encoding again'
   )
   const libraryDirectory = resolve(workspaceDir, 'ordinary.photoslibrary')
   await mkdir(libraryDirectory)
@@ -614,6 +735,7 @@ export const shell = { trashItem: async (path) => {
   })
   assert.ok(libraryVideoResult.includes('"outputBytes":'), libraryVideoResult)
   await access(resolve(libraryDirectory, 'output.mp4'))
+  await checkPreservedOriginal(videoInput, resolve(libraryDirectory, 'output.mp4'), videoBytes)
   assert.deepEqual((await readdir(libraryDirectory)).sort(), ['output.mp4', 'source.mov'])
   assert.match(
     await callTool('compress_video', {
@@ -708,10 +830,11 @@ export const shell = { trashItem: async (path) => {
   assert.equal((await send('a', 'closed', '你好')).status, 'error')
   if (serverFailure) throw serverFailure
   console.log(
-    'PASS: Pi tool parameters, Mole analysis/preview arguments/results/partial/failure/cancellation, real Agent image/video compression and source preservation, native file operations, real Electron recycle bin, permanent deletion, failure/no-fallback and critical system path protection without user-directory blacklists, PDF placeholder without side effects, streaming, history, isolation, recovery and key redaction.'
+    'PASS: Pi tool parameters, actual image/video/PDF compression and original backup, optional combined archive, standalone archive/retry, batch Finder tags, preset labels and AND search; Mole previews, native file operations, streaming, isolation, cancellation and key redaction.'
   )
 } finally {
   service?.dispose()
+  await catalog?.close()
   server.closeAllConnections()
   await new Promise<void>((done) => {
     server.close(() => {
