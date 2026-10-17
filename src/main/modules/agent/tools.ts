@@ -107,7 +107,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'compress_video',
       label: '视频压缩',
       description:
-        '复用 Arkive 视频压缩业务。仅在用户已授权输入、输出位置和压缩操作后调用；生成新 MP4，保留原件，不覆盖已有文件。当前使用硬件 HEVC，保留 AAC 音轨；会移除字幕、章节、封面及其他辅助流，调用前向用户说明。compatibility 参数完整保留，但当前 H.264 模式会返回尚未支持。结构和解码检查不代表感知画质验收。',
+        '复用 Arkive 视频压缩业务。仅在用户已授权输入、输出位置和压缩操作后调用；生成新 MP4，保留原件，不覆盖已有文件。默认使用硬件 HEVC；compatibility=true 输出硬件 H.264 8bit，调用前须明确说明 10bit 原片将转为 8bit、体积可能更大；两种模式均保留原分辨率、帧时间关系与 AAC 音轨，HDR 等未支持特性仍拒绝。会移除字幕、章节、封面及其他辅助流，调用前向用户说明。结构和解码检查不代表感知画质验收。',
       parameters: Type.Object({
         inputPath: Type.String({ description: '源视频绝对路径。' }),
         outputPath: Type.String({ description: '用户授权的新 MP4 输出绝对路径，父目录须已存在。' }),

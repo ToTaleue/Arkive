@@ -64,6 +64,7 @@ async function check(): Promise<void> {
   const fixtures = join(app.getPath('desktop'), 'arkive-test')
   const source = join(fixtures, 'video-dji-4k.MP4')
   const directory = await mkdtemp(join(fixtures, 'dji-compression-check-'))
+  const compatibility = process.argv.includes('--h264')
   try {
     const originalHash = await hash(source)
     assert.deepEqual((await inspectVideo(source)).removedContents, [
@@ -71,11 +72,11 @@ async function check(): Promise<void> {
       '时间码',
       '封面／缩略图'
     ])
-    const outputPath = join(directory, 'video-dji-4k-balanced.mp4')
+    const outputPath = join(directory, `video-dji-4k-balanced${compatibility ? '-h264' : ''}.mp4`)
     const started = Date.now()
     const updates: VideoCompressionProgress[] = []
     const result = await compressVideo(
-      { inputPath: source, outputPath, preset: 'balanced' },
+      { inputPath: source, outputPath, preset: 'balanced', compatibility },
       undefined,
       (update) => updates.push(update)
     )
@@ -110,11 +111,11 @@ async function check(): Promise<void> {
       await probe(outputPath, 'stream=codec_name,profile,width,height,pix_fmt', 'V'),
       JSON.stringify([
         {
-          codec_name: 'hevc',
-          profile: 'Main 10',
+          codec_name: compatibility ? 'h264' : 'hevc',
+          profile: compatibility ? 'High' : 'Main 10',
           width: 3840,
           height: 2160,
-          pix_fmt: 'yuv420p10le'
+          pix_fmt: compatibility ? 'yuv420p' : 'yuv420p10le'
         }
       ])
     )
@@ -129,7 +130,7 @@ async function check(): Promise<void> {
     assert.equal(await audioHashes(outputPath), await audioHashes(source))
     assert.equal(await hash(source), originalHash)
     console.log(
-      'PASS: actual DJI Pocket 3; 4K/59.94fps/10bit/color preserved, AAC packets unchanged, extra streams removed, full decode passed, original unchanged'
+      `PASS: actual DJI Pocket 3; 4K/59.94fps/color preserved, ${compatibility ? 'H.264 8bit' : 'HEVC 10bit'}, AAC packets unchanged, extra streams removed, full decode passed, original unchanged`
     )
     console.log(
       JSON.stringify(

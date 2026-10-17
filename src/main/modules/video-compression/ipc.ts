@@ -37,7 +37,8 @@ function isStartRequest(value: unknown): value is VideoStartRequest {
     typeof value.fileId === 'string' &&
     'preset' in value &&
     typeof value.preset === 'string' &&
-    ['quality', 'balanced', 'size'].includes(value.preset)
+    ['quality', 'balanced', 'size'].includes(value.preset) &&
+    (!('compatibility' in value) || typeof value.compatibility === 'boolean')
   )
 }
 
@@ -114,7 +115,12 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
         )
         await assertSystemWriteAllowed(output)
         const result = await compressVideo(
-          { inputPath: input, outputPath: output, preset: request.preset },
+          {
+            inputPath: input,
+            outputPath: output,
+            preset: request.preset,
+            compatibility: request.compatibility
+          },
           controller.signal,
           (progress) => {
             if (

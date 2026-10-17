@@ -10,16 +10,19 @@ export interface AbAv1SearchResult {
 
 /** Decode only the terminal success event, never an intermediate sample or error event. */
 export function parseAbAv1SearchResult(stdout: string): AbAv1SearchResult {
+  return parseResult(stdout, 'crf-search-done')
+}
+
+function parseResult(
+  stdout: string,
+  type: 'crf-search-done' | 'sample-encode-done'
+): AbAv1SearchResult {
   const events: unknown[] = stdout
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line) as unknown)
   const done = events.findLast(
-    (event) =>
-      typeof event === 'object' &&
-      event !== null &&
-      'type' in event &&
-      event.type === 'crf-search-done'
+    (event) => typeof event === 'object' && event !== null && 'type' in event && event.type === type
   )
   if (
     typeof done !== 'object' ||
@@ -58,6 +61,22 @@ export async function searchWithAbAv1(
   args: readonly string[],
   options: Pick<ToolProcessOptions, 'signal' | 'cwd'>
 ): Promise<AbAv1SearchResult> {
+  return runAbAv1(args, options, 'crf-search-done')
+}
+
+/** Explicit q:v is needed for H.264 VideoToolbox; upstream only maps HEVC's crf to q:v. */
+export async function sampleWithAbAv1(
+  args: readonly string[],
+  options: Pick<ToolProcessOptions, 'signal' | 'cwd'>
+): Promise<AbAv1SearchResult> {
+  return runAbAv1(args, options, 'sample-encode-done')
+}
+
+async function runAbAv1(
+  args: readonly string[],
+  options: Pick<ToolProcessOptions, 'signal' | 'cwd'>,
+  terminalType: 'crf-search-done' | 'sample-encode-done'
+): Promise<AbAv1SearchResult> {
   options.signal?.throwIfAborted()
   const tools = dirname(getBundledToolPath('ffmpeg'))
   getBundledToolPath('ffprobe')
@@ -70,5 +89,5 @@ export async function searchWithAbAv1(
   if (result.exitCode !== 0 || result.signal || result.stdoutTruncated) {
     throw new Error(`自动选参失败；未改用固定参数或软件编码。\n${result.stderr.slice(-4096)}`)
   }
-  return parseAbAv1SearchResult(result.stdout)
+  return parseResult(result.stdout, terminalType)
 }

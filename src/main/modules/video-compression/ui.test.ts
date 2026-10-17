@@ -2,7 +2,7 @@
 // Build the app first, then: rtk proxy node scripts/check-video-compression.mjs --ui
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -10,9 +10,12 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { runBundledTool } from '../../../execution/process'
 import { registerVideoCompressionIpc } from './ipc'
 
+// Keep failures observable after cleanup destroys the last window.
+app.on('window-all-closed', () => {})
+
 async function check(): Promise<void> {
   await app.whenReady()
-  const directory = await mkdtemp(join(tmpdir(), 'arkive-video-ui-'))
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'arkive-video-ui-')))
   const source = join(directory, 'sample.mov')
   let selectedPath = source
   let outputPath = join(directory, 'compressed.mp4')
@@ -38,6 +41,14 @@ async function check(): Promise<void> {
     webPreferences: { preload: resolve('out/preload/index.js'), sandbox: false }
   })
   attach(window.webContents)
+  async function checkOriginal(expectedHash: string): Promise<void> {
+    assert.equal(
+      createHash('sha256')
+        .update(await readFile(source))
+        .digest('hex'),
+      expectedHash
+    )
+  }
   async function evaluate(expression: string): Promise<unknown> {
     const value: unknown = await window.webContents.executeJavaScript(expression)
     return value
@@ -97,6 +108,10 @@ async function check(): Promise<void> {
     )
     assert.equal(await evaluate('document.querySelector("input[value=balanced]").checked'), true)
     assert.equal(
+      await evaluate('document.querySelector(".video-compatibility input").checked'),
+      false
+    )
+    assert.equal(
       await evaluate(
         'document.querySelector("[role=note]").textContent.includes("仅保留主视频和音频")'
       ),
@@ -136,14 +151,68 @@ async function check(): Promise<void> {
     )
     assert.ok((await stat(outputPath)).size > 0)
     assert.equal(await evaluate('document.querySelector(".video-primary-button").disabled'), false)
-    assert.equal(
-      createHash('sha256')
-        .update(await readFile(source))
-        .digest('hex'),
-      hash
-    )
+    await checkOriginal(hash)
     console.log(
       'PASS: save cancellation and full UI → preload → IPC → real compression → result flow'
+    )
+
+    outputPath = join(directory, 'compatible.mp4')
+    await click('.video-compatibility input')
+    await waitFor('document.querySelector(".video-format").textContent.includes("H.264")')
+    assert.equal(
+      await evaluate(
+        'document.querySelector(".video-page").textContent.includes("10bit 原片将转为 8bit")'
+      ),
+      true
+    )
+    await click('.video-primary-button')
+    await waitFor('document.querySelector(".video-running")?.textContent.includes("正在分析画质")')
+    assert.equal(
+      await evaluate('document.querySelector(".video-compatibility input").disabled'),
+      true
+    )
+    await waitFor(
+      'document.querySelector(".video-result")?.textContent.includes("H.264 · 8bit")',
+      120_000
+    )
+    const compatible = await runBundledTool('ffprobe', [
+      '-v',
+      'error',
+      '-select_streams',
+      'v:0',
+      '-show_entries',
+      'stream=codec_name,pix_fmt',
+      '-of',
+      'json',
+      outputPath
+    ])
+    assert.equal(compatible.exitCode, 0, compatible.stderr)
+    const compatibleData: unknown = JSON.parse(compatible.stdout)
+    assert.ok(
+      typeof compatibleData === 'object' && compatibleData !== null && 'streams' in compatibleData
+    )
+    assert.deepEqual(compatibleData.streams, [{ codec_name: 'h264', pix_fmt: 'yuv420p' }])
+    await checkOriginal(hash)
+    await writeFile(
+      resolve('out/video-compression-h264.png'),
+      (await window.webContents.capturePage()).toPNG()
+    )
+    await click('.video-compatibility input')
+    await waitFor('document.querySelector(".video-format").textContent.includes("HEVC")')
+    assert.equal(
+      await evaluate(
+        'document.querySelector(".video-result").textContent.includes("H.264 · 8bit")'
+      ),
+      true
+    )
+    console.log(
+      'PASS: H.264 option reaches real encoder through IPC; busy option locked and result retains actual codec'
+    )
+
+    await assert.rejects(
+      evaluate(
+        'window.api.video.compress({runId:"invalid",fileId:"not-selected",preset:"balanced",compatibility:"true"})'
+      )
     )
 
     await assert.rejects(

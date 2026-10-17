@@ -45,6 +45,7 @@ function formatDuration(seconds: number): string {
 export function VideoCompressionPage(): React.JSX.Element {
   const [selected, setSelected] = useState<SelectedVideo | null>(null)
   const [preset, setPreset] = useState<VideoCompressionPreset>('balanced')
+  const [compatibility, setCompatibility] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [progress, setProgress] = useState<VideoCompressionProgress | null>(null)
   const [result, setResult] = useState<VideoCompressionResult | null>(null)
@@ -102,7 +103,7 @@ export function VideoCompressionPage(): React.JSX.Element {
     setError(null)
     setNotice(null)
     try {
-      const outcome = await api.compress({ runId: id, fileId: selected.id, preset })
+      const outcome = await api.compress({ runId: id, fileId: selected.id, preset, compatibility })
       if (!mounted.current) return
       if (outcome.status === 'completed') setResult(outcome.result)
       else if (outcome.status === 'error') setError(outcome.error)
@@ -159,7 +160,7 @@ export function VideoCompressionPage(): React.JSX.Element {
           <h1>视频压缩</h1>
           <p>选一个视频，从一小次压缩开始。</p>
         </div>
-        <span className="video-format">MP4 · HEVC</span>
+        <span className="video-format">MP4 · {compatibility ? 'H.264' : 'HEVC'}</span>
       </header>
 
       <section className="video-card" aria-labelledby="video-file-heading">
@@ -238,6 +239,22 @@ export function VideoCompressionPage(): React.JSX.Element {
             </label>
           ))}
         </fieldset>
+        <label className="video-compatibility">
+          <input
+            type="checkbox"
+            checked={compatibility}
+            disabled={busy}
+            onChange={(event) => {
+              setCompatibility(event.target.checked)
+            }}
+          />
+          兼容优先（H.264）
+        </label>
+        <p className="video-hint">
+          {compatibility
+            ? '输出 8bit H.264，便于在更多设备播放；10bit 原片将转为 8bit，体积可能比 HEVC 更大。保留原分辨率与帧率，老设备仍可能无法播放高规格视频。'
+            : '默认输出 HEVC，侧重节省空间，并保留支持的原片位深。'}
+        </p>
         <div className="video-actions">
           <p>
             保留原分辨率与帧率
@@ -341,6 +358,9 @@ export function VideoCompressionPage(): React.JSX.Element {
             {result.status === 'compressed'
               ? '已检查文件并完成解码验证，原视频已保留。'
               : '本次没有体积收益；输出文件和原视频均已保留。'}
+          </p>
+          <p>
+            输出 MP4 · {result.videoCodec === 'h264' ? 'H.264' : 'HEVC'} · {result.bitDepth}bit。
           </p>
           <p>
             抽样画质评分 {result.qualityAnalysis.sampleVmaf.toFixed(1)} / 100 （目标{' '}

@@ -44,10 +44,17 @@ try {
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   await new Promise((resolveCheck, reject) => {
-    const child = spawn(electron, [resolve(buildDirectory, 'checks.cjs')], {
-      env,
-      stdio: 'inherit'
-    })
+    const child = spawn(
+      electron,
+      [
+        resolve(buildDirectory, 'checks.cjs'),
+        ...(process.argv.includes('--h264') ? ['--h264'] : [])
+      ],
+      {
+        env,
+        stdio: 'inherit'
+      }
+    )
     child.on('error', reject)
     child.on('close', (code, signal) => {
       if (code === 0 && !signal) resolveCheck()

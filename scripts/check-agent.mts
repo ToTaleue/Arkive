@@ -629,7 +629,7 @@ export const shell = { trashItem: async (path) => {
       preset: 'quality',
       compatibility: true
     }),
-    /H.264/
+    /"videoCodec":"h264"/
   )
 
   await writeFile(moleModeFile, 'slow')

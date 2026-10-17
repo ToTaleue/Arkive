@@ -1,7 +1,7 @@
 import { link, lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { searchWithAbAv1 } from '../../../execution/ab-av1'
+import { sampleWithAbAv1, searchWithAbAv1, type AbAv1SearchResult } from '../../../execution/ab-av1'
 import { spawnFfmpeg } from '../../../execution/ffmpeg'
 import { runBundledTool } from '../../../execution/process'
 import type {
@@ -32,6 +32,33 @@ interface VideoInfo extends VideoInspection {
 
 // 抽样 VMAF 试验目标，尚待更多素材标定；不是整片画质保证或画质保留百分比。
 const targetVmaf = { quality: 98, balanced: 95, size: 90 } as const
+
+/** ab-av1 0.11.7 only maps HEVC's crf to q:v. Search H.264 with explicit q:v samples. */
+async function selectH264Quality(
+  sampleArgs: readonly string[],
+  target: number,
+  cwd: string,
+  signal?: AbortSignal
+): Promise<AbAv1SearchResult> {
+  let low = 4 // q:v 20, in steps of 5 up to 100; matches the HEVC search range.
+  let high = 20
+  let best: AbAv1SearchResult | undefined
+  while (low <= high) {
+    signal?.throwIfAborted()
+    const step = Math.floor((low + high) / 2)
+    const quality = step * 5
+    const sample = await sampleWithAbAv1(
+      ['sample-encode', ...sampleArgs, '--crf', String(quality), '--enc', `q:v=${String(quality)}`],
+      { cwd, signal }
+    )
+    if (sample.sampleVmaf >= target) {
+      best = sample
+      high = step - 1
+    } else low = step + 1
+  }
+  if (!best) throw new Error('H.264 自动选参未达到所选档位的抽样画质目标；未降低画质目标。')
+  return best
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -199,7 +226,7 @@ async function runFfmpeg(
 /**
  * 主进程内的业务入口，由用户确认后的任务流程调用，不直接注册为 Agent Tool。
  * 仅生成新文件，始终保留原件；结构检查和完整解码不代表感知画质验收。
- * 任务持久化、H.264 参数和原件处理后续再接入。
+ * 任务持久化和原件处理后续再接入。
  */
 export async function compressVideo(
   request: VideoCompressionRequest,
@@ -208,9 +235,6 @@ export async function compressVideo(
 ): Promise<VideoCompressionResult> {
   signal?.throwIfAborted()
   const { inputPath, outputPath, preset = 'balanced', compatibility = false } = request
-  if (compatibility) {
-    throw new Error('H.264 兼容优先模式的三档参数尚待单独验证，当前不套用 HEVC 参数。')
-  }
   if (!Object.hasOwn(targetVmaf, preset)) throw new Error('未知的视频压缩档位。')
   if (
     !isAbsolute(inputPath) ||
@@ -230,6 +254,19 @@ export async function compressVideo(
   if (!inputStat.isFile()) throw new Error('输入须为普通视频文件。')
   onUpdate?.({ stage: 'probing', percent: null, elapsedSeconds: 0, remainingSeconds: null })
   const before = await probeVideo(input, signal)
+  // Compatibility explicitly selects 8bit H.264; HEVC continues to preserve input bit depth.
+  const outputCodec = compatibility ? 'h264' : 'hevc'
+  const encoder = compatibility ? 'h264_videotoolbox' : 'hevc_videotoolbox'
+  const outputBitDepth = compatibility ? 8 : before.bitDepth
+  const pixelFormat = outputBitDepth === 10 ? 'p010le' : 'nv12'
+  const profile = compatibility ? 'high' : outputBitDepth === 10 ? 'main10' : 'main'
+  // VideoToolbox may omit H.264's limited-range VUI when no other color fields exist.
+  // Write the known source range explicitly, rather than weakening color validation.
+  const colorRange = before.color.find(({ option }) => option === '-color_range:v')?.value
+  const bitstreamFilter =
+    compatibility && colorRange
+      ? `h264_metadata=video_full_range_flag=${colorRange === 'pc' ? '1' : '0'}`
+      : undefined
   signal?.throwIfAborted()
   const temporaryDirectory = await mkdtemp(join(dirname(outputPath), '.arkive-video-'))
   const temporaryOutput = join(temporaryDirectory, 'compressed.mp4')
@@ -270,54 +307,60 @@ export async function compressVideo(
         ],
         signal
       )
-      const search = await searchWithAbAv1(
-        [
-          'crf-search',
-          '--input',
-          analysisInput,
-          '--encoder',
-          'hevc_videotoolbox',
-          '--min-vmaf',
-          String(targetVmaf[preset]),
-          // Savings are determined from the actual final file, including retained audio.
-          '--max-encoded-percent',
-          'inf',
-          '--min-crf',
-          '20',
-          '--max-crf',
-          '100',
-          '--crf-increment',
-          '5',
-          '--samples',
-          '2',
-          '--sample-duration',
-          '1s',
-          '--cache',
-          'false',
-          '--temp-dir',
-          temporaryDirectory,
-          '--stdout-format',
-          'json',
-          '--vmaf-fps',
-          '0',
-          '--vmaf',
-          'n_subsample=12',
-          '--vmaf',
-          'n_threads=8',
-          '--enc',
-          'allow_sw=0',
-          '--enc',
-          'enc_time_base:v=demux',
-          '--enc',
-          'g=250',
-          '--enc',
-          `pix_fmt:v:0=${before.bitDepth === 10 ? 'p010le' : 'nv12'}`,
-          '--enc',
-          `profile:v=${before.bitDepth === 10 ? 'main10' : 'main'}`,
-          ...before.color.flatMap(({ option, value }) => ['--enc', `${option.slice(1)}=${value}`])
-        ],
-        { signal, cwd: temporaryDirectory }
-      )
+      const sampleArgs = [
+        '--input',
+        analysisInput,
+        '--encoder',
+        encoder,
+        '--samples',
+        '2',
+        '--sample-duration',
+        '1s',
+        '--cache',
+        'false',
+        '--temp-dir',
+        temporaryDirectory,
+        '--stdout-format',
+        'json',
+        '--vmaf-fps',
+        '0',
+        '--vmaf',
+        'n_subsample=12',
+        '--vmaf',
+        'n_threads=8',
+        '--enc',
+        'allow_sw=0',
+        '--enc',
+        'enc_time_base:v=demux',
+        '--enc',
+        'g=250',
+        '--enc',
+        `pix_fmt:v:0=${pixelFormat}`,
+        '--enc',
+        `profile:v=${profile}`,
+        ...(bitstreamFilter ? ['--enc', `bsf:v=${bitstreamFilter}`] : []),
+        ...before.color.flatMap(({ option, value }) => ['--enc', `${option.slice(1)}=${value}`])
+      ]
+      const search = compatibility
+        ? await selectH264Quality(sampleArgs, targetVmaf[preset], temporaryDirectory, signal)
+        : await searchWithAbAv1(
+            [
+              'crf-search',
+              ...sampleArgs,
+              '--min-vmaf',
+              String(targetVmaf[preset]),
+              // Savings are determined from the actual final file, including retained audio.
+              '--max-encoded-percent',
+              'inf',
+              '--min-crf',
+              '20',
+              '--max-crf',
+              '100',
+              '--crf-increment',
+              '5'
+            ],
+            { signal, cwd: temporaryDirectory }
+          )
       if (search.sampleVmaf < targetVmaf[preset]) {
         throw new Error('自动选参结果未达到所选档位的抽样画质目标。')
       }
@@ -355,20 +398,21 @@ export async function compressVideo(
         '-write_tmcd',
         '0',
         '-c:v',
-        'hevc_videotoolbox',
+        encoder,
         '-allow_sw',
         '0',
         '-g',
         '250',
         '-pix_fmt',
-        before.bitDepth === 10 ? 'p010le' : 'nv12',
+        pixelFormat,
         '-profile:v',
-        before.bitDepth === 10 ? 'main10' : 'main',
+        profile,
         ...before.color.flatMap(({ option, value }) => [option, value]),
+        ...(bitstreamFilter ? ['-bsf:v', bitstreamFilter] : []),
         '-q:v',
         String(qualityAnalysis.quality),
         '-tag:v',
-        'hvc1',
+        compatibility ? 'avc1' : 'hvc1',
         '-fps_mode:v',
         'passthrough',
         '-enc_time_base:v',
@@ -394,11 +438,11 @@ export async function compressVideo(
     onUpdate?.({ stage: 'validating', percent: null, elapsedSeconds: 0, remainingSeconds: null })
     const after = await probeVideo(temporaryOutput, signal)
     if (
-      after.codec !== 'hevc' ||
+      after.codec !== outputCodec ||
       after.width !== before.width ||
       after.height !== before.height ||
       after.audioCount !== before.audioCount ||
-      after.bitDepth !== before.bitDepth ||
+      after.bitDepth !== outputBitDepth ||
       after.removedContents.length !== 0 ||
       before.color.some(
         ({ option, value }) =>
@@ -445,6 +489,8 @@ export async function compressVideo(
       inputBytes: inputStat.size,
       outputBytes: outputStat.size,
       savedBytes: Math.max(0, inputStat.size - outputStat.size),
+      videoCodec: outputCodec,
+      bitDepth: outputBitDepth,
       qualityAnalysis
     }
   } finally {

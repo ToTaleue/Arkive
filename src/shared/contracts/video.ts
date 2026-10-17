@@ -13,6 +13,8 @@ export interface VideoCompressionResult {
   inputBytes: number
   outputBytes: number
   savedBytes: number
+  videoCodec: 'hevc' | 'h264'
+  bitDepth: 8 | 10
   qualityAnalysis: VideoQualityAnalysis
 }
 
@@ -45,6 +47,7 @@ export interface VideoStartRequest {
   runId: string
   fileId: string
   preset: VideoCompressionPreset
+  compatibility?: boolean
 }
 export type VideoCompressionOutcome =
   | { status: 'completed'; result: VideoCompressionResult }

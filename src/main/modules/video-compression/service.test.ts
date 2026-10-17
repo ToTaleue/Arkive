@@ -69,42 +69,73 @@ async function check(): Promise<void> {
     const originalHash = createHash('sha256')
       .update(await readFile(source))
       .digest('hex')
-    for (const preset of ['quality', 'balanced', 'size'] as const) {
-      const outputPath = join(directory, `${preset}.mp4`)
-      const updates: VideoCompressionProgress[] = []
-      const result = await compressVideo(
-        { inputPath: source, outputPath, preset },
-        undefined,
-        (update) => updates.push(update)
-      )
-      for (const stage of ['encoding', 'validating'] as const) {
-        const reports = updates.filter((update) => update.stage === stage)
-        assert.ok(reports.length >= 2, `Expected real FFmpeg progress for ${stage}`)
-        assert.ok(
-          reports.some((update) => update.percent !== null && update.percent > 0),
-          `No processed frames reported: ${JSON.stringify({ stage, reports })}`
+    for (const compatibility of [false, true]) {
+      for (const preset of ['quality', 'balanced', 'size'] as const) {
+        const outputPath = join(directory, `${compatibility ? 'h264' : 'hevc'}-${preset}.mp4`)
+        const updates: VideoCompressionProgress[] = []
+        const result = await compressVideo(
+          { inputPath: source, outputPath, preset, compatibility },
+          undefined,
+          (update) => updates.push(update)
         )
-        assert.ok(
-          reports.every(
-            (update) => update.percent === null || (update.percent >= 0 && update.percent < 100)
+        for (const stage of ['encoding', 'validating'] as const) {
+          const reports = updates.filter((update) => update.stage === stage)
+          assert.ok(reports.length >= 2, `Expected real FFmpeg progress for ${stage}`)
+          assert.ok(
+            reports.some((update) => update.percent !== null && update.percent > 0),
+            `No processed frames reported: ${JSON.stringify({ stage, reports })}`
           )
+          assert.ok(
+            reports.every(
+              (update) => update.percent === null || (update.percent >= 0 && update.percent < 100)
+            )
+          )
+        }
+        assert.equal(result.outputBytes, (await stat(outputPath)).size)
+        assert.equal(result.videoCodec, compatibility ? 'h264' : 'hevc')
+        assert.equal(result.bitDepth, 8)
+        const video = await runBundledTool('ffprobe', [
+          '-v',
+          'error',
+          '-select_streams',
+          'v:0',
+          '-show_entries',
+          'stream=codec_name,codec_tag_string,profile,pix_fmt,width,height,nb_frames',
+          '-of',
+          'json',
+          outputPath
+        ])
+        assert.equal(video.exitCode, 0, video.stderr)
+        const data: unknown = JSON.parse(video.stdout)
+        assert.ok(typeof data === 'object' && data !== null && 'streams' in data)
+        assert.deepEqual(data.streams, [
+          {
+            codec_name: compatibility ? 'h264' : 'hevc',
+            profile: compatibility ? 'High' : 'Main',
+            codec_tag_string: compatibility ? 'avc1' : 'hvc1',
+            width: 320,
+            height: 240,
+            pix_fmt: 'yuv420p',
+            nb_frames: '90'
+          }
+        ])
+        assert.equal(
+          result.status,
+          result.outputBytes < result.inputBytes ? 'compressed' : 'no-savings'
+        )
+        assert.equal(result.savedBytes, Math.max(0, result.inputBytes - result.outputBytes))
+        assert.ok(result.qualityAnalysis.sampleVmaf >= result.qualityAnalysis.targetVmaf)
+        assert.ok(result.qualityAnalysis.quality >= 0 && result.qualityAnalysis.quality <= 100)
+        const analysis = updates.filter((update) => update.stage === 'analyzing')
+        assert.ok(analysis.length > 0)
+        assert.ok(
+          analysis.every((update) => update.percent === null && update.remainingSeconds === null)
         )
       }
-      assert.equal(result.outputBytes, (await stat(outputPath)).size)
-      assert.equal(
-        result.status,
-        result.outputBytes < result.inputBytes ? 'compressed' : 'no-savings'
-      )
-      assert.equal(result.savedBytes, Math.max(0, result.inputBytes - result.outputBytes))
-      assert.ok(result.qualityAnalysis.sampleVmaf >= result.qualityAnalysis.targetVmaf)
-      assert.ok(result.qualityAnalysis.quality >= 0 && result.qualityAnalysis.quality <= 100)
-      const analysis = updates.filter((update) => update.stage === 'analyzing')
-      assert.ok(analysis.length > 0)
-      assert.ok(
-        analysis.every((update) => update.percent === null && update.remainingSeconds === null)
-      )
     }
-    console.log('PASS: all three HEVC presets with real VideoToolbox, AAC and output decoding')
+    console.log(
+      'PASS: all three HEVC and H.264 presets with real VideoToolbox, AAC and output decoding'
+    )
 
     const cover = join(directory, 'cover.jpg')
     await ffmpeg(['-i', source, '-frames:v', '1', '-update', '1', cover])
@@ -143,20 +174,27 @@ async function check(): Promise<void> {
       camera
     ])
     assert.deepEqual((await inspectVideo(camera)).removedContents, ['时间码', '封面／缩略图'])
-    const cameraOutput = join(directory, 'camera-compressed.mp4')
-    await compressVideo({ inputPath: camera, outputPath: cameraOutput })
-    assert.deepEqual((await inspectVideo(cameraOutput)).removedContents, [])
-    const tracks = await runBundledTool('ffprobe', [
-      '-v',
-      'error',
-      '-show_entries',
-      'stream=codec_type,pix_fmt',
-      '-of',
-      'csv=p=0',
-      cameraOutput
-    ])
-    assert.equal(tracks.stdout.trim(), 'video,yuv420p10le\naudio\naudio')
-    console.log('PASS: 10bit camera fixture retains both AAC tracks and removes cover/timecode')
+    for (const compatibility of [false, true]) {
+      const cameraOutput = join(directory, `camera-${compatibility ? 'h264' : 'hevc'}.mp4`)
+      await compressVideo({ inputPath: camera, outputPath: cameraOutput, compatibility })
+      assert.deepEqual((await inspectVideo(cameraOutput)).removedContents, [])
+      const tracks = await runBundledTool('ffprobe', [
+        '-v',
+        'error',
+        '-show_entries',
+        'stream=codec_type,pix_fmt',
+        '-of',
+        'csv=p=0',
+        cameraOutput
+      ])
+      assert.equal(
+        tracks.stdout.trim(),
+        `video,${compatibility ? 'yuv420p' : 'yuv420p10le'}\naudio\naudio`
+      )
+    }
+    console.log(
+      'PASS: 10bit camera fixture retains AAC tracks; HEVC preserves 10bit, H.264 outputs 8bit; cover/timecode removed'
+    )
 
     const variable = join(directory, 'variable.mov')
     await ffmpeg([
@@ -173,18 +211,20 @@ async function check(): Promise<void> {
       '-an',
       variable
     ])
-    const variableOutput = join(directory, 'variable.mp4')
-    await compressVideo({ inputPath: variable, outputPath: variableOutput })
-    const before = await timestamps(variable)
-    const after = await timestamps(variableOutput)
-    assert.equal(after.length, before.length)
-    assert.ok(
-      new Set(before.slice(1).map((time, index) => (time - before[index]).toFixed(4))).size > 1
-    )
-    after.forEach((time, index) => {
-      assert.ok(Math.abs(time - before[index]) < 0.0001)
-    })
-    console.log('PASS: VFR frame timestamps and frame count preserved')
+    for (const compatibility of [false, true]) {
+      const variableOutput = join(directory, `variable-${compatibility ? 'h264' : 'hevc'}.mp4`)
+      await compressVideo({ inputPath: variable, outputPath: variableOutput, compatibility })
+      const before = await timestamps(variable)
+      const after = await timestamps(variableOutput)
+      assert.equal(after.length, before.length)
+      assert.ok(
+        new Set(before.slice(1).map((time, index) => (time - before[index]).toFixed(4))).size > 1
+      )
+      after.forEach((time, index) => {
+        assert.ok(Math.abs(time - before[index]) < 0.0001)
+      })
+    }
+    console.log('PASS: HEVC and H.264 preserve VFR frame timestamps and frame count')
 
     const tiny = join(directory, 'tiny.mp4')
     await ffmpeg([
@@ -217,14 +257,6 @@ async function check(): Promise<void> {
     await assert.rejects(compressVideo({ inputPath: source, outputPath: existing }), /已存在/)
     assert.equal(await readFile(existing, 'utf8'), 'keep existing content')
     await assert.rejects(compressVideo({ inputPath: source, outputPath: source }), /扩展名|已存在/)
-    await assert.rejects(
-      compressVideo({
-        inputPath: source,
-        outputPath: join(directory, 'compat.mp4'),
-        compatibility: true
-      }),
-      /H.264/
-    )
 
     const audio = join(directory, 'pcm.mov')
     await ffmpeg(['-i', source, '-c:v', 'copy', '-c:a', 'pcm_s16le', audio])
@@ -238,7 +270,7 @@ async function check(): Promise<void> {
       compressVideo({ inputPath: highDepth, outputPath: join(directory, '10bit.mp4') }),
       /4:2:0/
     )
-    console.log('PASS: existing files protected; unresolved compatibility/audio/4:2:2 rejected')
+    console.log('PASS: existing files protected; unresolved audio/4:2:2 rejected')
 
     // Wait for ab-av1 to start creating its private samples, then cancel during analysis.
     const longSource = join(directory, 'long.mov')
@@ -253,34 +285,60 @@ async function check(): Promise<void> {
       '3',
       longSource
     ])
-    const controller = new AbortController()
-    const cancelledOutput = join(directory, 'cancelled.mp4')
-    const cancelled = compressVideo(
-      { inputPath: longSource, outputPath: cancelledOutput },
-      controller.signal
-    )
-    const rejection = assert.rejects(cancelled, { name: 'AbortError' })
-    const deadline = Date.now() + 10_000
-    let analysisStarted = false
-    while (!analysisStarted) {
-      const task = (await readdir(directory)).find((name) => name.startsWith('.arkive-video-'))
-      analysisStarted = Boolean(
-        task && (await readdir(join(directory, task))).some((name) => name.startsWith('.ab-av1-'))
+    for (const compatibility of [false, true]) {
+      const controller = new AbortController()
+      const cancelledOutput = join(directory, `cancelled-${compatibility ? 'h264' : 'hevc'}.mp4`)
+      const cancelled = compressVideo(
+        { inputPath: longSource, outputPath: cancelledOutput, compatibility },
+        controller.signal
       )
-      assert.ok(Date.now() < deadline, 'Timed out waiting for automatic quality analysis to start')
-      if (!analysisStarted) await delay(10)
+      const rejection = assert.rejects(cancelled, { name: 'AbortError' })
+      const deadline = Date.now() + 10_000
+      let analysisStarted = false
+      while (!analysisStarted) {
+        const task = (await readdir(directory)).find((name) => name.startsWith('.arkive-video-'))
+        analysisStarted = Boolean(
+          task && (await readdir(join(directory, task))).some((name) => name.startsWith('.ab-av1-'))
+        )
+        assert.ok(
+          Date.now() < deadline,
+          'Timed out waiting for automatic quality analysis to start'
+        )
+        if (!analysisStarted) await delay(10)
+      }
+      const processLine = execFileSync('/bin/ps', ['-axo', 'pid,pgid,command'], {
+        encoding: 'utf8'
+      })
+        .split('\n')
+        .find(
+          (line) =>
+            line.includes(`ab-av1 ${compatibility ? 'sample-encode' : 'crf-search'}`) &&
+            line.includes(directory)
+        )
+      assert.ok(processLine, 'Expected an active ab-av1 search process')
+      const [pid, group] = processLine.trim().split(/\s+/).map(Number)
+      assert.equal(pid, group, 'Search must own a private process group')
+      controller.abort()
+      await rejection
+      // macOS may briefly keep killed descendants as zombies (kill(0) can return EPERM).
+      // Check that no live member of this private process group remains.
+      const shutdownDeadline = Date.now() + 5_000
+      for (;;) {
+        const liveMembers = execFileSync('/bin/ps', ['-axo', 'pgid=,stat='], { encoding: 'utf8' })
+          .trim()
+          .split('\n')
+          .map((line) => line.trim().split(/\s+/))
+          .filter(([pgid, state]) => Number(pgid) === group && !state.startsWith('Z'))
+        if (liveMembers.length === 0) break
+        assert.ok(
+          Date.now() < shutdownDeadline,
+          `Live analysis descendants remain: ${JSON.stringify(liveMembers)}`
+        )
+        await delay(20)
+      }
+      await assert.rejects(stat(cancelledOutput), { code: 'ENOENT' })
+      assert.ok(!(await readdir(directory)).some((name) => name.startsWith('.arkive-video-')))
     }
-    const processLine = execFileSync('/bin/ps', ['-axo', 'pid,pgid,command'], { encoding: 'utf8' })
-      .split('\n')
-      .find((line) => line.includes('ab-av1 crf-search') && line.includes(directory))
-    assert.ok(processLine, 'Expected an active ab-av1 search process')
-    const [pid, group] = processLine.trim().split(/\s+/).map(Number)
-    assert.equal(pid, group, 'Search must own a private process group')
-    controller.abort()
-    await rejection
-    assert.throws(() => process.kill(-group, 0), { code: 'ESRCH' })
-    await assert.rejects(stat(cancelledOutput), { code: 'ENOENT' })
-    assert.ok(!(await readdir(directory)).some((name) => name.startsWith('.arkive-video-')))
     assert.equal(
       createHash('sha256')
         .update(await readFile(source))
