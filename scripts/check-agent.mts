@@ -187,7 +187,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       } else {
         const text = messageText(result)
         if (last === 'MOLE_FAIL') {
-          assert.match(text, /Mole 清理预览失败/)
+          assert.match(text, /Mole clean 预览失败/)
           assert.ok(text.includes('"exitCode":7'))
           assert.ok(text.includes('fixture failure'))
           send({ content: '预览失败，不能声称已清理' })
@@ -248,13 +248,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     response.end('data: [DONE]\n\n')
   } catch (error) {
     serverFailure = error
-    response.writeHead(500)
+    console.error('Local model fixture failed', error)
+    if (!response.headersSent) response.writeHead(500)
     response.end('fixture failed')
   }
 }
 
 let service: Service | undefined
 let catalog: CatalogService | undefined
+let taskQueue: typeof import('../src/main/tasks/service').tasks | undefined
 try {
   // Exercise the real process/adapter/service/tool chain without scanning the user's Mac.
   const moleDir = resolve(buildDir, 'resources/tools/darwin-arm64/mole')
@@ -366,6 +368,7 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
           contracts: resolve('src/shared/contracts/agent.ts'),
           config: resolve('src/main/modules/agent/config.ts'),
           catalog: resolve('src/main/modules/catalog/service.ts'),
+          tasks: resolve('src/main/tasks/service.ts'),
           officeFixtures: resolve('src/main/modules/office-compression/fixtures.test.ts')
         },
         output: { format: 'es', entryFileNames: '[name].mjs' }
@@ -387,6 +390,10 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   const { fixture: officeFixture } = (await import(
     pathToFileURL(resolve(buildDir, 'officeFixtures.mjs')).href
   )) as typeof import('../src/main/modules/office-compression/fixtures.test')
+  const { tasks } = (await import(
+    pathToFileURL(resolve(buildDir, 'tasks.mjs')).href
+  )) as typeof import('../src/main/tasks/service')
+  taskQueue = tasks
   catalog = new Catalog({
     databasePath: resolve(workspaceDir, 'catalog.db'),
     archiveRoot: resolve(workspaceDir, 'Archive'),
@@ -658,13 +665,42 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   assert.match(await callTool('inspect_pdf', { inputPath: pdfInput }), /"pageCount":1/)
   assert.deepEqual(await readFile(pdfInput), pdfBytes)
   const pdfOutput = resolve(workspaceDir, 'compressed.pdf')
-  const pdfResult = await callTool('compress_pdf', {
+  let releaseTaskQueue!: () => void
+  const queueHold = new Promise<void>((done) => {
+    releaseTaskQueue = done
+  })
+  const queueBlocker = tasks.submitBatch(
+    [{ title: 'hold Agent PDF queue', run: () => queueHold }],
+    { onError: 'stop' }
+  )
+  let pdfToolCompleted = false
+  const pdfPending = callTool('compress_pdf', {
     inputPath: pdfInput,
     outputPath: pdfOutput,
     preset: 'lossless',
     archive: true,
     tags: ['参考']
+  }).then((result) => {
+    pdfToolCompleted = true
+    return result
   })
+  try {
+    const deadline = Date.now() + 10_000
+    while (
+      !tasks
+        .list()
+        .some((task) => task.title === 'PDF 压缩：source.pdf' && task.status === 'queued')
+    ) {
+      assert.ok(Date.now() < deadline, 'Agent PDF tool did not join the shared queue')
+      await delay(20)
+    }
+    assert.equal(pdfToolCompleted, false, 'Agent must await the actual result, not a task ID')
+    await assert.rejects(access(pdfOutput))
+  } finally {
+    releaseTaskQueue()
+    await tasks.wait(queueBlocker.taskIds[0])
+  }
+  const pdfResult = await pdfPending
   assert.ok(pdfResult.includes('"outputBytes":'), pdfResult)
   await access(pdfOutput)
   const pdfId = await checkPreservedOriginal(pdfInput, pdfOutput, pdfBytes)
@@ -684,6 +720,46 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
     .png({ compressionLevel: 0 })
     .toFile(imageInput)
   const imageBytes = await readFile(imageInput)
+  const cancelHold = new Promise<void>((done) => {
+    releaseTaskQueue = done
+  })
+  const cancelBlocker = tasks.submitBatch(
+    [{ title: 'hold Agent cancellation queue', run: () => cancelHold }],
+    { onError: 'stop' }
+  )
+  const cancelledImageOutput = resolve(workspaceDir, 'cancelled-image.webp')
+  const queuedAgent = send(
+    'agent-task-cancel',
+    'agent-task-cancel',
+    `CALL ${JSON.stringify({ name: 'compress_image', arguments: { inputPath: imageInput, outputPath: cancelledImageOutput } })}`
+  )
+  try {
+    const deadline = Date.now() + 10_000
+    while (
+      !tasks
+        .list()
+        .some(
+          (task) => task.title === '图片压缩：image with spaces.png' && task.status === 'queued'
+        )
+    ) {
+      assert.ok(Date.now() < deadline, 'Agent image tool did not join the shared queue')
+      await delay(20)
+    }
+    await currentService.stop({
+      conversationId: 'agent-task-cancel',
+      requestId: 'agent-task-cancel'
+    })
+    assert.equal((await queuedAgent).status, 'cancelled')
+    assert.equal(
+      tasks.list().find((task) => task.title === '图片压缩：image with spaces.png')?.status,
+      'cancelled'
+    )
+    await assert.rejects(access(cancelledImageOutput))
+    assert.deepEqual(await readFile(imageInput), imageBytes)
+  } finally {
+    releaseTaskQueue()
+    await tasks.wait(cancelBlocker.taskIds[0])
+  }
   assert.match(await callTool('inspect_image', { inputPath: imageInput }), /"width":96/)
   assert.deepEqual(await readFile(imageInput), imageBytes)
   const imageOutput = resolve(workspaceDir, 'compressed.webp')
@@ -702,6 +778,11 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   assert.ok(pendingImage)
   const imageId = String(pendingImage.id)
   assert.equal(currentCatalog.get(imageId).backupStatus, 'error')
+  const failedImageTask = tasks
+    .list()
+    .find((task) => task.status === 'failed' && task.key?.endsWith('/image with spaces.png'))
+  assert.ok(failedImageTask)
+  assert.equal(JSON.stringify(failedImageTask.result).includes(imageId), true)
   assert.deepEqual(await readFile(imageInput), imageBytes, 'Backup failure preserves the source')
   assert.equal(currentCatalog.get(imageId).archivePath, null, 'Compression alone does not archive')
   assert.ok((await callTool('search_archives', { state: 'pending' })).includes(imageId))
@@ -950,6 +1031,9 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   console.log(
     'PASS: Pi Office discovery, read-only inspection, in-place replacement/backup/archive, skipped video, no-savings, invalid parameters and publication failure reporting'
   )
+  console.log(
+    'PASS: Agent compression shares the Task queue, awaits real results, propagates cancellation and retains partial business failures'
+  )
 
   await writeFile(moleModeFile, 'slow')
   await rm(moleStartedFile)
@@ -1037,6 +1121,7 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   )
 } finally {
   service?.dispose()
+  await taskQueue?.close()
   await catalog?.close()
   server.closeAllConnections()
   await new Promise<void>((done) => {

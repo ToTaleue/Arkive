@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto'
 import type { TaskBatch, TaskProgress, TaskSnapshot } from '../../shared/contracts/task'
 import { TaskCancelled, TaskFailure } from './outcome'
 
-export interface TaskJob {
+export interface TaskJob<T = unknown> {
   title: string
+  requestId?: string
   /** Business-defined identity for an operation; reserved while queued or running. */
   key?: string
-  run: (signal: AbortSignal, reportProgress: (progress: TaskProgress) => void) => Promise<unknown>
+  run: (signal: AbortSignal, reportProgress: (progress: TaskProgress) => void) => Promise<T>
 }
 
 export interface TaskBatchOptions {
@@ -69,6 +70,7 @@ export class TaskManager {
           id,
           batchId,
           title: job.title.trim(),
+          ...(job.requestId === undefined ? {} : { requestId: job.requestId }),
           ...(job.key === undefined ? {} : { key: job.key }),
           status: 'queued',
           createdAt: Date.now(),
@@ -104,6 +106,21 @@ export class TaskManager {
     return () => {
       this.listeners.delete(listener)
     }
+  }
+
+  /** Wait through cancellation cleanup; also works for an already completed task. */
+  wait(id: string): Promise<TaskSnapshot> {
+    if (!this.entries.has(id)) return Promise.reject(new Error('任务不存在。'))
+    return new Promise((resolve) => {
+      const check = (): void => {
+        const task = this.get(id)
+        if (!task || task.status === 'queued' || task.status === 'running') return
+        unsubscribe()
+        resolve(task)
+      }
+      const unsubscribe = this.subscribe(check)
+      check()
+    })
   }
 
   cancel(id: string): boolean {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DuplicateTaskError, TaskManager } from './manager'
 import { TaskCancelled, TaskFailure } from './outcome'
+import { runTask, tasks } from './service'
 import type { TaskSnapshot } from '../../shared/contracts/task'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -25,6 +26,90 @@ function finished(manager: TaskManager, batchId: string): Promise<TaskSnapshot[]
     check()
   })
 }
+
+void test('wait observes cleanup, completed snapshots and missing IDs', async () => {
+  const manager = new TaskManager()
+  const gate = deferred()
+  const started = deferred()
+  const { taskIds } = manager.submitBatch(
+    [
+      {
+        title: 'wait fixture',
+        run: async (signal) => {
+          started.resolve()
+          await gate.promise
+          signal.throwIfAborted()
+        }
+      }
+    ],
+    { onError: 'stop' }
+  )
+  await started.promise
+  let settled = false
+  const pending = manager.wait(taskIds[0]).then((task) => {
+    settled = true
+    return task
+  })
+  manager.cancel(taskIds[0])
+  await Promise.resolve()
+  assert.equal(settled, false)
+  gate.resolve()
+  const task = await pending
+  assert.equal(task.status, 'cancelled')
+  assert.deepEqual(await manager.wait(task.id), task)
+  await assert.rejects(manager.wait('missing'), /不存在/)
+})
+
+void test('Promise callers receive results and Task-origin cancellation without aborting their own signal', async () => {
+  assert.deepEqual(
+    await runTask({ title: 'typed result', run: () => Promise.resolve({ value: 42 }) }),
+    {
+      value: 42
+    }
+  )
+  const gate = deferred()
+  const started = deferred()
+  const controller = new AbortController()
+  const requestId = 'service-cancel-fixture'
+  const work = runTask(
+    {
+      title: 'cancel by Task',
+      requestId,
+      run: async (signal) => {
+        started.resolve()
+        await gate.promise
+        signal.throwIfAborted()
+      }
+    },
+    controller.signal
+  )
+  await started.promise
+  const task = tasks.list().find((item) => item.requestId === requestId)
+  assert.ok(task)
+  const rejected = assert.rejects(work, TaskCancelled)
+  tasks.cancel(task.id)
+  assert.equal(controller.signal.aborted, false)
+  gate.resolve()
+  await rejected
+
+  const unsubscribe = tasks.subscribe(() => {
+    if (tasks.list().some((item) => item.title === 'abort on submit')) controller.abort()
+  })
+  try {
+    await assert.rejects(
+      runTask(
+        {
+          title: 'abort on submit',
+          run: () => Promise.reject(new Error('cancelled queued job ran'))
+        },
+        controller.signal
+      ),
+      TaskCancelled
+    )
+  } finally {
+    unsubscribe()
+  }
+})
 
 void test(
   'business failure retains partial results and applies the batch failure policy',

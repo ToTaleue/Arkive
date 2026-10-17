@@ -19,6 +19,7 @@ import {
 import { assertSystemWriteAllowed } from '../../system-paths'
 import { inspectVideo } from './service'
 import { compressVideoAndBackup as compressVideo } from '../catalog/compression'
+import { TaskCancelled, TaskFailure } from '../../tasks/service'
 
 interface WindowState {
   selection?: SelectedVideo
@@ -132,12 +133,17 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
               const update: VideoCompressionUpdate = { runId: request.runId, ...progress }
               event.sender.send(videoChannels.update, update)
             }
-          }
+          },
+          request.runId
         )
         state.outputPath = result.outputPath
         return { status: 'completed', result }
       } catch (error) {
-        if (controller.signal.aborted) return { status: 'cancelled' }
+        if (
+          error instanceof TaskCancelled ||
+          (controller.signal.aborted && !(error instanceof TaskFailure))
+        )
+          return { status: 'cancelled' }
         return {
           status: 'error',
           error: error instanceof Error ? error.message : '视频压缩失败，请重试。'

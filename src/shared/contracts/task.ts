@@ -17,6 +17,8 @@ export interface TaskSnapshot {
   id: string
   batchId: string
   title: string
+  /** Optional correlation with an existing UI / IPC request. */
+  requestId?: string
   key?: string
   status: TaskStatus
   createdAt: number

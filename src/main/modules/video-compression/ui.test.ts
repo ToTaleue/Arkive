@@ -20,6 +20,8 @@ import { runBundledTool } from '../../../execution/process'
 import { registerVideoCompressionIpc } from './ipc'
 import { Catalog, setCatalog } from '../catalog/service'
 import { registerCatalogIpc } from '../catalog/ipc'
+import { registerTasksIpc } from '../../tasks/ipc'
+import { tasks } from '../../tasks/service'
 
 // Keep failures observable after cleanup destroys the last window.
 app.on('window-all-closed', () => {})
@@ -54,12 +56,14 @@ async function check(): Promise<void> {
       filePath: cancelSave ? '' : outputPath
     })
   const attach = registerVideoCompressionIpc()
+  const attachTasks = registerTasksIpc(tasks)
   const window = new BrowserWindow({
     width: 1280,
     height: 1000,
     show: false,
     webPreferences: { preload: resolve('out/preload/index.js'), sandbox: false }
   })
+  attachTasks(window.webContents)
   attach(window.webContents)
   registerCatalogIpc(catalog)(window.webContents)
   async function checkOriginal(expectedHash: string): Promise<void> {
@@ -169,7 +173,22 @@ async function check(): Promise<void> {
     await waitFor('document.querySelector(".video-feedback")?.textContent.includes("已取消")')
     await assert.rejects(stat(outputPath), { code: 'ENOENT' })
     cancelSave = false
-    await click('.video-primary-button')
+    let releaseQueue!: () => void
+    const hold = new Promise<void>((done) => {
+      releaseQueue = done
+    })
+    const blocker = tasks.submitBatch([{ title: 'hold video UI queue', run: () => hold }], {
+      onError: 'stop'
+    })
+    try {
+      await click('.video-primary-button')
+      await waitFor('document.querySelector(".video-running")?.textContent.includes("已加入队列")')
+      await assert.rejects(stat(outputPath), { code: 'ENOENT' })
+      assert.equal(await evaluate('Boolean(document.querySelector(".video-running button"))'), true)
+    } finally {
+      releaseQueue()
+      await tasks.wait(blocker.taskIds[0])
+    }
     await waitFor('document.querySelector(".video-running")?.textContent.includes("正在分析画质")')
     assert.equal(
       await evaluate('document.querySelector(".video-running progress").hasAttribute("value")'),
@@ -316,6 +335,7 @@ async function check(): Promise<void> {
       'PASS: real percentage/ETA displayed; navigation retains task; cancellation clears progress and temporary output'
     )
   } finally {
+    await tasks.close()
     await catalog.close()
     window.destroy()
     dialog.showOpenDialog = originalOpen

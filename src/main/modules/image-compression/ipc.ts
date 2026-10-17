@@ -18,6 +18,7 @@ import {
 import { assertSystemWriteAllowed } from '../../system-paths'
 import { inspectImage } from './service'
 import { compressImageAndBackup as compressImage } from '../catalog/compression'
+import { TaskCancelled, TaskFailure } from '../../tasks/service'
 
 interface WindowState {
   selection?: SelectedImage
@@ -187,12 +188,17 @@ export function registerImageCompressionIpc(): (contents: WebContents) => void {
               ? {}
               : { jpegBackground: request.jpegBackground })
           },
-          controller.signal
+          controller.signal,
+          request.runId
         )
         state.outputPath = result.outputPath
         return { status: 'completed', result }
       } catch (error) {
-        if (controller.signal.aborted) return { status: 'cancelled' }
+        if (
+          error instanceof TaskCancelled ||
+          (controller.signal.aborted && !(error instanceof TaskFailure))
+        )
+          return { status: 'cancelled' }
         return {
           status: 'error',
           error: error instanceof Error ? error.message : '图片压缩失败，请重试。'

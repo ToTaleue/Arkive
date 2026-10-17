@@ -22,6 +22,7 @@ import { inspectPdf } from '../pdf-compression/service'
 import { inspectOffice } from '../office-compression/service'
 import { compressOfficeInPlace } from '../office-compression/in-place'
 import { compressPdfAndBackup } from '../catalog/compression'
+import { TaskCancelled, TaskFailure } from '../../tasks/service'
 import { scanDuplicates } from '../duplicate-detection/service'
 
 type State = {
@@ -155,7 +156,8 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
             kind: 'pdf',
             value: await compressPdfAndBackup(
               { inputPath: selected.path, outputPath: destination.filePath, preset },
-              controller.signal
+              controller.signal,
+              request.runId
             )
           }
         } else {
@@ -179,7 +181,11 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
         state.selected = undefined
         return { status: 'completed', result }
       } catch (error) {
-        if (controller.signal.aborted) return { status: 'cancelled' }
+        if (
+          error instanceof TaskCancelled ||
+          (controller.signal.aborted && !(error instanceof TaskFailure))
+        )
+          return { status: 'cancelled' }
         return { status: 'error', error: error instanceof Error ? error.message : String(error) }
       } finally {
         state.running = undefined

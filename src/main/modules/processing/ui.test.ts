@@ -8,6 +8,8 @@ import sharp from 'sharp'
 import { registerProcessingIpc } from './ipc'
 import { Catalog, setCatalog } from '../catalog/service'
 import { registerCatalogIpc } from '../catalog/ipc'
+import { registerTasksIpc } from '../../tasks/ipc'
+import { tasks } from '../../tasks/service'
 import { fixture } from '../office-compression/fixtures.test'
 import { runBundledTool } from '../../../execution/process'
 import { hashFile } from '../catalog/files'
@@ -79,6 +81,7 @@ async function check(): Promise<void> {
   registerProcessingIpc()(window.webContents)
   registerCatalogIpc(catalog)(window.webContents)
   registerImageCompressionIpc()(window.webContents)
+  registerTasksIpc(tasks)(window.webContents)
   ipcMain.handle('agent:status', () => ({ configured: false, model: '' }))
   const evaluate = async (expression: string): Promise<unknown> =>
     window.webContents.executeJavaScript(expression)
@@ -147,13 +150,36 @@ async function check(): Promise<void> {
     await wait("document.querySelector('#documents-page').innerText.includes('已取消')")
     await assert.rejects(stat(output))
     cancelSave = false
+    let releaseQueue!: () => void
+    const hold = new Promise<void>((done) => {
+      releaseQueue = done
+    })
+    const blocker = tasks.submitBatch([{ title: 'hold PDF UI queue', run: () => hold }], {
+      onError: 'stop'
+    })
+    try {
+      await click('开始文档压缩')
+      await wait("document.querySelector('.document-running')?.innerText.includes('已加入队列')")
+      assert.equal(catalog.query({ state: 'pending' }).total, 0)
+      await assert.rejects(stat(output))
+      const queued = tasks.list().find((task) => task.status === 'queued' && task.requestId)
+      assert.ok(queued)
+      await evaluate(`window.api.tasks.cancel('${queued.id}')`)
+      await wait(
+        "document.querySelector('#documents-page').innerText.includes('已取消') && !document.querySelector('.document-select').disabled"
+      )
+      assert.equal(tasks.get(queued.id)?.status, 'cancelled')
+    } finally {
+      releaseQueue()
+      await tasks.wait(blocker.taskIds[0])
+    }
     await click('开始文档压缩')
     // A second click while running must not encode twice.
     await evaluate(
       "[...document.querySelectorAll('#documents-page button')].find(b => b.textContent === '开始文档压缩').click()"
     )
     await wait('document.querySelector(\'[aria-label="文档压缩结果"]\') !== null')
-    assert.equal(saveCalls, 2)
+    assert.equal(saveCalls, 3)
     assert.equal((await runBundledTool('qpdf', ['--check', output])).exitCode, 0)
     const pending = catalog.query({ state: 'pending' })
     assert.equal(pending.total, 1)
@@ -295,7 +321,21 @@ async function check(): Promise<void> {
       3000
     )
     savePath = join(directory, 'native-drop-result.webp')
-    await click('开始压缩', '.image-page')
+    const imageHold = new Promise<void>((done) => {
+      releaseQueue = done
+    })
+    const imageBlocker = tasks.submitBatch(
+      [{ title: 'hold image UI queue', run: () => imageHold }],
+      { onError: 'stop' }
+    )
+    try {
+      await click('开始压缩', '.image-page')
+      await wait("document.querySelector('.image-page').innerText.includes('已加入队列')")
+      await assert.rejects(stat(savePath))
+    } finally {
+      releaseQueue()
+      await tasks.wait(imageBlocker.taskIds[0])
+    }
     await wait("document.querySelector('.image-page .image-result') !== null")
     assert.equal((await sharp(savePath).metadata()).format, 'webp')
     const imageItem = catalog
@@ -339,6 +379,7 @@ async function check(): Promise<void> {
     dialog.showOpenDialog = originalOpen
     dialog.showSaveDialog = originalSave
     window.destroy()
+    await tasks.close()
     await catalog.close()
   }
   // Reopen persisted database after all UI work, without regenerating records.

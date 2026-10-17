@@ -72,13 +72,22 @@ app
       catalog.scheduleRefresh()
     })
     let closing = false
+    let shutdownComplete = false
     app.on('before-quit', (event) => {
-      if (closing) return
+      if (shutdownComplete) return
       event.preventDefault()
+      if (closing) return
       closing = true
-      void catalog.close().finally(() => {
-        app.quit()
-      })
+      void tasks
+        .close()
+        .then(() => catalog.close())
+        .catch((error: unknown) => {
+          console.error('Failed to close application resources', error)
+        })
+        .finally(() => {
+          shutdownComplete = true
+          app.quit()
+        })
     })
     loadAgentEnvironment(app.getAppPath(), app.isPackaged)
     const attachAgent = registerAgentIpc(app.getPath('userData'))

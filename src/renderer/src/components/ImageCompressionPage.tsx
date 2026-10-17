@@ -1,4 +1,5 @@
 import { ArchiveAction } from './ArchiveAction'
+import { useCompressionTask, compressionTaskMessage } from '../hooks/useCompressionTask'
 import { useRef, useState } from 'react'
 import { ArrowDown, CheckCircle2, FileImage, FolderOpen, LoaderCircle, Upload } from 'lucide-react'
 import type {
@@ -42,6 +43,8 @@ export function ImageCompressionPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const runId = useRef<string | null>(null)
+  const [taskRequestId, setTaskRequestId] = useState<string | null>(null)
+  const task = useCompressionTask(taskRequestId)
   const api = window.api?.image
 
   async function selectImage(): Promise<void> {
@@ -84,6 +87,7 @@ export function ImageCompressionPage(): React.JSX.Element {
     if (!api || !selected || busy) return
     const id = crypto.randomUUID()
     runId.current = id
+    setTaskRequestId(id)
     setBusy(true)
     setResult(null)
     setError(null)
@@ -102,6 +106,7 @@ export function ImageCompressionPage(): React.JSX.Element {
       setError(message(failure))
     } finally {
       runId.current = null
+      setTaskRequestId(null)
       setBusy(false)
     }
   }
@@ -244,6 +249,11 @@ export function ImageCompressionPage(): React.JSX.Element {
             </button>
           )}
         </div>
+        {busy && (
+          <p className="image-feedback" role="status">
+            {compressionTaskMessage(task) ?? '请选择保存位置，确认后加入压缩队列。'}
+          </p>
+        )}
       </section>
 
       {error && (

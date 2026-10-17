@@ -1,4 +1,5 @@
 import { ArchiveAction } from './ArchiveAction'
+import { useCompressionTask, compressionTaskMessage } from '../hooks/useCompressionTask'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, CheckCircle2, FileVideo, FolderOpen, LoaderCircle, Upload } from 'lucide-react'
 import type {
@@ -53,6 +54,8 @@ export function VideoCompressionPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const runId = useRef<string | null>(null)
+  const [taskRequestId, setTaskRequestId] = useState<string | null>(null)
+  const task = useCompressionTask(taskRequestId)
   const operating = useRef(false)
   const mounted = useRef(true)
   const api = window.api?.video
@@ -98,6 +101,7 @@ export function VideoCompressionPage(): React.JSX.Element {
     operating.current = true
     const id = crypto.randomUUID()
     runId.current = id
+    setTaskRequestId(id)
     setPhase('saving')
     setProgress(null)
     setResult(null)
@@ -114,6 +118,7 @@ export function VideoCompressionPage(): React.JSX.Element {
     } finally {
       operating.current = false
       runId.current = null
+      setTaskRequestId(null)
       if (mounted.current) setPhase('idle')
     }
   }
@@ -141,7 +146,8 @@ export function VideoCompressionPage(): React.JSX.Element {
   }
 
   const status =
-    phase === 'saving'
+    compressionTaskMessage(task) ??
+    (phase === 'saving'
       ? '选择保存位置，确认后开始压缩；成功且体积减小后原件移入备份目录。'
       : phase === 'cancelling'
         ? '正在取消并清理临时文件…'
@@ -149,7 +155,7 @@ export function VideoCompressionPage(): React.JSX.Element {
           ? '请选择本地视频。'
           : phase === 'idle'
             ? null
-            : stageLabels[phase]
+            : stageLabels[phase])
 
   return (
     <div className="video-page">
@@ -312,7 +318,7 @@ export function VideoCompressionPage(): React.JSX.Element {
                 {phase === 'encoding' && <p>压缩后还会校验文件；预计时间随实际处理速度更新。</p>}
               </div>
             )}
-            {phase !== 'saving' && phase !== 'selecting' && (
+            {(phase !== 'saving' || task) && phase !== 'selecting' && (
               <button
                 className="video-text-button"
                 disabled={phase === 'cancelling'}

@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/contracts/processing'
 import type { DuplicateScanResult } from '../../../shared/contracts/duplicates'
 import { ArchiveAction } from './ArchiveAction'
+import { useCompressionTask, compressionTaskMessage } from '../hooks/useCompressionTask'
 import '../assets/documents.css'
 
 function errorText(error: unknown): string {
@@ -35,6 +36,8 @@ export function DocumentCompressionPage(): React.JSX.Element {
   const [notice, setNotice] = useState('')
   const lock = useRef(false)
   const run = useRef<string | null>(null)
+  const [taskRequestId, setTaskRequestId] = useState<string | null>(null)
+  const task = useCompressionTask(taskRequestId)
   const api = window.api?.processing
 
   async function perform(work: (client: ProcessingApi) => Promise<void>): Promise<void> {
@@ -50,6 +53,7 @@ export function DocumentCompressionPage(): React.JSX.Element {
     } finally {
       lock.current = false
       run.current = null
+      setTaskRequestId(null)
       setBusy(false)
       setStage('')
       setCancellable(false)
@@ -72,6 +76,7 @@ export function DocumentCompressionPage(): React.JSX.Element {
     await perform(async (client) => {
       const id = crypto.randomUUID()
       run.current = id
+      if (file.kind === 'pdf') setTaskRequestId(id)
       setCancellable(true)
       setStage('正在压缩与校验，完成后处理原件备份…')
       setResult(null)
@@ -334,7 +339,7 @@ export function DocumentCompressionPage(): React.JSX.Element {
       </section>
       {busy && (
         <div className="document-running" role="status">
-          <p>{stage}</p>
+          <p>{compressionTaskMessage(task) ?? stage}</p>
           {cancellable && <button onClick={() => void cancel()}>取消当前处理</button>}
         </div>
       )}
