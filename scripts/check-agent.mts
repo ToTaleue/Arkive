@@ -48,6 +48,9 @@ const enabledTools = [
   'ls',
   'mole_clean_preview',
   'mole_analyze',
+  'mole_installer_preview',
+  'mole_purge_preview',
+  'mole_uninstall_list',
   'compress_image',
   'compress_video',
   'inspect_office',
@@ -263,7 +266,11 @@ const fs = require('node:fs')
 const args = process.argv.slice(2)
 fs.writeFileSync(${JSON.stringify(moleArgumentsFile)}, JSON.stringify(args))
 const analyzing = args[0] === 'analyze' && args[1] === '--json' && args.length === 3
-if (!analyzing && JSON.stringify(args) !== JSON.stringify(['clean', '--dry-run'])) process.exit(99)
+const cleaning = JSON.stringify(args) === JSON.stringify(['clean', '--dry-run'])
+const installing = JSON.stringify(args) === JSON.stringify(['installer', '--dry-run', '--debug'])
+const purging = JSON.stringify(args) === JSON.stringify(['purge', '--dry-run', '--debug'])
+const listing = JSON.stringify(args) === JSON.stringify(['uninstall', '--list'])
+if (!analyzing && !cleaning && !installing && !purging && !listing) process.exit(99)
 const mode = fs.readFileSync(${JSON.stringify(moleModeFile)}, 'utf8')
 fs.writeFileSync(${JSON.stringify(moleStartedFile)}, 'started')
 if (mode === 'slow') {
@@ -275,6 +282,15 @@ if (mode === 'slow') {
   if (mode === 'truncated') process.stdout.write('x'.repeat(1100000))
   else if (mode === 'invalid') process.stdout.write('not json')
   else process.stdout.write(JSON.stringify({path: args[2], scan_status: mode === 'partial' ? 'partial' : 'complete', total_size: 1234, entries: []}))
+} else if (installing) {
+  process.stdout.write('Dry run complete\\n')
+  process.stderr.write('Found installer:   * /tmp/arkive-installer-fixture/Test.dmg\\n')
+} else if (purging) {
+  process.stdout.write('→ DRY RUN MODE, No project artifacts will be removed\\n')
+  process.stdout.write('✓ [DRY RUN] ~/Developer/fixture-project/node_modules, 42MB\\n')
+  process.stdout.write('✓ [DRY RUN] ~/Developer/fixture-project/target, 128MB\\n')
+} else if (listing) {
+  process.stdout.write(JSON.stringify([{name:'Fixture App',bundle_id:'com.example.fixture',source:'App',uninstall_name:'Fixture App',path:'/Applications/Fixture App.app',size:'12MB'}]))
 } else {
   process.stdout.write('Mole preview fixture\\n')
   process.stderr.write('fixture warning\\n')
@@ -481,6 +497,26 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   assert.match(await callTool('mole_analyze', { path: project }), /JSON/)
   await writeFile(moleModeFile, 'truncated')
   assert.match(await callTool('mole_analyze', { path: project }), /报告超出输出容量/)
+
+  await writeFile(moleModeFile, 'success')
+  const installerPreview = await callTool('mole_installer_preview', {})
+  assert.ok(installerPreview.includes('Test.dmg'))
+  assert.deepEqual(JSON.parse(await readFile(moleArgumentsFile, 'utf8')), [
+    'installer',
+    '--dry-run',
+    '--debug'
+  ])
+  const purgePreview = await callTool('mole_purge_preview', {})
+  assert.ok(purgePreview.includes('fixture-project/node_modules'))
+  assert.ok(purgePreview.includes('42MB'))
+  assert.deepEqual(JSON.parse(await readFile(moleArgumentsFile, 'utf8')), [
+    'purge',
+    '--dry-run',
+    '--debug'
+  ])
+  const uninstallList = await callTool('mole_uninstall_list', {})
+  assert.ok(uninstallList.includes('Fixture App'))
+  assert.deepEqual(JSON.parse(await readFile(moleArgumentsFile, 'utf8')), ['uninstall', '--list'])
 
   const directory = resolve(workspaceDir, 'new directory;literal', 'nested')
   await callTool('mkdir', { path: directory, mode: 0o700 })

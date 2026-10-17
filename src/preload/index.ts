@@ -9,6 +9,7 @@ import {
 import type { DuplicateScanResult } from '../shared/contracts/duplicates'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {} from './index.d'
+import { taskChannels, type TaskSnapshot } from '../shared/contracts/task'
 import {
   agentChannels,
   type AgentUpdate,
@@ -18,7 +19,10 @@ import {
 } from '../shared/contracts/agent'
 import {
   moleChannels,
-  type MoleDryRunResult,
+  type MoleAnalyzeResult,
+  type MoleInstalledApp,
+  type MolePreviewResult,
+  type MoleTrashResult,
   type MoleDryRunUpdate
 } from '../shared/contracts/mole'
 import {
@@ -35,6 +39,22 @@ import {
 
 // Custom APIs for renderer
 const api: ArkiveApi = {
+  tasks: {
+    list: (batchId) => ipcRenderer.invoke(taskChannels.list, batchId) as Promise<TaskSnapshot[]>,
+    get: (id) => ipcRenderer.invoke(taskChannels.get, id) as Promise<TaskSnapshot | undefined>,
+    cancel: (id) => ipcRenderer.invoke(taskChannels.cancel, id) as Promise<boolean>,
+    cancelBatch: (batchId) =>
+      ipcRenderer.invoke(taskChannels.cancelBatch, batchId) as Promise<number>,
+    onChanged: (listener) => {
+      const handler = (): void => {
+        listener()
+      }
+      ipcRenderer.on(taskChannels.changed, handler)
+      return () => {
+        ipcRenderer.removeListener(taskChannels.changed, handler)
+      }
+    }
+  },
   processing: {
     select: (kind) =>
       ipcRenderer.invoke(processingChannels.select, kind) as Promise<SelectedDocument | null>,
@@ -116,7 +136,15 @@ const api: ArkiveApi = {
     reveal: () => ipcRenderer.invoke(imageChannels.reveal) as Promise<void>
   },
   mole: {
-    dryRun: (runId) => ipcRenderer.invoke(moleChannels.dryRun, runId) as Promise<MoleDryRunResult>,
+    dryRun: (runId) => ipcRenderer.invoke(moleChannels.dryRun, runId) as Promise<MolePreviewResult>,
+    analyze: (path) => ipcRenderer.invoke(moleChannels.analyze, path) as Promise<MoleAnalyzeResult>,
+    installerPreview: (runId) =>
+      ipcRenderer.invoke(moleChannels.installerPreview, runId) as Promise<MolePreviewResult>,
+    purgePreview: (runId) =>
+      ipcRenderer.invoke(moleChannels.purgePreview, runId) as Promise<MolePreviewResult>,
+    uninstallList: () =>
+      ipcRenderer.invoke(moleChannels.uninstallList) as Promise<MoleInstalledApp[]>,
+    trash: (paths) => ipcRenderer.invoke(moleChannels.trash, paths) as Promise<MoleTrashResult>,
     onUpdate: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, update: MoleDryRunUpdate): void => {
         listener(update)

@@ -23,7 +23,12 @@ import { VideoCompressionPage } from './components/VideoCompressionPage'
 import { ImageCompressionPage } from './components/ImageCompressionPage'
 import { initialConversations, type Conversation, type PreviewMessage } from './chat-preview'
 import type { AgentStatus } from '../../shared/contracts/agent'
-import type { MoleDryRunResult, MoleOutputBlock } from '../../shared/contracts/mole'
+import type {
+  MoleCandidate,
+  MoleInstalledApp,
+  MoleOutputBlock,
+  MolePreviewResult
+} from '../../shared/contracts/mole'
 
 function App(): React.JSX.Element {
   const [activePage, setActivePage] = useState<
@@ -34,7 +39,14 @@ function App(): React.JSX.Element {
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
   const [activeId, setActiveId] = useState('welcome')
   const [moleRunning, setMoleRunning] = useState(false)
-  const [moleResult, setMoleResult] = useState<MoleDryRunResult | null>(null)
+  const [moleResult, setMoleResult] = useState<MolePreviewResult | null>(null)
+  const [moleMode, setMoleMode] = useState<
+    'clean' | 'installer' | 'purge' | 'uninstall' | 'analyze'
+  >('clean')
+  const [moleApps, setMoleApps] = useState<MoleInstalledApp[]>([])
+  const [moleSelectedPaths, setMoleSelectedPaths] = useState<string[]>([])
+  const [moleAnalyzeResult, setMoleAnalyzeResult] = useState<unknown>(null)
+  const [moleActionMessage, setMoleActionMessage] = useState<string | null>(null)
   const [moleError, setMoleError] = useState<string | null>(null)
   const [moleBlocks, setMoleBlocks] = useState<MoleOutputBlock[]>([])
   const [moleStage, setMoleStage] = useState<string | null>(null)
@@ -112,6 +124,8 @@ function App(): React.JSX.Element {
     setMoleError(null)
     setMoleBlocks([])
     setMoleStage(null)
+    setMoleMode('clean')
+    setMoleSelectedPaths([])
     try {
       const result = await mole.dryRun(runId)
       // The final snapshot also reconciles updates that arrived near process close.
@@ -123,6 +137,107 @@ function App(): React.JSX.Element {
       moleRunId.current = null
       setMoleStage(null)
       setMoleRunning(false)
+    }
+  }
+
+  async function runMoleInstallerPreview(): Promise<void> {
+    const mole = window.api?.mole
+    if (!mole || !moleAvailable || moleRunId.current) return
+    const runId = crypto.randomUUID()
+    moleRunId.current = runId
+    setMoleRunning(true)
+    setMoleResult(null)
+    setMoleError(null)
+    setMoleBlocks([])
+    setMoleStage(null)
+    setMoleMode('installer')
+    setMoleSelectedPaths([])
+    try {
+      const result = await mole.installerPreview(runId)
+      setMoleBlocks(result.blocks)
+      setMoleResult(result)
+    } catch (error) {
+      setMoleError(error instanceof Error ? error.message : 'Mole 安装包预览调用失败。')
+    } finally {
+      moleRunId.current = null
+      setMoleStage(null)
+      setMoleRunning(false)
+    }
+  }
+
+  async function loadMoleApps(): Promise<void> {
+    const mole = window.api?.mole
+    if (!mole) return
+    setMoleMode('uninstall')
+    setMoleError(null)
+    setMoleActionMessage(null)
+    setMoleSelectedPaths([])
+    try {
+      setMoleApps(await mole.uninstallList())
+    } catch (error) {
+      setMoleError(error instanceof Error ? error.message : 'Mole 应用清单调用失败。')
+    }
+  }
+
+  async function runMolePurgePreview(): Promise<void> {
+    const mole = window.api?.mole
+    if (!mole || !moleAvailable || moleRunId.current) return
+    const runId = crypto.randomUUID()
+    moleRunId.current = runId
+    setMoleRunning(true)
+    setMoleResult(null)
+    setMoleError(null)
+    setMoleBlocks([])
+    setMoleStage(null)
+    setMoleMode('purge')
+    setMoleSelectedPaths([])
+    try {
+      const result = await mole.purgePreview(runId)
+      setMoleBlocks(result.blocks)
+      setMoleResult(result)
+    } catch (error) {
+      setMoleError(error instanceof Error ? error.message : 'Mole 开发产物预览调用失败。')
+    } finally {
+      moleRunId.current = null
+      setMoleStage(null)
+      setMoleRunning(false)
+    }
+  }
+
+  async function runMoleAnalyze(): Promise<void> {
+    const mole = window.api?.mole
+    if (!mole) return
+    setMoleMode('analyze')
+    setMoleError(null)
+    setMoleActionMessage(null)
+    try {
+      setMoleAnalyzeResult((await mole.analyze()).report)
+    } catch (error) {
+      setMoleError(error instanceof Error ? error.message : 'Mole 占用分析调用失败。')
+    }
+  }
+
+  function toggleMolePath(path: string): void {
+    setMoleSelectedPaths((current) =>
+      current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
+    )
+  }
+
+  async function trashSelectedMolePaths(): Promise<void> {
+    const mole = window.api?.mole
+    if (!mole || moleSelectedPaths.length === 0) return
+    setMoleError(null)
+    setMoleActionMessage(null)
+    try {
+      const result = await mole.trash(moleSelectedPaths)
+      setMoleSelectedPaths([])
+      setMoleActionMessage(`已移入回收站 ${String(result.completed.length)} 项。`)
+      if (moleMode === 'clean') await runMoleDryRun()
+      if (moleMode === 'installer') await runMoleInstallerPreview()
+      if (moleMode === 'purge') await runMolePurgePreview()
+      if (moleMode === 'uninstall') await loadMoleApps()
+    } catch (error) {
+      setMoleError(error instanceof Error ? error.message : '移入回收站失败。')
     }
   }
 
@@ -445,16 +560,46 @@ function App(): React.JSX.Element {
                 </p>
               </div>
               <section className="mole-demo">
-                <div className="section-eyebrow">二进制调用测试</div>
-                <h3>Mole 清理预览</h3>
-                <p>预览可清理内容，扫描结果会按章节陆续显示，不执行清理。</p>
-                <button
-                  className="mole-demo-button"
-                  onClick={() => void runMoleDryRun()}
-                  disabled={moleRunning || !moleAvailable}
-                >
-                  {moleRunning ? 'Mole dry run 运行中…' : '运行 Mole dry run'}
-                </button>
+                <div className="section-eyebrow">Mole 受控操作</div>
+                <h3>先预览，再选择处理</h3>
+                <p>Agent 和按钮都先拿到候选清单；移入回收站只处理你勾选并确认的项目。</p>
+                <div className="mole-tabs" role="tablist" aria-label="Mole 功能">
+                  <button
+                    className={moleMode === 'clean' ? 'active' : ''}
+                    onClick={() => void runMoleDryRun()}
+                    disabled={moleRunning || !moleAvailable}
+                  >
+                    Clean
+                  </button>
+                  <button
+                    className={moleMode === 'analyze' ? 'active' : ''}
+                    onClick={() => void runMoleAnalyze()}
+                    disabled={moleRunning || !moleAvailable}
+                  >
+                    Analyze
+                  </button>
+                  <button
+                    className={moleMode === 'installer' ? 'active' : ''}
+                    onClick={() => void runMoleInstallerPreview()}
+                    disabled={moleRunning || !moleAvailable}
+                  >
+                    Installer
+                  </button>
+                  <button
+                    className={moleMode === 'purge' ? 'active' : ''}
+                    onClick={() => void runMolePurgePreview()}
+                    disabled={moleRunning || !moleAvailable}
+                  >
+                    Purge
+                  </button>
+                  <button
+                    className={moleMode === 'uninstall' ? 'active' : ''}
+                    onClick={() => void loadMoleApps()}
+                    disabled={moleRunning || !moleAvailable}
+                  >
+                    Uninstall
+                  </button>
+                </div>
                 {window.api?.mole && !moleAvailable && <p>请重启 Electron，以加载分段预览功能。</p>}
                 {moleRunning && (
                   <p role="status">
@@ -463,11 +608,19 @@ function App(): React.JSX.Element {
                   </p>
                 )}
                 {moleError && <p className="mole-demo-error">{moleError}</p>}
+                {moleActionMessage && <p className="mole-demo-result">{moleActionMessage}</p>}
+                {moleMode === 'analyze' && Boolean(moleAnalyzeResult) && (
+                  <pre className="mole-analyze-output">
+                    {JSON.stringify(moleAnalyzeResult, null, 2)}
+                  </pre>
+                )}
                 {moleResult && (
                   <p className="mole-demo-result" role="status">
-                    {moleResult.exitCode === 0
-                      ? 'Dry run 已结束，未执行清理。'
-                      : `Dry run 未正常完成（${moleResult.signal ?? String(moleResult.exitCode ?? 'unknown')}），以下内容可能不完整。`}
+                    {moleResult.kind === 'clean'
+                      ? 'Clean 预览已结束，未执行清理。'
+                      : moleResult.kind === 'installer'
+                        ? '安装包预览已结束，未执行清理。'
+                        : '开发产物预览已结束，未执行清理。'}
                   </p>
                 )}
                 {(moleResult?.stdoutTruncated || moleResult?.stderrTruncated) && (
@@ -485,6 +638,70 @@ function App(): React.JSX.Element {
                         <pre>{block.text}</pre>
                       </details>
                     ))}
+                  </div>
+                )}
+                {moleResult && moleResult.candidates.length > 0 && (
+                  <div className="mole-candidates" aria-label="Mole 候选清单">
+                    {moleResult.candidates.map((candidate: MoleCandidate) => (
+                      <label key={candidate.path} className="mole-candidate">
+                        <input
+                          type="checkbox"
+                          checked={moleSelectedPaths.includes(candidate.path)}
+                          onChange={() => {
+                            toggleMolePath(candidate.path)
+                          }}
+                        />
+                        <span>
+                          <strong>{candidate.name}</strong>
+                          <small>{candidate.path}</small>
+                        </span>
+                        <em>
+                          {candidate.sizeText ?? candidate.source ?? candidate.category ?? ''}
+                        </em>
+                      </label>
+                    ))}
+                    {moleMode === 'purge' && (
+                      <p className="mole-demo-note">
+                        这些目录通常可由项目重新生成，但可能需要联网重新安装依赖或重新构建；清理前请单独确认。
+                      </p>
+                    )}
+                    <button
+                      className="mole-action-button"
+                      onClick={() => void trashSelectedMolePaths()}
+                      disabled={moleSelectedPaths.length === 0}
+                    >
+                      将已选项目移入回收站（{String(moleSelectedPaths.length)}）
+                    </button>
+                  </div>
+                )}
+                {moleMode === 'uninstall' && moleApps.length > 0 && (
+                  <div className="mole-candidates" aria-label="已安装应用清单">
+                    {moleApps.map((app: MoleInstalledApp) => (
+                      <label key={`${app.path}:${app.bundleId}`} className="mole-candidate">
+                        <input
+                          type="checkbox"
+                          checked={moleSelectedPaths.includes(app.path)}
+                          onChange={() => {
+                            toggleMolePath(app.path)
+                          }}
+                        />
+                        <span>
+                          <strong>{app.name}</strong>
+                          <small>{app.path}</small>
+                        </span>
+                        <em>{app.size}</em>
+                      </label>
+                    ))}
+                    <button
+                      className="mole-action-button"
+                      onClick={() => void trashSelectedMolePaths()}
+                      disabled={moleSelectedPaths.length === 0}
+                    >
+                      将选中 App 移入回收站（{String(moleSelectedPaths.length)}）
+                    </button>
+                    <p className="mole-demo-note">
+                      移除 App 后可回到 Clean 预览关联残留；个人数据不会由此按钮自动删除。
+                    </p>
                   </div>
                 )}
               </section>

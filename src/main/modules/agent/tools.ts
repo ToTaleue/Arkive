@@ -1,6 +1,6 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { shell } from 'electron'
-import { cp, lstat, mkdir, rename, rm } from 'node:fs/promises'
+import { cp, lstat, mkdir, rename } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { runBundledTool } from '../../../execution/process'
 import { assertSystemWriteAllowed, resolveFilePath } from '../../system-paths'
@@ -9,7 +9,12 @@ import {
   compressPdfAndBackup as compressPdf,
   compressVideoAndBackup as compressVideo
 } from '../catalog/compression'
-import { runMoleDryRun } from '../mole/service'
+import {
+  listMoleApps,
+  runMoleDryRun,
+  runMoleInstallerPreview,
+  runMolePurgePreview
+} from '../mole/service'
 import { getCatalog } from '../catalog/service'
 import { normalizeTags } from '../catalog/finder-tags'
 import { inspectOffice } from '../office-compression/service'
@@ -18,6 +23,7 @@ import { inspectImage } from '../image-compression/service'
 import { inspectVideo } from '../video-compression/service'
 import { inspectPdf } from '../pdf-compression/service'
 import { scanDuplicates } from '../duplicate-detection/service'
+import { trashPaths } from '../file-operations/service'
 
 function isWithin(root: string, path: string): boolean {
   const child = relative(root, path)
@@ -214,6 +220,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         const maxChars = 16_384
         const details = {
           dryRun: true,
+          candidates: result.candidates,
           exitCode: result.exitCode,
           signal: result.signal,
           stdout: result.stdout.slice(0, maxChars),
@@ -225,6 +232,61 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
           throw new Error(`Mole 清理预览失败：${JSON.stringify(details)}`)
         }
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
+      }
+    },
+    {
+      name: 'mole_installer_preview',
+      label: 'Mole 安装包预览',
+      description:
+        '只读预览 Mole 发现的安装包。返回完整路径、文件名和来源，固定运行 installer --dry-run，不删除文件。Agent 可以根据用户目标从 candidates 选择路径，再在用户明确授权后调用 trash；不要把普通下载文件当作安装包。',
+      parameters: Type.Object({}, { additionalProperties: false }),
+      execute: async (_toolCallId, _params, signal) => {
+        const result = await runMoleInstallerPreview(() => undefined, signal)
+        const maxChars = 16_384
+        const details = {
+          dryRun: true,
+          candidates: result.candidates,
+          exitCode: result.exitCode,
+          signal: result.signal,
+          stdout: result.stdout.slice(0, maxChars),
+          stderr: result.stderr.slice(0, maxChars),
+          stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
+          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
+      }
+    },
+    {
+      name: 'mole_purge_preview',
+      label: 'Mole 开发产物预览',
+      description:
+        '只读预览 Mole 在已配置项目目录中发现的可重建开发产物，例如 node_modules、target、dist、.venv 和构建缓存。固定运行 purge --dry-run，不删除文件。归档开发项目或用户明确询问开发目录空间时使用；先展示项目、路径、大小和“可重建但可能需要联网恢复”的影响，再由用户决定是否调用 trash。不要把 Purge 候选自动当作归档内容，也不要调用 --yes 或永久删除。',
+      parameters: Type.Object({}, { additionalProperties: false }),
+      execute: async (_toolCallId, _params, signal) => {
+        const result = await runMolePurgePreview(() => undefined, signal)
+        const maxChars = 16_384
+        const details = {
+          dryRun: true,
+          candidates: result.candidates,
+          exitCode: result.exitCode,
+          signal: result.signal,
+          stdout: result.stdout.slice(0, maxChars),
+          stderr: result.stderr.slice(0, maxChars),
+          stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
+          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
+      }
+    },
+    {
+      name: 'mole_uninstall_list',
+      label: 'Mole 应用清单',
+      description:
+        '只读获取 Mole 可识别的已安装应用清单，返回应用路径、Bundle ID、来源和大小。Agent 先向用户展示并确认要移除的 App，再把选中的 path 交给 trash 移入回收站；移除后可重新运行 mole_clean_preview 检查残留。不要猜测残留路径或直接运行 Mole 交互式卸载 TUI。',
+      parameters: Type.Object({}, { additionalProperties: false }),
+      execute: async (_toolCallId, _params, signal) => {
+        const apps = await listMoleApps(signal)
+        return { content: [{ type: 'text', text: JSON.stringify({ apps }) }], details: { apps } }
       }
     },
     defineTool({
@@ -407,29 +469,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         permanent: Type.Optional(Type.Boolean({ description: '仅在用户明确授权永久删除时使用。' }))
       }),
       execute: async (_toolCallId, { paths, permanent = false }, signal) => {
-        const completed: string[] = []
-        const failed: { path: string; error: string }[] = []
-        for (const requestedPath of paths) {
-          try {
-            signal?.throwIfAborted()
-            const path = await resolveFilePath(requestedPath)
-            await assertSystemWriteAllowed(path, true)
-            signal?.throwIfAborted()
-            if (permanent) await rm(path, { recursive: true })
-            else await shell.trashItem(path)
-            completed.push(requestedPath)
-          } catch (error) {
-            failed.push({ path: requestedPath, error: String(error) })
-            if (signal?.aborted) break
-          }
-        }
-        const details = {
-          operation: permanent ? 'permanent-delete' : 'trash',
-          completed,
-          failed,
-          unprocessed: paths.slice(completed.length + failed.length)
-        }
-        if (failed.length > 0) throw new Error(`清理未全部完成：${JSON.stringify(details)}`)
+        const details = await trashPaths(paths, signal, permanent)
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
     }),
