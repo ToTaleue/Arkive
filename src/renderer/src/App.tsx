@@ -1,8 +1,11 @@
+import { ArchivePage } from './components/ArchivePage'
+import './assets/archive.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Archive,
   ChevronRight,
   Film,
+  Image as ImageIcon,
   Folder,
   FolderOpen,
   MessageSquare,
@@ -15,12 +18,13 @@ import {
 } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
 import { VideoCompressionPage } from './components/VideoCompressionPage'
+import { ImageCompressionPage } from './components/ImageCompressionPage'
 import { initialConversations, type Conversation, type PreviewMessage } from './chat-preview'
 import type { AgentStatus } from '../../shared/contracts/agent'
 import type { MoleDryRunResult, MoleOutputBlock } from '../../shared/contracts/mole'
 
 function App(): React.JSX.Element {
-  const [activePage, setActivePage] = useState<'chat' | 'video'>('chat')
+  const [activePage, setActivePage] = useState<'chat' | 'video' | 'image' | 'archive'>('chat')
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 680)
   const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 960)
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
@@ -158,15 +162,25 @@ function App(): React.JSX.Element {
           <Archive size={15} />
           <span>Arkive</span>
           <ChevronRight size={13} />
-          <span className="muted">{activePage === 'video' ? '视频压缩' : '工作空间'}</span>
+          <span className="muted">
+            {activePage === 'archive'
+              ? '我的归档'
+              : activePage === 'video'
+                ? '视频压缩'
+                : activePage === 'image'
+                  ? '图片压缩'
+                  : '工作空间'}
+          </span>
         </div>
         <span className="preview-badge">
           <span />
           {activePage === 'video'
             ? '本地视频处理'
-            : agentStatus?.configured
-              ? 'Pi 对话'
-              : '待配置模型'}
+            : activePage === 'image'
+              ? '本地图片处理'
+              : agentStatus?.configured
+                ? 'Pi 对话'
+                : '待配置模型'}
         </span>
       </header>
       <div className="workspace">
@@ -206,6 +220,18 @@ function App(): React.JSX.Element {
             <Film size={21} strokeWidth={1.6} />
           </button>
           <button
+            className={`rail-button ${activePage === 'image' ? 'active' : ''}`}
+            title="图片压缩"
+            aria-label="图片压缩"
+            aria-controls="image-compression-page"
+            aria-current={activePage === 'image' ? 'page' : undefined}
+            onClick={() => {
+              setActivePage('image')
+            }}
+          >
+            <ImageIcon size={21} strokeWidth={1.6} />
+          </button>
+          <button
             className={`rail-button ${activePage === 'chat' && rightOpen ? 'active' : ''}`}
             title="切换工作区"
             aria-label="切换工作区"
@@ -217,6 +243,17 @@ function App(): React.JSX.Element {
             }}
           >
             <FolderOpen size={21} strokeWidth={1.6} />
+          </button>
+          <button
+            className={`rail-button ${activePage === 'archive' ? 'active' : ''}`}
+            title="我的归档"
+            aria-label="我的归档"
+            aria-current={activePage === 'archive' ? 'page' : undefined}
+            onClick={() => {
+              setActivePage('archive')
+            }}
+          >
+            <Archive size={21} strokeWidth={1.6} />
           </button>
           <div className="rail-bottom">
             <span className="profile-mark" title="本地工作空间">
@@ -321,6 +358,12 @@ function App(): React.JSX.Element {
         <main id="video-compression-page" className="video-main" hidden={activePage !== 'video'}>
           <VideoCompressionPage />
         </main>
+        <main id="image-compression-page" className="image-main" hidden={activePage !== 'image'}>
+          <ImageCompressionPage />
+        </main>
+        <main className="archive-main" id="archive-page" hidden={activePage !== 'archive'}>
+          <ArchivePage />
+        </main>
         {activePage === 'chat' && rightOpen && (
           <aside id="details-sidebar" className="details-sidebar" aria-label="工作区">
             <header className="details-header">
@@ -376,7 +419,7 @@ function App(): React.JSX.Element {
               <div className="preview-note">
                 <ShieldCheck size={17} />
                 <p>
-                  当前已接入 Pi 文件工具<small>支持读取、搜索和文本编辑，压缩归档尚未接入</small>
+                  当前已接入 Pi 文件工具<small>支持文件操作与压缩；归档可在压缩结果页完成</small>
                 </p>
               </div>
               <section className="mole-demo">

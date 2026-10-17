@@ -2,20 +2,40 @@
 // Build the app first, then: rtk proxy node scripts/check-video-compression.mjs --ui
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { app, BrowserWindow, dialog } from 'electron'
 import { runBundledTool } from '../../../execution/process'
 import { registerVideoCompressionIpc } from './ipc'
+import { Catalog, setCatalog } from '../catalog/service'
+import { registerCatalogIpc } from '../catalog/ipc'
 
 // Keep failures observable after cleanup destroys the last window.
 app.on('window-all-closed', () => {})
 
 async function check(): Promise<void> {
   await app.whenReady()
-  const directory = await realpath(await mkdtemp(join(tmpdir(), 'arkive-video-ui-')))
+  const fixtureRoot = join(app.getPath('desktop'), 'arkive-test')
+  await mkdir(fixtureRoot, { recursive: true })
+  const directory = await realpath(await mkdtemp(join(fixtureRoot, 'arkive-video-ui-')))
+  const catalog = new Catalog({
+    databasePath: join(directory, 'catalog.db'),
+    archiveRoot: join(directory, 'Archive'),
+    backupRoot: join(directory, 'Backup')
+  })
+  setCatalog(catalog)
+  await catalog.start()
   const source = join(directory, 'sample.mov')
   let selectedPath = source
   let outputPath = join(directory, 'compressed.mp4')
@@ -41,13 +61,26 @@ async function check(): Promise<void> {
     webPreferences: { preload: resolve('out/preload/index.js'), sandbox: false }
   })
   attach(window.webContents)
+  registerCatalogIpc(catalog)(window.webContents)
   async function checkOriginal(expectedHash: string): Promise<void> {
+    const row = catalog.repo.db
+      .prepare('SELECT id FROM catalog_items WHERE output_path = ?')
+      .get(outputPath)
+    assert.ok(row)
+    const record = catalog.get(String(row.id))
+    const keptPath = record.backupStatus === 'ready' ? record.backupPath : source
+    assert.ok(keptPath)
     assert.equal(
       createHash('sha256')
-        .update(await readFile(source))
+        .update(await readFile(keptPath))
         .digest('hex'),
       expectedHash
     )
+    if (keptPath !== source) {
+      await assert.rejects(stat(source), { code: 'ENOENT' })
+      // Restore only the generated fixture so the next test can use the same selection.
+      await copyFile(keptPath, source)
+    }
   }
   async function evaluate(expression: string): Promise<unknown> {
     const value: unknown = await window.webContents.executeJavaScript(expression)
@@ -152,8 +185,15 @@ async function check(): Promise<void> {
     assert.ok((await stat(outputPath)).size > 0)
     assert.equal(await evaluate('document.querySelector(".video-primary-button").disabled'), false)
     await checkOriginal(hash)
+    await waitFor('document.querySelector(".archive-primary")?.disabled === false')
+    await click('.archive-primary')
+    await waitFor('document.querySelector(".archive-action")?.textContent.includes("已归档")')
+    assert.equal(catalog.query({}).total, 1)
+    await click('button[aria-label="我的归档"]')
+    await waitFor('document.querySelectorAll(".archive-row").length === 1')
+    await click('button[aria-label="视频压缩"]')
     console.log(
-      'PASS: save cancellation and full UI → preload → IPC → real compression → result flow'
+      'PASS: full compression → original backup → one-click archive → archive search page through real UI/IPC'
     )
 
     outputPath = join(directory, 'compatible.mp4')
@@ -276,6 +316,7 @@ async function check(): Promise<void> {
       'PASS: real percentage/ETA displayed; navigation retains task; cancellation clears progress and temporary output'
     )
   } finally {
+    await catalog.close()
     window.destroy()
     dialog.showOpenDialog = originalOpen
     dialog.showSaveDialog = originalSave

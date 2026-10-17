@@ -17,7 +17,8 @@ import {
   type VideoStartRequest
 } from '../../../shared/contracts/video'
 import { assertSystemWriteAllowed } from '../../system-paths'
-import { compressVideo, inspectVideo } from './service'
+import { inspectVideo } from './service'
+import { compressVideoAndBackup as compressVideo } from '../catalog/compression'
 
 interface WindowState {
   selection?: SelectedVideo

@@ -1,5 +1,7 @@
+import type { CatalogApi } from './catalog'
 import type { MoleApi } from './mole'
 import type { VideoApi } from './video'
+import type { ImageApi } from './image'
 
 export const agentChannels = {
   status: 'agent:status',
@@ -23,9 +25,11 @@ export interface AgentApi {
   onUpdate: (listener: (update: AgentUpdate) => void) => () => void
 }
 export interface ArkiveApi {
+  catalog: CatalogApi
   agent: AgentApi
   mole: MoleApi
   video: VideoApi
+  image: ImageApi
 }
 
 export function isAgentRunId(value: unknown): value is AgentRunId {

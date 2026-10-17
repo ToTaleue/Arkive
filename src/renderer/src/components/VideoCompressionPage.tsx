@@ -1,3 +1,4 @@
+import { ArchiveAction } from './ArchiveAction'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, CheckCircle2, FileVideo, FolderOpen, LoaderCircle, Upload } from 'lucide-react'
 import type {
@@ -141,7 +142,7 @@ export function VideoCompressionPage(): React.JSX.Element {
 
   const status =
     phase === 'saving'
-      ? '选择保存位置，确认后开始压缩。'
+      ? '选择保存位置，确认后开始压缩；成功且体积减小后原件移入备份目录。'
       : phase === 'cancelling'
         ? '正在取消并清理临时文件…'
         : phase === 'selecting'
@@ -158,6 +159,7 @@ export function VideoCompressionPage(): React.JSX.Element {
         </div>
         <div>
           <h1>视频压缩</h1>
+          <p>成功且体积减小后，原件移入 Arkive Backup；压缩结果保留在选定位置。</p>
           <p>选一个视频，从一小次压缩开始。</p>
         </div>
         <span className="video-format">MP4 · {compatibility ? 'H.264' : 'HEVC'}</span>
@@ -259,7 +261,7 @@ export function VideoCompressionPage(): React.JSX.Element {
           <p>
             保留原分辨率与帧率
             <br />
-            <span>点击开始后选择保存位置</span>
+            <span>点击开始后选择保存位置；成功且体积减小后，原件移入备份目录</span>
           </p>
           <button
             className="video-primary-button"
@@ -350,13 +352,13 @@ export function VideoCompressionPage(): React.JSX.Element {
               <strong>{formatSize(result.outputBytes)}</strong>
             </div>
             <div>
-              <span>节省空间</span>
+              <span>体积减少</span>
               <strong>{formatSize(result.savedBytes)}</strong>
             </div>
           </div>
           <p>
             {result.status === 'compressed'
-              ? '已检查文件并完成解码验证，原视频已保留。'
+              ? '已检查文件并完成解码验证。原件位置见下方备份状态。'
               : '本次没有体积收益；输出文件和原视频均已保留。'}
           </p>
           <p>
@@ -370,6 +372,7 @@ export function VideoCompressionPage(): React.JSX.Element {
           <button className="video-text-button" onClick={() => void reveal()}>
             <FolderOpen size={15} />在 Finder 中显示
           </button>
+          {result.catalog && <ArchiveAction key={result.catalog.id} record={result.catalog} />}
         </section>
       )}
     </div>

@@ -1,3 +1,5 @@
+import type { CompressionRecord } from './catalog'
+
 export type VideoCompressionPreset = 'quality' | 'balanced' | 'size'
 
 export interface VideoCompressionRequest {
@@ -8,6 +10,7 @@ export interface VideoCompressionRequest {
 }
 
 export interface VideoCompressionResult {
+  catalog?: CompressionRecord
   status: 'compressed' | 'no-savings'
   outputPath: string
   inputBytes: number

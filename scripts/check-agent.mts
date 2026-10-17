@@ -626,16 +626,33 @@ export const shell = { trashItem: async (path) => {
     .toFile(imageInput)
   const imageBytes = await readFile(imageInput)
   const imageOutput = resolve(workspaceDir, 'compressed.webp')
+  const unavailableBackup = `${currentCatalog.backupRoot}.offline`
+  await rename(currentCatalog.backupRoot, unavailableBackup)
+  await writeFile(currentCatalog.backupRoot, 'simulate an unavailable backup root')
   assert.ok(
     (await callTool('compress_image', { inputPath: imageInput, outputPath: imageOutput })).includes(
       '"outputFormat":"webp"'
     )
   )
   assert.equal((await sharp(imageOutput).metadata()).format, 'webp')
-  const imageId = await checkPreservedOriginal(imageInput, imageOutput, imageBytes)
+  const pendingImage = currentCatalog.repo.db
+    .prepare('SELECT id FROM catalog_items WHERE output_path = ?')
+    .get(imageOutput)
+  assert.ok(pendingImage)
+  const imageId = String(pendingImage.id)
+  assert.equal(currentCatalog.get(imageId).backupStatus, 'error')
+  assert.deepEqual(await readFile(imageInput), imageBytes, 'Backup failure preserves the source')
   assert.equal(currentCatalog.get(imageId).archivePath, null, 'Compression alone does not archive')
+  await rm(currentCatalog.backupRoot)
+  await rename(unavailableBackup, currentCatalog.backupRoot)
   assert.ok(
     (await callTool('archive_file', { id: imageId, tags: ['旅行'] })).includes('"archivePath":')
+  )
+  await checkPreservedOriginal(imageInput, imageOutput, imageBytes)
+  assert.equal(
+    currentCatalog.get(imageId).backupStatus,
+    'ready',
+    'Standalone archive retries backup first'
   )
   const imageArchivePath = currentCatalog.get(imageId).archivePath
   await callTool('archive_file', { id: imageId })

@@ -1,3 +1,4 @@
+import { catalogChannels, type ArchiveItem, type CatalogPage } from '../shared/contracts/catalog'
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {} from './index.d'
@@ -19,9 +20,36 @@ import {
   type VideoCompressionOutcome,
   type VideoCompressionUpdate
 } from '../shared/contracts/video'
+import {
+  imageChannels,
+  type ImageCompressionOutcome,
+  type SelectedImage
+} from '../shared/contracts/image'
 
 // Custom APIs for renderer
 const api: ArkiveApi = {
+  catalog: {
+    archive: (id, tags) =>
+      ipcRenderer.invoke(catalogChannels.archive, id, tags) as Promise<ArchiveItem>,
+    query: (query) => ipcRenderer.invoke(catalogChannels.query, query) as Promise<CatalogPage>,
+    get: (id) => ipcRenderer.invoke(catalogChannels.get, id) as Promise<ArchiveItem>,
+    tags: (ids, add, remove) =>
+      ipcRenderer.invoke(catalogChannels.tags, ids, add, remove) as Promise<void>,
+    refresh: () => ipcRenderer.invoke(catalogChannels.refresh) as Promise<void>,
+    retryBackup: (id) =>
+      ipcRenderer.invoke(catalogChannels.retryBackup, id) as Promise<ArchiveItem>,
+    open: (id) => ipcRenderer.invoke(catalogChannels.open, id) as Promise<void>,
+    reveal: (id) => ipcRenderer.invoke(catalogChannels.reveal, id) as Promise<void>,
+    onChanged: (listener) => {
+      const handler = (): void => {
+        listener()
+      }
+      ipcRenderer.on(catalogChannels.changed, handler)
+      return () => {
+        ipcRenderer.removeListener(catalogChannels.changed, handler)
+      }
+    }
+  },
   agent: {
     status: () => ipcRenderer.invoke(agentChannels.status) as Promise<AgentStatus>,
     send: (request) => ipcRenderer.invoke(agentChannels.send, request) as Promise<AgentResult>,
@@ -51,6 +79,15 @@ const api: ArkiveApi = {
         ipcRenderer.removeListener(videoChannels.update, handler)
       }
     }
+  },
+  image: {
+    select: () => ipcRenderer.invoke(imageChannels.select) as Promise<SelectedImage | null>,
+    selectPath: (inputPath) =>
+      ipcRenderer.invoke(imageChannels.selectPath, inputPath) as Promise<SelectedImage>,
+    compress: (request) =>
+      ipcRenderer.invoke(imageChannels.compress, request) as Promise<ImageCompressionOutcome>,
+    cancel: (runId) => ipcRenderer.invoke(imageChannels.cancel, runId) as Promise<void>,
+    reveal: () => ipcRenderer.invoke(imageChannels.reveal) as Promise<void>
   },
   mole: {
     dryRun: (runId) => ipcRenderer.invoke(moleChannels.dryRun, runId) as Promise<MoleDryRunResult>,

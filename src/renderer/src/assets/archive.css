@@ -1,0 +1,222 @@
+.archive-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px;
+  color: #262626;
+}
+.archive-main {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: #fafafa;
+}
+.archive-main[hidden] {
+  display: none;
+}
+.archive-page h1 {
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+.archive-page h2 {
+  font-size: 14px;
+}
+.archive-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.archive-heading p,
+.archive-action small,
+.archive-file small {
+  color: #737373;
+  font-size: 12px;
+}
+.archive-page button,
+.archive-action button,
+.archive-tag-picker button {
+  border: 1px solid #dedede;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.archive-page button:disabled,
+.archive-action button:disabled,
+.archive-tag-picker button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.archive-page input:not([type='checkbox']),
+.archive-tag-picker input:not([type='checkbox']) {
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  background: white;
+  color: #262626;
+  min-width: 0;
+}
+.archive-filters {
+  margin: 24px 0;
+  padding: 18px;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  background: white;
+}
+.archive-filters > label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.archive-filters fieldset {
+  border: 0;
+  padding: 0;
+  margin: 16px 0;
+}
+.archive-filters legend,
+.archive-date-filters label {
+  font-size: 12px;
+  color: #666;
+}
+.archive-date-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.archive-date-filters label {
+  display: grid;
+  gap: 6px;
+}
+.archive-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 8px 0;
+}
+.archive-tags label,
+.archive-tags span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f3f3f3;
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.archive-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.archive-list {
+  margin-top: 12px;
+}
+.archive-row {
+  display: flex;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+.archive-file {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.archive-file strong {
+  font-size: 13px;
+}
+.archive-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: 6px;
+}
+.archive-action {
+  border-top: 1px solid #e5e5e5;
+  margin-top: 16px;
+  padding-top: 12px;
+  font-size: 12px;
+}
+.archive-action p,
+.archive-action small {
+  display: block;
+  line-height: 1.6;
+}
+.archive-action details {
+  margin: 10px 0;
+}
+.archive-path {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #737373;
+}
+.archive-action .archive-primary {
+  background: #292929;
+  color: white;
+  border-color: #292929;
+}
+.archive-error,
+.archive-action [role='alert'] {
+  color: #b42318;
+}
+.archive-empty {
+  display: grid;
+  justify-items: center;
+  padding: 70px 16px;
+  color: #888;
+  font-size: 13px;
+}
+.archive-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin: 24px;
+  font-size: 12px;
+}
+.archive-editor,
+.archive-batch {
+  padding: 18px;
+  margin: 16px 0;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: white;
+}
+.archive-editor {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: min(480px, calc(100vw - 80px));
+  max-height: 70vh;
+  overflow: auto;
+  box-shadow: 0 8px 32px #0002;
+  z-index: 10;
+}
+.archive-page :focus-visible,
+.archive-action :focus-visible {
+  outline: 2px solid #4c78b8;
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  .archive-row {
+    flex-wrap: wrap;
+  }
+  .archive-row-actions {
+    margin-left: 28px;
+  }
+  .archive-date-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

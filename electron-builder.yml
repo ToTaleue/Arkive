@@ -3,6 +3,7 @@ productName: arkive
 directories:
   buildResources: build
 files:
+  - '!out/*-check*/**'
   - '!resources/tools/**'
   - '!**/.vscode/*'
   - '!src/*'
@@ -22,6 +23,8 @@ nsis:
   createDesktopShortcut: always
 mac:
   extraResources:
+    - from: resources/finder-tags.jxa
+      to: finder-tags.jxa
     - from: resources/tools/darwin-${arch}
       to: tools
       filter:
