@@ -3,6 +3,7 @@ import type { MoleApi } from './mole'
 import type { VideoApi } from './video'
 import type { ImageApi } from './image'
 import type { ProcessingApi } from './processing'
+import type { TasksApi } from './task'
 
 export const agentChannels = {
   status: 'agent:status',
@@ -31,6 +32,7 @@ export interface AgentApi {
   onUpdate: (listener: (update: AgentUpdate) => void) => () => void
 }
 export interface ArkiveApi {
+  tasks: TasksApi
   processing: ProcessingApi
   catalog: CatalogApi
   agent: AgentApi
