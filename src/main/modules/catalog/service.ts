@@ -6,6 +6,10 @@ import { homedir } from 'node:os'
 import { openDatabase } from '../../storage/database'
 import { assertSystemWriteAllowed } from '../../system-paths'
 import { backupOriginal } from '../original-backup/service'
+import {
+  commitOfficeReplacement,
+  recoverOfficeReplacements
+} from '../office-compression/replacement'
 import { CatalogRepository } from './repository'
 import { fileTags, normalizeTags } from './finder-tags'
 import {
@@ -70,6 +74,7 @@ export class Catalog {
     await managedDirectory(this.archiveRoot)
     await managedDirectory(this.backupRoot)
     await this.exclusive(async () => {
+      await recoverOfficeReplacements(this.repo, this.backupRoot)
       for (const id of this.repo.recoveryIds()) {
         await backupOriginal(this.repo, id, this.backupRoot)
         if (this.repo.get(id).archive_status === 'copying') {
@@ -185,6 +190,14 @@ export class Catalog {
       const row = this.repo.get(id)
       if (row.compression_status !== 'ready') throw new Error('压缩结果尚未就绪。')
       await backupOriginal(this.repo, id, this.backupRoot)
+      this.changed()
+      return this.repo.item(id)
+    })
+  }
+
+  finishOfficeReplacement(id: string): Promise<CompressionRecord> {
+    return this.exclusive(async () => {
+      await commitOfficeReplacement(this.repo, this.backupRoot, id)
       this.changed()
       return this.repo.item(id)
     })

@@ -177,7 +177,9 @@ export class CatalogRepository {
     return this.db
       .prepare(
         `SELECT id FROM catalog_items WHERE compression_status = 'ready'
-      AND (backup_status IN ('pending', 'error') OR archive_status = 'copying')`
+      AND ((backup_status IN ('pending', 'error') AND NOT EXISTS
+        (SELECT 1 FROM office_replacements o WHERE o.item_id = catalog_items.id))
+        OR archive_status = 'copying')`
       )
       .all()
       .map((row) => String(row.id))

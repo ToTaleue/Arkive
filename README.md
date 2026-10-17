@@ -39,11 +39,18 @@ apps use runtime environment variables; an end-user credentials UI is not added 
   reset on page reload, window close or restart; durable history is not implemented.
 - Missing configuration and request errors appear in the chat. Provider messages
   may be sent over the network; no API key is exposed by the preload interface.
-- The workspace file panel is a placeholder; the agent can read, search and edit
-  files through its tools. Compression, moving and deletion tools are not connected.
+- The workspace file panel is a placeholder; the agent can read and search files,
+  then use connected compression and file-operation tools within user authorization.
   On smaller windows, the workspace starts collapsed.
 
-Pi enables `read`, `grep`, `find`, `ls`, `edit`, `write` and `mole_clean_preview`.
+Pi enables the native `read`, `grep`, `find` and `ls` tools, plus Arkive's compression,
+archive, tag, file-operation and Mole tools. `edit`, `write` and shell tools are disabled.
+Office uses `inspect_office` for read-only package inspection and `compress_office`
+for DOCX/PPTX embedded media compression with whole-original backup and replacement
+at the original path. It accepts `inputPath` and optional `preset`, without a separate
+output path. Check `replacementStatus` as well as compression and backup status;
+archive successful replacements through `archive_file` using `catalog.id`.
+See [Office module details](src/main/modules/office-compression/README.md).
 The Mole tool shares `runMoleDryRun` with the preview button and runs only
 `clean --dry-run`, with a two-minute timeout and the Agent's cancellation signal.
 It accepts no command arguments and returns bounded stdout/stderr plus exit status
@@ -60,7 +67,9 @@ to verify the real Pi SDK against a
 local streaming fixture: the tool allowlist, actual file tool execution in a
 temporary directory, Mole preview arguments/results/failure/cancellation using a
 temporary executable fixture, multiple turns, isolated conversations, cancellation,
-request errors, configuration validation and key redaction. It does not call a
+request errors, configuration validation and key redaction. It also drives Office
+inspection, actual in-place document replacement, original backup, subsequent archive,
+no-savings and publication failure through the registered tools. It does not call a
 real model service or require credentials, and does not scan or clean the user's Mac.
 
 ## Bundled tools (macOS Apple Silicon)

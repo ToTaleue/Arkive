@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 export function migrateDatabase(db: DatabaseSync): void {
   const version = Number(db.prepare('PRAGMA user_version').get()?.user_version)
-  if (version > 2) throw new Error('数据库版本高于当前应用，请使用更新版本的 Arkive。')
+  if (version > 3) throw new Error('数据库版本高于当前应用，请使用更新版本的 Arkive。')
   db.exec(`
     BEGIN IMMEDIATE;
     CREATE TABLE IF NOT EXISTS catalog_items (
@@ -32,6 +32,16 @@ export function migrateDatabase(db: DatabaseSync): void {
       ALTER TABLE catalog_items ADD COLUMN inherit_tags_pending INTEGER NOT NULL DEFAULT 1;
       UPDATE catalog_items SET inherit_tags_pending = 0 WHERE archive_status = 'ready';
       PRAGMA user_version = 2;
+      COMMIT;`)
+  }
+  if (version < 3) {
+    db.exec(`BEGIN IMMEDIATE;
+      CREATE TABLE office_replacements (
+        item_id TEXT PRIMARY KEY REFERENCES catalog_items(id) ON DELETE CASCADE,
+        candidate_path TEXT NOT NULL, original_path TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'prepared', error TEXT
+      );
+      PRAGMA user_version = 3;
       COMMIT;`)
   }
 }

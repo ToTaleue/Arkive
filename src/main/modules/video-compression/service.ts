@@ -169,8 +169,9 @@ async function probeVideo(path: string, signal?: AbortSignal): Promise<VideoInfo
 }
 
 /** Selection-time inspection: show exactly which auxiliary streams will be discarded. */
-export async function inspectVideo(path: string): Promise<VideoInspection> {
-  const { removedContents } = await probeVideo(path)
+export async function inspectVideo(path: string, signal?: AbortSignal): Promise<VideoInspection> {
+  signal?.throwIfAborted()
+  const { removedContents } = await probeVideo(path, signal)
   return { removedContents }
 }
 

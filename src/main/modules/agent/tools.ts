@@ -12,6 +12,8 @@ import {
 import { runMoleDryRun } from '../mole/service'
 import { getCatalog } from '../catalog/service'
 import { normalizeTags } from '../catalog/finder-tags'
+import { inspectOffice } from '../office-compression/service'
+import { compressOfficeInPlace } from '../office-compression/in-place'
 
 function isWithin(root: string, path: string): boolean {
   const child = relative(root, path)
@@ -155,6 +157,42 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
     },
+    defineTool({
+      name: 'inspect_office',
+      label: 'Office 嵌入媒体探测',
+      description:
+        '只读探测普通 DOCX／PPTX 的包结构、大小及嵌入 JPEG／PNG、MP4 候选数量和其他媒体数量。不修改源文档、不访问外链；候选数量不代表一定可压缩，包校验不等于 Word／PowerPoint 打开或播放验收。旧版 DOC／PPT、宏、签名及加密文档不支持。',
+      parameters: Type.Object(
+        { inputPath: Type.String({ description: '源 DOCX／PPTX 文档绝对路径。' }) },
+        { additionalProperties: false }
+      ),
+      execute: async (_toolCallId, request, signal) => {
+        const result = await inspectOffice(request.inputPath, signal)
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+      }
+    }),
+    defineTool({
+      name: 'compress_office',
+      label: 'Office 原路径压缩',
+      description:
+        '用户明确授权后，压缩普通 DOCX／PPTX 内嵌媒体并替换原路径上的整份文档，保持文件名及文档格式。调用前说明有损压缩、原路径替换和完整原件移动到 Arkive Backup。JPEG／PNG 保持格式，MP4 输出 H.264 8bit 并复制 AAC；外链不访问，不支持或质量未达标的媒体保留原样。默认质量优先，只有媒体和完整文档变小且校验通过才替换；无收益返回 unchanged。必须检查 replacementStatus、replacementError、media 和 catalog.backupStatus，不能只根据 status 宣称替换成功。选参和编码可取消；进入备份发布提交阶段后完成提交。归档须在 replaced 后用返回的 catalog.id 调用 archive_file，不再压缩。',
+      parameters: Type.Object(
+        {
+          inputPath: Type.String({ description: '已授权原路径替换的 DOCX／PPTX 文档绝对路径。' }),
+          preset: Type.Optional(
+            Type.Union([Type.Literal('quality'), Type.Literal('balanced'), Type.Literal('size')])
+          )
+        },
+        { additionalProperties: false }
+      ),
+      execute: async (_toolCallId, request, signal) => {
+        signal?.throwIfAborted()
+        const inputPath = await resolveFilePath(request.inputPath)
+        await assertSystemWriteAllowed(inputPath, true)
+        const result = await compressOfficeInPlace({ ...request, inputPath }, signal)
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+      }
+    }),
     defineTool({
       name: 'compress_video',
       label: '视频压缩',

@@ -23,6 +23,7 @@ import { build } from 'vite'
 import type { AgentService as Service } from '../src/main/modules/agent/service'
 import type { AgentResult, AgentUpdate } from '../src/shared/contracts/agent'
 import type { Catalog as CatalogService } from '../src/main/modules/catalog/service'
+import type { OfficeReplacementResult } from '../src/shared/contracts/office'
 
 type FixtureMessage = { role: string; content: string | { type: string; text?: string }[] }
 type FixtureRequest = {
@@ -49,6 +50,8 @@ const enabledTools = [
   'mole_analyze',
   'compress_image',
   'compress_video',
+  'inspect_office',
+  'compress_office',
   'move',
   'copy',
   'mkdir',
@@ -332,7 +335,8 @@ export const shell = { trashItem: async (path) => {
           service: resolve('src/main/modules/agent/service.ts'),
           contracts: resolve('src/shared/contracts/agent.ts'),
           config: resolve('src/main/modules/agent/config.ts'),
-          catalog: resolve('src/main/modules/catalog/service.ts')
+          catalog: resolve('src/main/modules/catalog/service.ts'),
+          officeFixtures: resolve('src/main/modules/office-compression/fixtures.test.ts')
         },
         output: { format: 'es', entryFileNames: '[name].mjs' }
       }
@@ -350,6 +354,9 @@ export const shell = { trashItem: async (path) => {
   const { Catalog, setCatalog } = (await import(
     pathToFileURL(resolve(buildDir, 'catalog.mjs')).href
   )) as typeof import('../src/main/modules/catalog/service')
+  const { fixture: officeFixture } = (await import(
+    pathToFileURL(resolve(buildDir, 'officeFixtures.mjs')).href
+  )) as typeof import('../src/main/modules/office-compression/fixtures.test')
   catalog = new Catalog({
     databasePath: resolve(workspaceDir, 'catalog.db'),
     archiveRoot: resolve(workspaceDir, 'Archive'),
@@ -769,6 +776,90 @@ export const shell = { trashItem: async (path) => {
       compatibility: true
     }),
     /"videoCodec":"h264"/
+  )
+
+  // Drive the registered tools through Pi, then verify full-document side effects.
+  const officePng = await sharp({
+    create: { width: 256, height: 256, channels: 4, background: '#00998880' }
+  })
+    .png({ compressionLevel: 0 })
+    .toBuffer()
+  for (const format of ['docx', 'pptx'] as const) {
+    const inputPath = resolve(workspaceDir, `office with spaces.${format}`)
+    await officeFixture(inputPath, format, [officePng], { video: Buffer.from('invalid video') })
+    const original = await readFile(inputPath)
+    const inspected = await callTool('inspect_office', { inputPath })
+    assert.ok(inspected.includes(`"format":"${format}"`), inspected)
+    assert.ok(inspected.includes('"embeddedImages":1'), inspected)
+    assert.ok(inspected.includes('"embeddedVideos":1'), inspected)
+    assert.deepEqual(await readFile(inputPath), original, 'Inspection is read-only')
+    assert.match(
+      await callTool('compress_office', { inputPath, preset: 'invalid' }),
+      /preset|invalid|literal/i
+    )
+    assert.deepEqual(await readFile(inputPath), original, 'Invalid parameters preserve source')
+    assert.match(
+      await callTool('compress_office', {
+        inputPath,
+        outputPath: resolve(workspaceDir, 'unexpected.docx')
+      }),
+      /outputPath|additional|unexpected/i
+    )
+    assert.deepEqual(await readFile(inputPath), original, 'Unexpected output paths are rejected')
+    const replaced = JSON.parse(
+      await callTool('compress_office', { inputPath, preset: 'quality' })
+    ) as OfficeReplacementResult
+    assert.equal(replaced.status, 'compressed')
+    assert.equal(replaced.replacementStatus, 'replaced', replaced.replacementError)
+    assert.equal(replaced.outputPath, inputPath)
+    assert.ok(replaced.savedBytes > 0)
+    assert.ok(replaced.media.some((part) => part.status === 'compressed'))
+    assert.ok(
+      replaced.media.some((part) => part.part.endsWith('.mp4') && part.status === 'skipped')
+    )
+    assert.equal(replaced.catalog?.backupStatus, 'ready')
+    assert.ok(replaced.catalog?.backupPath)
+    assert.deepEqual(await readFile(replaced.catalog.backupPath), original)
+    const current = await readFile(inputPath)
+    assert.notDeepEqual(current, original)
+    assert.equal(current.length, replaced.outputBytes)
+    assert.equal(currentCatalog.get(replaced.catalog.id).outputPath, inputPath)
+    assert.equal(currentCatalog.get(replaced.catalog.id).archivePath, null)
+    await callTool('archive_file', { id: replaced.catalog.id, tags: ['参考'] })
+    const archived = currentCatalog.get(replaced.catalog.id)
+    assert.ok(archived.archivePath)
+    assert.deepEqual(await readFile(archived.archivePath), current)
+  }
+  const officeEmpty = resolve(workspaceDir, 'office-no-savings.docx')
+  await officeFixture(officeEmpty, 'docx', [])
+  const officeEmptyBytes = await readFile(officeEmpty)
+  assert.match(
+    await callTool('compress_office', { inputPath: officeEmpty }),
+    /"replacementStatus":"unchanged"/
+  )
+  assert.deepEqual(await readFile(officeEmpty), officeEmptyBytes)
+  assert.match(await callTool('compress_office', { inputPath: 'relative.docx' }), /绝对路径/)
+  assert.match(
+    await callTool('compress_office', { inputPath: '/System/office.docx' }),
+    /系统关键路径受保护/
+  )
+  const officeFailure = resolve(workspaceDir, 'office-backup-failure.pptx')
+  await officeFixture(officeFailure, 'pptx', [officePng])
+  const officeFailureBytes = await readFile(officeFailure)
+  await rename(currentCatalog.backupRoot, unavailableBackup)
+  await writeFile(currentCatalog.backupRoot, 'simulate unavailable Office backup root')
+  const officeFailed = JSON.parse(
+    await callTool('compress_office', { inputPath: officeFailure })
+  ) as OfficeReplacementResult
+  assert.equal(officeFailed.status, 'compressed')
+  assert.equal(officeFailed.replacementStatus, 'error')
+  assert.ok(officeFailed.replacementError)
+  assert.equal(officeFailed.catalog?.backupStatus, 'error')
+  assert.deepEqual(await readFile(officeFailure), officeFailureBytes)
+  await rm(currentCatalog.backupRoot)
+  await rename(unavailableBackup, currentCatalog.backupRoot)
+  console.log(
+    'PASS: Pi Office discovery, read-only inspection, in-place replacement/backup/archive, skipped video, no-savings, invalid parameters and publication failure reporting'
   )
 
   await writeFile(moleModeFile, 'slow')
