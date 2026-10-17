@@ -13,6 +13,12 @@ import {
   type MoleDryRunResult,
   type MoleDryRunUpdate
 } from '../shared/contracts/mole'
+import {
+  videoChannels,
+  type SelectedVideo,
+  type VideoCompressionOutcome,
+  type VideoCompressionUpdate
+} from '../shared/contracts/video'
 
 // Custom APIs for renderer
 const api: ArkiveApi = {
@@ -27,6 +33,22 @@ const api: ArkiveApi = {
       ipcRenderer.on(agentChannels.update, handler)
       return () => {
         ipcRenderer.removeListener(agentChannels.update, handler)
+      }
+    }
+  },
+  video: {
+    select: () => ipcRenderer.invoke(videoChannels.select) as Promise<SelectedVideo | null>,
+    compress: (request) =>
+      ipcRenderer.invoke(videoChannels.compress, request) as Promise<VideoCompressionOutcome>,
+    cancel: (runId) => ipcRenderer.invoke(videoChannels.cancel, runId) as Promise<void>,
+    reveal: () => ipcRenderer.invoke(videoChannels.reveal) as Promise<void>,
+    onUpdate: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, update: VideoCompressionUpdate): void => {
+        listener(update)
+      }
+      ipcRenderer.on(videoChannels.update, handler)
+      return () => {
+        ipcRenderer.removeListener(videoChannels.update, handler)
       }
     }
   },

@@ -1,0 +1,297 @@
+import { useEffect, useRef, useState } from 'react'
+import { ArrowDown, CheckCircle2, FileVideo, FolderOpen, LoaderCircle, Upload } from 'lucide-react'
+import type {
+  SelectedVideo,
+  VideoCompressionPreset,
+  VideoCompressionResult,
+  VideoCompressionStage
+} from '../../../shared/contracts/video'
+
+const presets: { value: VideoCompressionPreset; title: string; description: string }[] = [
+  { value: 'quality', title: '画质优先', description: '尽量保留细节，体积收益其次' },
+  { value: 'balanced', title: '均衡压缩', description: '兼顾画质和体积，推荐从这里开始' },
+  { value: 'size', title: '体积优先', description: '争取更小体积，接受更多细节损失' }
+]
+const stageLabels: Record<VideoCompressionStage, string> = {
+  probing: '正在读取视频信息…',
+  encoding: '正在压缩视频…',
+  validating: '正在检查并解码压缩结果…'
+}
+type Phase = 'idle' | 'selecting' | 'saving' | 'cancelling' | VideoCompressionStage
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+function message(error: unknown): string {
+  return error instanceof Error
+    ? error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+    : '操作失败，请重试。'
+}
+
+export function VideoCompressionPage(): React.JSX.Element {
+  const [selected, setSelected] = useState<SelectedVideo | null>(null)
+  const [preset, setPreset] = useState<VideoCompressionPreset>('balanced')
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [result, setResult] = useState<VideoCompressionResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const runId = useRef<string | null>(null)
+  const operating = useRef(false)
+  const mounted = useRef(true)
+  const api = window.api?.video
+  const busy = phase !== 'idle'
+
+  useEffect(() => {
+    mounted.current = true
+    const video = window.api?.video
+    const unsubscribe = video?.onUpdate((update) => {
+      if (update.runId === runId.current) {
+        setPhase((current) => (current === 'cancelling' ? current : update.stage))
+      }
+    })
+    return () => {
+      mounted.current = false
+      unsubscribe?.()
+    }
+  }, [])
+
+  async function selectVideo(): Promise<void> {
+    if (!api || operating.current) return
+    operating.current = true
+    setPhase('selecting')
+    setError(null)
+    try {
+      const file = await api.select()
+      if (file && mounted.current) {
+        setSelected(file)
+        setResult(null)
+        setNotice(null)
+      }
+    } catch (failure) {
+      if (mounted.current) setError(message(failure))
+    } finally {
+      operating.current = false
+      if (mounted.current) setPhase('idle')
+    }
+  }
+
+  async function compress(): Promise<void> {
+    if (!api || !selected || operating.current) return
+    operating.current = true
+    const id = crypto.randomUUID()
+    runId.current = id
+    setPhase('saving')
+    setResult(null)
+    setError(null)
+    setNotice(null)
+    try {
+      const outcome = await api.compress({ runId: id, fileId: selected.id, preset })
+      if (!mounted.current) return
+      if (outcome.status === 'completed') setResult(outcome.result)
+      else if (outcome.status === 'error') setError(outcome.error)
+      else setNotice('已取消，原视频已保留。')
+    } catch (failure) {
+      if (mounted.current) setError(message(failure))
+    } finally {
+      operating.current = false
+      runId.current = null
+      if (mounted.current) setPhase('idle')
+    }
+  }
+
+  async function cancel(): Promise<void> {
+    if (!api || !runId.current || phase === 'cancelling') return
+    const previousPhase = phase
+    setPhase('cancelling')
+    try {
+      await api.cancel(runId.current)
+    } catch (failure) {
+      if (mounted.current && runId.current) {
+        setError(message(failure))
+        setPhase(previousPhase)
+      }
+    }
+  }
+
+  async function reveal(): Promise<void> {
+    try {
+      await api?.reveal()
+    } catch (failure) {
+      setError(message(failure))
+    }
+  }
+
+  const status =
+    phase === 'saving'
+      ? '选择保存位置，确认后开始压缩。'
+      : phase === 'cancelling'
+        ? '正在取消并清理临时文件…'
+        : phase === 'selecting'
+          ? '请选择本地视频。'
+          : phase === 'idle'
+            ? null
+            : stageLabels[phase]
+
+  return (
+    <div className="video-page">
+      <header className="video-page-heading">
+        <div className="video-heading-icon">
+          <FileVideo size={25} strokeWidth={1.5} />
+        </div>
+        <div>
+          <h1>视频压缩</h1>
+          <p>选一个视频，从一小次压缩开始。</p>
+        </div>
+        <span className="video-format">MP4 · HEVC</span>
+      </header>
+
+      <section className="video-card" aria-labelledby="video-file-heading">
+        <div className="video-section-heading">
+          <span>01</span>
+          <h2 id="video-file-heading">选择视频</h2>
+        </div>
+        {!selected ? (
+          <button
+            className="video-file-picker"
+            disabled={busy || !api}
+            onClick={() => void selectVideo()}
+          >
+            <Upload size={30} strokeWidth={1.4} />
+            <strong>点击选择本地视频</strong>
+            <span>支持 MP4、MOV 等常见格式</span>
+          </button>
+        ) : (
+          <div className="video-selected-file">
+            <FileVideo size={30} strokeWidth={1.4} />
+            <div>
+              <strong>{selected.name}</strong>
+              <span>{formatSize(selected.sizeBytes)}</span>
+              <p>{selected.path}</p>
+            </div>
+            <button
+              className="video-text-button"
+              disabled={busy}
+              onClick={() => void selectVideo()}
+            >
+              更换视频
+            </button>
+          </div>
+        )}
+        <p className="video-hint">文件仅在本机处理，始终保留原视频。</p>
+        {!api && (
+          <p role="alert" className="video-error">
+            请在 Electron 桌面应用中打开；开发中更新后请重启应用。
+          </p>
+        )}
+      </section>
+
+      <section className="video-card" aria-labelledby="video-preset-heading">
+        <div className="video-section-heading">
+          <span>02</span>
+          <h2 id="video-preset-heading">选择压缩档位</h2>
+        </div>
+        <fieldset className="video-presets" disabled={busy}>
+          <legend className="sr-only">压缩档位</legend>
+          {presets.map((item) => (
+            <label
+              key={item.value}
+              className={`video-preset ${preset === item.value ? 'selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name="video-preset"
+                value={item.value}
+                checked={preset === item.value}
+                onChange={() => {
+                  setPreset(item.value)
+                }}
+              />
+              <strong>{item.title}</strong>
+              <span>{item.description}</span>
+            </label>
+          ))}
+        </fieldset>
+        <div className="video-actions">
+          <p>
+            保留原分辨率与帧率
+            <br />
+            <span>点击开始后选择保存位置</span>
+          </p>
+          <button
+            className="video-primary-button"
+            disabled={!selected || busy || !api}
+            onClick={() => void compress()}
+          >
+            {busy && phase !== 'selecting' ? (
+              <LoaderCircle size={16} className="video-spinner" />
+            ) : (
+              <ArrowDown size={16} />
+            )}
+            {busy && phase !== 'selecting' ? '处理中…' : '开始压缩'}
+          </button>
+        </div>
+        {status && (
+          <div className="video-running" role="status">
+            <p>{status}</p>
+            {phase !== 'selecting' && <progress aria-label="视频处理进度" />}
+            {phase !== 'saving' && phase !== 'selecting' && (
+              <button
+                className="video-text-button"
+                disabled={phase === 'cancelling'}
+                onClick={() => void cancel()}
+              >
+                取消压缩
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+
+      {error && (
+        <div className="video-error video-feedback" role="alert">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <p className="video-feedback" role="status">
+          {notice}
+        </p>
+      )}
+      {result && (
+        <section className="video-card video-result" aria-label="压缩结果" role="status">
+          <h2>
+            <CheckCircle2 size={19} />
+            {result.status === 'compressed' ? '压缩完成' : '处理完成，体积没有减小'}
+          </h2>
+          <div className="video-size-comparison">
+            <div>
+              <span>原视频</span>
+              <strong>{formatSize(result.inputBytes)}</strong>
+            </div>
+            <ArrowDown size={18} />
+            <div>
+              <span>压缩后</span>
+              <strong>{formatSize(result.outputBytes)}</strong>
+            </div>
+            <div>
+              <span>节省空间</span>
+              <strong>{formatSize(result.savedBytes)}</strong>
+            </div>
+          </div>
+          <p>
+            {result.status === 'compressed'
+              ? '已检查文件并完成解码验证，原视频已保留。'
+              : '本次没有体积收益；输出文件和原视频均已保留。'}
+          </p>
+          <p className="video-output-path">{result.outputPath}</p>
+          <button className="video-text-button" onClick={() => void reveal()}>
+            <FolderOpen size={15} />在 Finder 中显示
+          </button>
+        </section>
+      )}
+    </div>
+  )
+}

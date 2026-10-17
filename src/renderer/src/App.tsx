@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Archive,
   ChevronRight,
+  Film,
   Folder,
   FolderOpen,
   MessageSquare,
@@ -13,11 +14,13 @@ import {
   X
 } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
+import { VideoCompressionPage } from './components/VideoCompressionPage'
 import { initialConversations, type Conversation, type PreviewMessage } from './chat-preview'
 import type { AgentStatus } from '../../shared/contracts/agent'
 import type { MoleDryRunResult, MoleOutputBlock } from '../../shared/contracts/mole'
 
 function App(): React.JSX.Element {
+  const [activePage, setActivePage] = useState<'chat' | 'video'>('chat')
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 680)
   const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 960)
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
@@ -73,6 +76,7 @@ function App(): React.JSX.Element {
   if (!activeConversation) throw new Error('Active conversation is missing')
 
   function newConversation(): void {
+    setActivePage('chat')
     const emptyConversation = conversations.find(
       (conversation) => conversation.messages.length === 0
     )
@@ -154,11 +158,15 @@ function App(): React.JSX.Element {
           <Archive size={15} />
           <span>Arkive</span>
           <ChevronRight size={13} />
-          <span className="muted">工作空间</span>
+          <span className="muted">{activePage === 'video' ? '视频压缩' : '工作空间'}</span>
         </div>
         <span className="preview-badge">
           <span />
-          {agentStatus?.configured ? 'Pi 对话' : '待配置模型'}
+          {activePage === 'video'
+            ? '本地视频处理'
+            : agentStatus?.configured
+              ? 'Pi 对话'
+              : '待配置模型'}
         </span>
       </header>
       <div className="workspace">
@@ -173,24 +181,38 @@ function App(): React.JSX.Element {
           </button>
           <div className="rail-divider" />
           <button
-            className={`rail-button ${leftOpen ? 'active' : ''}`}
+            className={`rail-button ${activePage === 'chat' && leftOpen ? 'active' : ''}`}
             title="切换会话列表"
             aria-label="切换会话列表"
             aria-controls="conversation-sidebar"
-            aria-expanded={leftOpen}
+            aria-expanded={activePage === 'chat' && leftOpen}
             onClick={() => {
-              setLeftOpen(!leftOpen)
+              if (activePage !== 'chat') setActivePage('chat')
+              else setLeftOpen(!leftOpen)
             }}
           >
             <MessageSquare size={21} strokeWidth={1.6} />
           </button>
           <button
-            className={`rail-button ${rightOpen ? 'active' : ''}`}
+            className={`rail-button ${activePage === 'video' ? 'active' : ''}`}
+            title="视频压缩"
+            aria-label="视频压缩"
+            aria-controls="video-compression-page"
+            aria-current={activePage === 'video' ? 'page' : undefined}
+            onClick={() => {
+              setActivePage('video')
+            }}
+          >
+            <Film size={21} strokeWidth={1.6} />
+          </button>
+          <button
+            className={`rail-button ${activePage === 'chat' && rightOpen ? 'active' : ''}`}
             title="切换工作区"
             aria-label="切换工作区"
             aria-controls="details-sidebar"
-            aria-expanded={rightOpen}
+            aria-expanded={activePage === 'chat' && rightOpen}
             onClick={() => {
+              setActivePage('chat')
               setRightOpen(!rightOpen)
             }}
           >
@@ -202,7 +224,7 @@ function App(): React.JSX.Element {
             </span>
           </div>
         </nav>
-        {leftOpen && (
+        {activePage === 'chat' && leftOpen && (
           <aside id="conversation-sidebar" className="conversation-sidebar" aria-label="会话列表">
             <div className="sidebar-heading">
               <h1>Arkive</h1>
@@ -251,7 +273,7 @@ function App(): React.JSX.Element {
             </div>
           </aside>
         )}
-        <main className="chat-main">
+        <main className="chat-main" hidden={activePage !== 'chat'}>
           <header className="chat-header">
             <div className="chat-title">
               {!leftOpen && (
@@ -296,7 +318,10 @@ function App(): React.JSX.Element {
             </div>
           ))}
         </main>
-        {rightOpen && (
+        <main id="video-compression-page" className="video-main" hidden={activePage !== 'video'}>
+          <VideoCompressionPage />
+        </main>
+        {activePage === 'chat' && rightOpen && (
           <aside id="details-sidebar" className="details-sidebar" aria-label="工作区">
             <header className="details-header">
               <span>

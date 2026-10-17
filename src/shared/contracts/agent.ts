@@ -1,4 +1,5 @@
 import type { MoleApi } from './mole'
+import type { VideoApi } from './video'
 
 export const agentChannels = {
   status: 'agent:status',
@@ -24,6 +25,7 @@ export interface AgentApi {
 export interface ArkiveApi {
   agent: AgentApi
   mole: MoleApi
+  video: VideoApi
 }
 
 export function isAgentRunId(value: unknown): value is AgentRunId {

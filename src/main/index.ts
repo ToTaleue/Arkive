@@ -5,8 +5,9 @@ import icon from '../../resources/icon.png?asset'
 import { loadAgentEnvironment } from './modules/agent/config'
 import { registerAgentIpc } from './modules/agent/ipc'
 import { registerMoleIpc } from './modules/mole/ipc'
+import { registerVideoCompressionIpc } from './modules/video-compression/ipc'
 
-function createWindow(attachAgent: (contents: Electron.WebContents) => void): void {
+function createWindow(attachWindow: (contents: Electron.WebContents) => void): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1440,
@@ -25,7 +26,7 @@ function createWindow(attachAgent: (contents: Electron.WebContents) => void): vo
     }
   })
 
-  attachAgent(mainWindow.webContents)
+  attachWindow(mainWindow.webContents)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -60,6 +61,11 @@ app
     loadAgentEnvironment(app.getAppPath(), app.isPackaged)
     const attachAgent = registerAgentIpc(app.getPath('userData'))
     registerMoleIpc()
+    const attachVideo = registerVideoCompressionIpc()
+    const attachWindow = (contents: Electron.WebContents): void => {
+      attachAgent(contents)
+      attachVideo(contents)
+    }
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.electron')
 
@@ -75,12 +81,12 @@ app
       console.log('pong')
     })
 
-    createWindow(attachAgent)
+    createWindow(attachWindow)
 
     app.on('activate', function () {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
-      if (BrowserWindow.getAllWindows().length === 0) createWindow(attachAgent)
+      if (BrowserWindow.getAllWindows().length === 0) createWindow(attachWindow)
     })
   })
   .catch((error: unknown) => {
