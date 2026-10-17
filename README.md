@@ -74,7 +74,7 @@ real model service or require credentials, and does not scan or clean the user's
 
 ## Bundled tools (macOS Apple Silicon)
 
-FFmpeg, FFprobe, Mole, pngquant, jpegoptim, Ghostscript, qpdf and czkawka_cli are included in
+FFmpeg, FFprobe, Mole, pngquant, Ghostscript, qpdf and czkawka_cli are included in
 `resources/tools/darwin-arm64`. No system installation or local compilation is needed.
 Mole includes its upstream Bash runtime and precompiled `analyze-go` / `status-go` helpers.
 Versions, download hashes, sources and licenses are recorded in
@@ -87,7 +87,7 @@ Tool payloads for other platforms are not included.
 Main-process tool execution lives in `src/execution/process.ts`. Both entry points
 accept a registered tool name, a raw argument array and optional `cwd` / `signal`.
 Arguments pass through unchanged, without a shell. Tool names are `ffmpeg`, `ffprobe`,
-`mole`, `pngquant`, `jpegoptim`, `ghostscript`, `qpdf` and `czkawka_cli`.
+`mole`, `pngquant`, `ghostscript`, `qpdf` and `czkawka_cli`.
 Paths preserve the bundled directory layout, including qpdf's adjacent library.
 
 ```ts

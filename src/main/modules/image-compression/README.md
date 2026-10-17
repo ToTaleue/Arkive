@@ -12,7 +12,7 @@ const result = await compressImage({
 - 默认通过 Sharp 输出 WebP，并按 `balanced` 预设进行有损压缩。
 - `preserveFormat: true` 保持 JPEG、PNG 或 WebP 原格式；PNG 使用内置 pngquant，JPEG 和 WebP 使用 Sharp。
 - `preset` 可选 `quality`、`balanced` 或 `size`，目标 SSIMULACRA2 分数暂为 90、85、80；Sharp 候选质量分别为 `92 → 98`、`85 → 95`、`80 → 92`，每个预设最多尝试两个候选质量。
-- `outputFormat: 'png'` 仅接受 PNG 输入，调用内置 pngquant。JPEG 输出始终使用 Sharp 有损编码，不使用 jpegoptim。
+- `outputFormat: 'png'` 仅接受 PNG 输入，调用内置 pngquant。JPEG 输出始终使用 Sharp 有损编码。
 - 透明图片输出 JPEG 必须提供 `jpegBackground: '#RRGGBB'`，不默认填充白底。
 
 Sharp 编码参数是起始设置，尚未完成真实照片的画质标定。不同工具的质量数值不能等价比较。PNG 分支暂不接受单值 `quality`。
