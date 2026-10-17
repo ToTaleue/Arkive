@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AppendMessage } from '@assistant-ui/react'
 import type { Conversation, PreviewMessage } from '../chat-preview'
-import type { AgentRunId, AgentStatus } from '../../../shared/contracts/agent'
+import type { AgentRunId, AgentStatus, AgentToolActivity } from '../../../shared/contracts/agent'
 
 type ChatOptions = {
   conversation: Conversation
@@ -14,12 +14,14 @@ export function useAgentChat({ conversation, status, onAppend, onUpdate }: ChatO
   isRunning: boolean
   error: string | null
   notice: string | null
+  activities: AgentToolActivity[]
   send: (message: AppendMessage) => Promise<void>
   stop: () => Promise<void>
 } {
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [activities, setActivities] = useState<AgentToolActivity[]>([])
   const run = useRef<AgentRunId | null>(null)
   const agent = window.api?.agent
 
@@ -28,6 +30,12 @@ export function useAgentChat({ conversation, status, onAppend, onUpdate }: ChatO
     return agent.onUpdate((update) => {
       if (update.conversationId !== conversation.id || update.requestId !== run.current?.requestId)
         return
+      if (update.tool) {
+        const tool = update.tool
+        setActivities((previous) =>
+          [...previous.filter((item) => item.id !== tool.id), tool].slice(-30)
+        )
+      }
       onUpdate(conversation.id, { id: update.requestId, role: 'assistant', content: update.text })
     })
   }, [agent, conversation.id, conversation.example, onUpdate])
@@ -44,6 +52,7 @@ export function useAgentChat({ conversation, status, onAppend, onUpdate }: ChatO
     run.current = request
     setError(null)
     setNotice(null)
+    setActivities([])
     setIsRunning(true)
     onAppend(conversation.id, [{ id: crypto.randomUUID(), role: 'user', content: text }])
     try {
@@ -55,12 +64,16 @@ export function useAgentChat({ conversation, status, onAppend, onUpdate }: ChatO
           content: result.text
         })
       if (result.status === 'error') setError(result.error)
-      if (result.status === 'cancelled') setNotice('已停止生成，可以继续发送消息。')
+      if (result.status === 'cancelled')
+        setNotice('已停止生成；已完成的文件操作不会回滚，可以继续发送消息。')
     } catch {
       setError('与主进程的连接中断，请重启应用后重试。')
     } finally {
       run.current = null
       setIsRunning(false)
+      setActivities((previous) =>
+        previous.map((item) => (item.status === 'running' ? { ...item, status: 'stopped' } : item))
+      )
     }
   }
 
@@ -73,5 +86,5 @@ export function useAgentChat({ conversation, status, onAppend, onUpdate }: ChatO
     }
   }
 
-  return { isRunning, error, notice, send, stop }
+  return { isRunning, error, notice, activities, send, stop }
 }

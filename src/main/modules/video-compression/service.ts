@@ -171,8 +171,10 @@ async function probeVideo(path: string, signal?: AbortSignal): Promise<VideoInfo
 /** Selection-time inspection: show exactly which auxiliary streams will be discarded. */
 export async function inspectVideo(path: string, signal?: AbortSignal): Promise<VideoInspection> {
   signal?.throwIfAborted()
-  const { removedContents } = await probeVideo(path, signal)
-  return { removedContents }
+  if (!isAbsolute(path) || path.includes('\0')) throw new Error('视频路径须为本地绝对路径。')
+  const { width, height, duration, codec, bitDepth, audioCount, removedContents } =
+    await probeVideo(path, signal)
+  return { width, height, duration, codec, bitDepth, audioCount, removedContents }
 }
 
 /** 消费两路输出；进程出错或取消后等 close，再允许清理临时文件。 */

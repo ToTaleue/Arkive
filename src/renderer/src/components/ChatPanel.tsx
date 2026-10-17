@@ -93,7 +93,7 @@ export function ChatPanel({
   onUpdate
 }: ChatPanelProps): React.JSX.Element {
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const { isRunning, error, notice, send, stop } = useAgentChat({
+  const { isRunning, error, notice, activities, send, stop } = useAgentChat({
     conversation,
     status,
     onAppend,
@@ -152,6 +152,26 @@ export function ChatPanel({
           </div>
         </ThreadPrimitive.Viewport>
         <div className="composer-area">
+          {activities.length > 0 && (
+            <details className="chat-tool-activity" open={isRunning}>
+              <summary>本轮工具操作（{activities.length}）</summary>
+              <ul aria-label="工具执行状态" aria-live="polite">
+                {activities.map((item) => (
+                  <li key={item.id} data-status={item.status}>
+                    <code>{item.name}</code> ·{' '}
+                    {
+                      {
+                        running: '执行中',
+                        completed: '已返回，请核对结果',
+                        error: '执行失败',
+                        stopped: '已停止，请核对实际结果'
+                      }[item.status]
+                    }
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {isRunning && (
             <p className="chat-notice" role="status">
               Arkive 正在回复…

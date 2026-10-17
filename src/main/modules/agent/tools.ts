@@ -14,6 +14,10 @@ import { getCatalog } from '../catalog/service'
 import { normalizeTags } from '../catalog/finder-tags'
 import { inspectOffice } from '../office-compression/service'
 import { compressOfficeInPlace } from '../office-compression/in-place'
+import { inspectImage } from '../image-compression/service'
+import { inspectVideo } from '../video-compression/service'
+import { inspectPdf } from '../pdf-compression/service'
+import { scanDuplicates } from '../duplicate-detection/service'
 
 function isWithin(root: string, path: string): boolean {
   const child = relative(root, path)
@@ -49,6 +53,67 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
     tags: Type.Optional({ ...tags, description: '归档标签，与 archive=true 一起使用；可省略。' })
   }
   return [
+    ...[
+      {
+        name: 'inspect_image',
+        label: '图片探测',
+        inspect: (path: string, signal?: AbortSignal) => inspectImage({ inputPath: path }, signal)
+      },
+      { name: 'inspect_video', label: '视频探测', inspect: inspectVideo },
+      {
+        name: 'inspect_pdf',
+        label: 'PDF 探测',
+        inspect: (path: string, signal?: AbortSignal) => inspectPdf({ inputPath: path }, signal)
+      }
+    ].map(({ name, label, inspect }) =>
+      defineTool({
+        name,
+        label,
+        description: `只读${label}，返回格式、大小、结构和当前业务支持情况，供制定压缩方案；不修改文件，不保证一定有压缩收益。`,
+        parameters: Type.Object(
+          { inputPath: Type.String({ description: '用户授权检查的文件绝对路径。' }) },
+          { additionalProperties: false }
+        ),
+        execute: async (_toolCallId, request, signal) => {
+          signal?.throwIfAborted()
+          const result = await inspect(request.inputPath, signal)
+          signal?.throwIfAborted()
+          return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+        }
+      })
+    ),
+    defineTool({
+      name: 'scan_duplicates',
+      label: '重复文件检测',
+      description:
+        '只读递归检查用户指定文件夹中的重复文件，比较内容哈希，排除硬链接别名，不自动删除。partial 和 warnings 表示扫描不完整；redundantBytes 是逻辑重复内容大小，不是保证可释放的磁盘空间。',
+      parameters: Type.Object({ directoryPath: Type.String() }, { additionalProperties: false }),
+      execute: async (_toolCallId, request, signal) => {
+        const result = await scanDuplicates(request, signal)
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+      }
+    }),
+    defineTool({
+      name: 'open_archive',
+      label: '打开或定位归档文件',
+      description:
+        '按归档记录 id 打开已经归档的副本，或在 Finder 中定位。仅在用户要求打开或显示时使用；只接受已完成的归档记录，不能打开任意路径。',
+      parameters: Type.Object(
+        { id: recordId, action: Type.Union([Type.Literal('open'), Type.Literal('reveal')]) },
+        { additionalProperties: false }
+      ),
+      execute: async (_toolCallId, request, signal) => {
+        signal?.throwIfAborted()
+        const path = await getCatalog().archivePath(request.id)
+        signal?.throwIfAborted()
+        if (request.action === 'open') {
+          const error = await shell.openPath(path)
+          if (error) throw new Error(error)
+        } else shell.showItemInFolder(path)
+        const result = { id: request.id, path, action: request.action, status: 'requested' }
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+      }
+    }),
     defineTool({
       name: 'archive_file',
       label: '归档与原件备份',
@@ -70,6 +135,11 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       description:
         '只读查询归档库，返回文件 id、原件备份位置、归档路径、当前标签、同步状态和可用标签（含预设）。名称匹配原文件名或输出文件名子串，多标签必须全部满足；日期是毫秒时间戳，起点包含、终点不包含，每页 50 条。不读取正文、不做 OCR；可用来获取快速打标前的记录和已有标签。',
       parameters: Type.Object({
+        state: Type.Optional(
+          Type.Union([Type.Literal('archived'), Type.Literal('pending')], {
+            description: '默认 archived；pending 查询已压缩但尚未归档的结果，可用于恢复后续归档。'
+          })
+        ),
         name: Type.Optional(Type.String({ maxLength: 500 })),
         tags: Type.Optional(tags),
         modifiedFrom: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),

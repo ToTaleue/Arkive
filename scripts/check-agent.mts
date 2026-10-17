@@ -59,7 +59,12 @@ const enabledTools = [
   'compress_pdf',
   'archive_file',
   'search_archives',
-  'tag_archives'
+  'tag_archives',
+  'inspect_image',
+  'inspect_video',
+  'inspect_pdf',
+  'scan_duplicates',
+  'open_archive'
 ]
 const toolFile = 'agent-tool-check.txt'
 const toolCalls = [
@@ -277,7 +282,16 @@ if (mode === 'slow') {
 `,
     { mode: 0o755 }
   )
-  for (const name of ['ffmpeg', 'ffprobe', 'ab-av1', 'gs', 'qpdf', 'pngquant', 'ssimulacra2']) {
+  for (const name of [
+    'ffmpeg',
+    'ffprobe',
+    'ab-av1',
+    'gs',
+    'qpdf',
+    'pngquant',
+    'ssimulacra2',
+    'czkawka_cli'
+  ]) {
     await symlink(
       resolve('resources/tools/darwin-arm64', name),
       resolve(buildDir, 'resources/tools/darwin-arm64', name)
@@ -297,7 +311,7 @@ app.whenReady().then(async () => {
     `import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 export const app = { isPackaged: false, getAppPath: () => ${JSON.stringify(buildDir)} }
-export const shell = { trashItem: async (path) => {
+export const shell = { openPath: async () => '', showItemInFolder: () => {}, trashItem: async (path) => {
   if (path.endsWith('trash-failure.txt')) throw new Error('simulated recycle-bin failure')
   const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE
   await promisify(execFile)(${JSON.stringify(resolve('node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'))}, [${JSON.stringify(electronTrashRunner)}, path], { env, timeout: 20000 })
@@ -605,6 +619,8 @@ export const shell = { trashItem: async (path) => {
     pdfPostScript
   ])
   const pdfBytes = await readFile(pdfInput)
+  assert.match(await callTool('inspect_pdf', { inputPath: pdfInput }), /"pageCount":1/)
+  assert.deepEqual(await readFile(pdfInput), pdfBytes)
   const pdfOutput = resolve(workspaceDir, 'compressed.pdf')
   const pdfResult = await callTool('compress_pdf', {
     inputPath: pdfInput,
@@ -632,6 +648,8 @@ export const shell = { trashItem: async (path) => {
     .png({ compressionLevel: 0 })
     .toFile(imageInput)
   const imageBytes = await readFile(imageInput)
+  assert.match(await callTool('inspect_image', { inputPath: imageInput }), /"width":96/)
+  assert.deepEqual(await readFile(imageInput), imageBytes)
   const imageOutput = resolve(workspaceDir, 'compressed.webp')
   const unavailableBackup = `${currentCatalog.backupRoot}.offline`
   await rename(currentCatalog.backupRoot, unavailableBackup)
@@ -650,6 +668,8 @@ export const shell = { trashItem: async (path) => {
   assert.equal(currentCatalog.get(imageId).backupStatus, 'error')
   assert.deepEqual(await readFile(imageInput), imageBytes, 'Backup failure preserves the source')
   assert.equal(currentCatalog.get(imageId).archivePath, null, 'Compression alone does not archive')
+  assert.ok((await callTool('search_archives', { state: 'pending' })).includes(imageId))
+  assert.match(await callTool('open_archive', { id: imageId, action: 'reveal' }), /归档|不存在|未/)
   await rm(currentCatalog.backupRoot)
   await rename(unavailableBackup, currentCatalog.backupRoot)
   assert.ok(
@@ -664,6 +684,16 @@ export const shell = { trashItem: async (path) => {
   const imageArchivePath = currentCatalog.get(imageId).archivePath
   await callTool('archive_file', { id: imageId })
   assert.equal(currentCatalog.get(imageId).archivePath, imageArchivePath)
+  assert.ok(!(await callTool('search_archives', { state: 'pending' })).includes(imageId))
+  assert.ok(
+    (await callTool('open_archive', { id: imageId, action: 'reveal' })).includes(
+      imageArchivePath ?? 'missing'
+    )
+  )
+  assert.match(
+    await callTool('open_archive', { id: imageId, action: 'open' }),
+    /"status":"requested"/
+  )
   await callTool('tag_archives', { ids: [imageId, pdfId], add: ['公共标签'] })
   assert.equal(currentCatalog.query({ tags: ['公共标签'] }).total, 2)
   const search = await callTool('search_archives', { tags: ['公共标签', '旅行'] })
@@ -723,6 +753,8 @@ export const shell = { trashItem: async (path) => {
     videoInput
   ])
   const videoBytes = await readFile(videoInput)
+  assert.match(await callTool('inspect_video', { inputPath: videoInput }), /"width":320/)
+  assert.deepEqual(await readFile(videoInput), videoBytes)
   const unavailableArchive = `${currentCatalog.archiveRoot}.offline`
   await rename(currentCatalog.archiveRoot, unavailableArchive)
   await writeFile(currentCatalog.archiveRoot, 'simulate an unavailable archive root')
@@ -856,6 +888,27 @@ export const shell = { trashItem: async (path) => {
   assert.ok(officeFailed.replacementError)
   assert.equal(officeFailed.catalog?.backupStatus, 'error')
   assert.deepEqual(await readFile(officeFailure), officeFailureBytes)
+  const duplicatesDirectory = resolve(workspaceDir, 'duplicates')
+  await mkdir(duplicatesDirectory)
+  await writeFile(resolve(duplicatesDirectory, 'a.txt'), 'duplicate content')
+  await writeFile(resolve(duplicatesDirectory, 'b.txt'), 'duplicate content')
+  assert.match(
+    await callTool('scan_duplicates', { directoryPath: duplicatesDirectory }),
+    /"duplicateFileCount":1/
+  )
+  assert.deepEqual(await readdir(duplicatesDirectory), ['a.txt', 'b.txt'])
+  assert.match(await callTool('scan_duplicates', { directoryPath: '/' }), /根目录受保护/)
+  assert.match(await callTool('inspect_pdf', { inputPath: imageInput }), /PDF|pdf/)
+  assert.ok(
+    updates.some(
+      (update) => update.tool?.name === 'inspect_pdf' && update.tool.status === 'completed'
+    )
+  )
+  assert.ok(
+    updates.some(
+      (update) => update.tool?.name === 'scan_duplicates' && update.tool.status === 'error'
+    )
+  )
   await rm(currentCatalog.backupRoot)
   await rename(unavailableBackup, currentCatalog.backupRoot)
   console.log(
@@ -931,6 +984,12 @@ export const shell = { trashItem: async (path) => {
   const pending = send('new', 'early-stop', '未开始就取消')
   await currentService.stop({ conversationId: 'new', requestId: 'early-stop' })
   assert.equal((await pending).status, 'cancelled')
+  const configuredBase = process.env.ARKIVE_AI_BASE_URL
+  process.env.ARKIVE_AI_BASE_URL = 'https://arkive-test-does-not-exist.invalid/v1'
+  const dnsFailure = await send('dns-failure', 'dns-failure', '你好')
+  assert.ok(dnsFailure.status === 'error')
+  assert.match(dnsFailure.error, /解析|DNS/)
+  process.env.ARKIVE_AI_BASE_URL = configuredBase
   delete process.env.ARKIVE_AI_API_KEY
   assert.equal(agentStatus().configured, false)
   assert.equal((await send('missing-key', 'no-key', '你好')).status, 'error')

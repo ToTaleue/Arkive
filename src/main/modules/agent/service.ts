@@ -5,7 +5,7 @@ import type {
   AgentRunId,
   AgentUpdate
 } from '../../../shared/contracts/agent'
-import { safeAgentError } from './config'
+import { agentErrorMessage } from './config'
 import { createChatSession } from './session'
 
 type ConversationSession = { session?: AgentSession; requestId?: string; cancelled: boolean }
@@ -46,7 +46,26 @@ export class AgentService {
         return { status: 'cancelled', text }
       }
       unsubscribe = session.subscribe((event) => {
-        if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+        if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
+          emit({
+            conversationId: request.conversationId,
+            requestId: request.requestId,
+            text,
+            tool: {
+              id: event.toolCallId,
+              name: event.toolName,
+              status:
+                event.type === 'tool_execution_start'
+                  ? 'running'
+                  : event.isError
+                    ? 'error'
+                    : 'completed'
+            }
+          })
+        } else if (
+          event.type === 'message_update' &&
+          event.assistantMessageEvent.type === 'text_delta'
+        ) {
           text += event.assistantMessageEvent.delta
           emit({ conversationId: request.conversationId, requestId: request.requestId, text })
         } else if (event.type === 'message_end' && event.message.role === 'assistant') {
@@ -66,7 +85,7 @@ export class AgentService {
       return { status: 'completed', text }
     } catch (error) {
       if (this.isStopped(conversation)) return { status: 'cancelled', text }
-      return { status: 'error', text, error: safeAgentError(error) }
+      return { status: 'error', text, error: await agentErrorMessage(error) }
     } finally {
       unsubscribe?.()
       conversation.requestId = undefined

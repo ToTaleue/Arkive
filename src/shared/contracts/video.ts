@@ -38,6 +38,12 @@ export interface VideoCompressionProgress {
   remainingSeconds: number | null
 }
 export interface VideoInspection {
+  width: number
+  height: number
+  duration: number
+  codec: string
+  bitDepth: 8 | 10
+  audioCount: number
   removedContents: string[]
 }
 export interface SelectedVideo extends VideoInspection {

@@ -229,8 +229,12 @@ async function runCompression(
 }
 
 /** Read-only main-process API used by UI proposals and Agent planning. */
-export async function inspectPdf(request: { inputPath: string }): Promise<PdfInspection> {
-  return inspectInput(request.inputPath)
+export async function inspectPdf(
+  request: { inputPath: string },
+  signal?: AbortSignal
+): Promise<PdfInspection> {
+  signal?.throwIfAborted()
+  return inspectInput(request.inputPath, signal)
 }
 
 /** Generate a validated PDF copy. The source and existing targets are never overwritten. */

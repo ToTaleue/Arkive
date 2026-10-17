@@ -650,6 +650,24 @@ body,
 .chat-notice {
   color: #a4b9a9;
 }
+
+.chat-tool-activity {
+  max-height: 160px;
+  overflow: auto;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-tool-activity summary {
+  cursor: pointer;
+}
+.chat-tool-activity ul {
+  padding-left: 20px;
+  line-height: 1.7;
+}
+.chat-tool-activity [data-status='error'] {
+  color: #db907d;
+}
 .chat-error {
   color: #e0b8a9;
   background: #392c27;

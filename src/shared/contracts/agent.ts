@@ -13,7 +13,12 @@ export const agentChannels = {
 
 export type AgentRequest = { conversationId: string; requestId: string; text: string }
 export type AgentRunId = Pick<AgentRequest, 'conversationId' | 'requestId'>
-export type AgentUpdate = AgentRunId & { text: string }
+export type AgentToolActivity = {
+  id: string
+  name: string
+  status: 'running' | 'completed' | 'error' | 'stopped'
+}
+export type AgentUpdate = AgentRunId & { text: string; tool?: AgentToolActivity }
 export type AgentResult =
   | { status: 'completed' | 'cancelled'; text: string }
   | { status: 'error'; text: string; error: string }

@@ -1,5 +1,6 @@
 import { loadEnvFile } from 'node:process'
 import { join } from 'node:path'
+import { lookup } from 'node:dns/promises'
 import type { AgentStatus } from '../../../shared/contracts/agent'
 
 export type AgentConfig = { provider: string; model: string; apiKey: string; baseUrl?: string }
@@ -64,7 +65,40 @@ export function agentStatus(): AgentStatus {
 
 export function safeAgentError(error: unknown): string {
   let message = error instanceof Error ? error.message : '模型请求失败，请检查配置或网络后重试。'
+  let cause: unknown = error
+  for (let depth = 0; cause && typeof cause === 'object' && depth < 8; depth++) {
+    if ('code' in cause && cause.code === 'ENOTFOUND') {
+      message = '无法解析模型服务地址（DNS）。请检查 ARKIVE_AI_BASE_URL、网络及所需的 VPN 后重试。'
+      break
+    }
+    if ('code' in cause && cause.code === 'ECONNREFUSED') {
+      message = '模型服务拒绝连接。请检查服务是否启动以及地址、端口是否正确。'
+      break
+    }
+    cause = 'cause' in cause ? cause.cause : undefined
+  }
   const key = process.env.ARKIVE_AI_API_KEY?.trim()
   if (key) message = message.split(key).join('[已隐藏密钥]')
   return message.replace(/Bearer\s+[^\s"']+/gi, 'Bearer [已隐藏]').slice(0, 1000)
+}
+
+/** Pi serializes provider failures into text, losing the original network cause. */
+export async function agentErrorMessage(error: unknown): Promise<string> {
+  const message = safeAgentError(error)
+  if (!/connection error|fetch failed/i.test(message)) return message
+  const baseUrl = process.env.ARKIVE_AI_BASE_URL?.trim()
+  if (baseUrl) {
+    try {
+      await lookup(new URL(baseUrl).hostname)
+    } catch (networkError) {
+      if (
+        networkError &&
+        typeof networkError === 'object' &&
+        'code' in networkError &&
+        networkError.code === 'ENOTFOUND'
+      )
+        return safeAgentError(networkError)
+    }
+  }
+  return '无法连接模型服务。请检查服务地址、网络及所需的 VPN 后重试。'
 }
