@@ -1,4 +1,4 @@
-// Real Sharp + bundled pngquant/jpegoptim. Only dedicated generated test fixtures are processed.
+// Real Sharp + bundled pngquant. Only dedicated generated test fixtures are processed.
 // Run: rtk proxy node scripts/check-image-compression.mts
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -81,6 +81,9 @@ try {
   const defaults = await compressImage({ inputPath: png, outputPath: path('default.webp') })
   assert.equal(defaults.tool, 'sharp')
   assert.equal(defaults.outputFormat, 'webp')
+  assert.equal(defaults.qualityAnalysis.metric, 'ssimulacra2')
+  assert.ok(defaults.qualityAnalysis.score >= 0 && defaults.qualityAnalysis.score <= 100)
+  assert.ok(defaults.qualityAnalysis.attempts >= 1 && defaults.qualityAnalysis.attempts <= 2)
   const webpMeta = await sharp(defaults.outputPath).metadata()
   assert.equal(webpMeta.hasAlpha, true)
   const webpPixels = await sharp(defaults.outputPath).raw().toBuffer()
@@ -92,30 +95,26 @@ try {
     outputFormat: 'png'
   })
   assert.equal(palette.tool, 'pngquant')
+  assert.equal(palette.qualityAnalysis.metric, 'ssimulacra2')
+  assert.ok(palette.qualityAnalysis.score >= 0 && palette.qualityAnalysis.score <= 100)
+  assert.ok(palette.qualityAnalysis.attempts >= 1 && palette.qualityAnalysis.attempts <= 2)
   assert.equal((await sharp(palette.outputPath).metadata()).isPalette, true)
   assert.equal((await sharp(palette.outputPath).raw().toBuffer())[3], 0)
 
-  const lossless = await compressImage({
+  const jpegOriginalFormat = await compressImage({
     inputPath: jpeg,
-    outputPath: path('lossless.jpg'),
-    outputFormat: 'jpeg'
+    outputPath: path('original-format.jpg'),
+    preserveFormat: true
   })
-  assert.equal(lossless.tool, 'jpegoptim')
-  assert.equal(lossless.quality, undefined)
-  assert.deepEqual(
-    await sharp(jpeg).raw().toBuffer(),
-    await sharp(lossless.outputPath).raw().toBuffer()
-  )
-  assert.equal((await sharp(lossless.outputPath).metadata()).orientation, 6)
-  const again = await compressImage({
-    inputPath: lossless.outputPath,
-    outputPath: path('again.jpg'),
-    compatibility: true
-  })
-  assert.equal(again.tool, 'jpegoptim')
-  assert.equal(again.status, 'no-savings')
-  assert.equal(again.savedBytes, 0)
-  assert.equal(again.outputBytes, again.originalBytes)
+  assert.equal(jpegOriginalFormat.tool, 'sharp')
+  assert.equal(jpegOriginalFormat.outputFormat, 'jpeg')
+  assert.equal(jpegOriginalFormat.qualityAnalysis.metric, 'ssimulacra2')
+  assert.ok(jpegOriginalFormat.qualityAnalysis.attempts >= 1)
+  const jpegOriginalMeta = await sharp(jpegOriginalFormat.outputPath).metadata()
+  assert.equal(jpegOriginalMeta.orientation, undefined)
+  assert.equal(jpegOriginalMeta.width, height)
+  assert.equal(jpegOriginalMeta.height, width)
+  assert.equal(jpegOriginalMeta.exif, undefined)
 
   const lossy = await compressImage({
     inputPath: jpeg,
@@ -123,34 +122,37 @@ try {
     outputFormat: 'jpeg',
     quality: 65
   })
-  assert.equal(lossy.tool, 'jpegoptim')
+  assert.equal(lossy.tool, 'sharp')
   assert.equal(lossy.quality, 65)
+  assert.equal(lossy.qualityAnalysis.metric, 'ssimulacra2')
+  assert.equal(lossy.qualityAnalysis.attempts, 1)
   assert.ok(lossy.outputBytes < lossy.originalBytes)
   const jpegWebp = await compressImage({ inputPath: jpeg, outputPath: path('photo.webp') })
   assert.equal(jpegWebp.tool, 'sharp')
   const jpegWebpMeta = await sharp(jpegWebp.outputPath).metadata()
-  const sourceMeta = await sharp(jpeg).metadata()
-  assert.equal(jpegWebpMeta.orientation, 6)
-  assert.ok(jpegWebpMeta.exif?.includes(Buffer.from('Arkive fixture')))
-  assert.deepEqual(jpegWebpMeta.icc, sourceMeta.icc)
-  assert.deepEqual(jpegWebpMeta.xmp, sourceMeta.xmp)
+  assert.equal(jpegWebpMeta.orientation, undefined)
+  assert.equal(jpegWebpMeta.width, height)
+  assert.equal(jpegWebpMeta.height, width)
+  assert.equal(jpegWebpMeta.exif, undefined)
+  assert.equal(jpegWebpMeta.icc, undefined)
+  assert.equal(jpegWebpMeta.xmp, undefined)
 
-  const compatibility = await compressImage({
+  const explicitJpeg = await compressImage({
     inputPath: png,
     outputPath: path('compatible.jpg'),
-    compatibility: true,
+    outputFormat: 'jpeg',
     jpegBackground: '#ffffff'
   })
-  assert.equal(compatibility.tool, 'sharp')
-  assert.equal(compatibility.outputFormat, 'jpeg')
-  const compatiblePixels = await sharp(compatibility.outputPath).raw().toBuffer()
+  assert.equal(explicitJpeg.tool, 'sharp')
+  assert.equal(explicitJpeg.outputFormat, 'jpeg')
+  const compatiblePixels = await sharp(explicitJpeg.outputPath).raw().toBuffer()
   assert.ok(
     compatiblePixels.subarray(0, 3).every((value) => value > 240),
     'Explicit white background is applied'
   )
 
   await assert.rejects(
-    compressImage({ inputPath: png, outputPath: path('no-background.jpg'), compatibility: true }),
+    compressImage({ inputPath: png, outputPath: path('no-background.jpg'), outputFormat: 'jpeg' }),
     /背景色/
   )
   await assert.rejects(
@@ -158,9 +160,9 @@ try {
       inputPath: png,
       outputPath: path('conflict.png'),
       outputFormat: 'png',
-      compatibility: true
+      preserveFormat: true
     }),
-    /冲突/
+    /不能与指定输出格式/
   )
   await assert.rejects(
     compressImage({ inputPath: jpeg, outputPath: path('invalid.png'), outputFormat: 'png' }),
@@ -216,7 +218,7 @@ try {
   const actualFormat = await compressImage({
     inputPath: path('looks-like-jpeg.jpg'),
     outputPath: path('actual-format.jpg'),
-    compatibility: true,
+    outputFormat: 'jpeg',
     jpegBackground: '#ffffff'
   })
   assert.equal(actualFormat.tool, 'sharp', 'Routing uses actual format, not filename')
@@ -231,24 +233,12 @@ try {
     .png()
     .toFile(path('metadata.png'))
   assert.ok((await sharp(path('metadata.png')).metadata()).exif)
-  // The macOS binary may strip metadata: either preserve it exactly, or fail without publication.
-  try {
-    await compressImage({
-      inputPath: path('metadata.png'),
-      outputPath: path('metadata-result.png'),
-      outputFormat: 'png'
-    })
-    assert.deepEqual(
-      (await sharp(path('metadata-result.png')).metadata()).exif,
-      (await sharp(path('metadata.png')).metadata()).exif
-    )
-  } catch (error) {
-    assert.match(String(error), /元数据/)
-    assert.equal(await exists(path('metadata-result.png')), false)
-    console.log(
-      'NOTE: Bundled pngquant strips fixture EXIF; service rejects publication and keeps the original.'
-    )
-  }
+  const metadataDropped = await compressImage({
+    inputPath: path('metadata.png'),
+    outputPath: path('metadata-result.webp')
+  })
+  assert.equal(metadataDropped.tool, 'sharp')
+  assert.equal((await sharp(metadataDropped.outputPath).metadata()).exif, undefined)
   await writeFile(path('corrupt.png'), (await readFile(png)).subarray(0, 80))
   await assert.rejects(
     compressImage({ inputPath: path('corrupt.png'), outputPath: path('corrupt.webp') })
@@ -287,7 +277,7 @@ try {
     'All task temp directories are removed'
   )
   console.log(
-    'PASS: Real Sharp/pngquant/jpegoptim routes, transparent pixels, explicit JPEG background, JPEG lossless pixels, EXIF/ICC/XMP, no-savings output, validation, cancellation, unrestricted user directories and critical system path protection, no-overwrite race and source preservation.'
+    'PASS: Real Sharp/pngquant lossy routes, transparent pixels, explicit JPEG background, metadata dropping, bounded quality attempts, no-savings output, validation, cancellation, unrestricted user directories and critical system path protection, no-overwrite race and source preservation.'
   )
 } finally {
   await rm(directory, { recursive: true, force: true })

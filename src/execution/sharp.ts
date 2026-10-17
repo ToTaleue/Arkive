@@ -6,8 +6,29 @@ export interface SharpEncodingOptions {
   jpegBackground?: string
 }
 
+export interface QualityImageOptions {
+  hasAlpha: boolean
+  flattenBackground?: string
+}
+
 export function readImageMetadata(path: string): Promise<Metadata> {
   return sharp(path, { failOn: 'warning' }).metadata()
+}
+
+/** Normalize an image for full-reference metrics and avoid palette decoder differences. */
+export async function writeQualityImage(
+  inputPath: string,
+  outputPath: string,
+  options: QualityImageOptions,
+  signal?: AbortSignal
+): Promise<void> {
+  signal?.throwIfAborted()
+  const image = sharp(inputPath, { failOn: 'warning' }).rotate().toColourspace('srgb')
+  if (options.flattenBackground) image.flatten({ background: options.flattenBackground })
+  else if (options.hasAlpha) image.ensureAlpha()
+  else image.removeAlpha()
+  await image.png({ palette: false }).toFile(outputPath)
+  signal?.throwIfAborted()
 }
 
 /** Fixed-format adapter. Business defaults, paths and output publication belong to the service. */
@@ -18,7 +39,9 @@ export async function encodeImage(
   signal?: AbortSignal
 ): Promise<OutputInfo> {
   signal?.throwIfAborted()
-  const image = sharp(inputPath, { failOn: 'warning' }).keepMetadata()
+  // Reorient pixels and normalize the colourspace before encoding. Metadata is intentionally
+  // discarded, so EXIF orientation and embedded profiles must not be required for display.
+  const image = sharp(inputPath, { failOn: 'warning' }).rotate().toColourspace('srgb')
   if (options.format === 'jpeg') {
     if (options.jpegBackground) image.flatten({ background: options.jpegBackground })
     image.jpeg({ quality: options.quality, mozjpeg: true })

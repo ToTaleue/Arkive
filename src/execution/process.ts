@@ -10,10 +10,10 @@ const toolFiles = {
   ffprobe: 'ffprobe',
   mole: 'mole/mo',
   pngquant: 'pngquant',
-  jpegoptim: 'jpegoptim',
   ghostscript: 'gs',
   qpdf: 'qpdf/bin/qpdf',
-  czkawka_cli: 'czkawka_cli'
+  czkawka_cli: 'czkawka_cli',
+  ssimulacra2: 'ssimulacra2'
 } as const
 
 export type BundledTool = keyof typeof toolFiles

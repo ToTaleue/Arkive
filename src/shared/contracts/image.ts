@@ -1,13 +1,18 @@
+import type { CompressionRecord } from './catalog'
+
 export type ImageOutputFormat = 'webp' | 'jpeg' | 'png'
+export type ImageCompressionPreset = 'quality' | 'balanced' | 'size'
 
 export interface ImageCompressionRequest {
   inputPath: string
   outputPath: string
-  /** Defaults to WebP. PNG output requires PNG input. */
+  /** Defaults to WebP. PNG output requires PNG input and uses pngquant. */
   outputFormat?: ImageOutputFormat
-  /** Requests JPEG output; cannot be combined with another explicit output format. */
-  compatibility?: boolean
-  /** Sharp encoding quality, or jpegoptim's quality ceiling. Omit for lossless jpegoptim. */
+  /** Keep the input format for JPEG, PNG, or WebP; PNG uses pngquant, others use Sharp. */
+  preserveFormat?: boolean
+  /** Perceptual quality target used to choose a candidate with at most one fallback. */
+  preset?: ImageCompressionPreset
+  /** Sharp or pngquant encoding quality. */
   quality?: number
   /** Required for transparent input when exporting JPEG, e.g. #ffffff. */
   jpegBackground?: string
@@ -22,7 +27,25 @@ export interface ImageInspection {
   hasAlpha: boolean
 }
 
+export interface SelectedImage extends ImageInspection {
+  id: string
+  name: string
+  path: string
+  sizeBytes: number
+}
+
+export interface ImageStartRequest {
+  runId: string
+  fileId: string
+  outputFormat?: ImageOutputFormat
+  preserveFormat?: boolean
+  preset?: ImageCompressionPreset
+  quality?: number
+  jpegBackground?: string
+}
+
 export interface ImageCompressionResult {
+  catalog?: CompressionRecord
   status: 'compressed' | 'no-savings'
   inputPath: string
   outputPath: string
@@ -30,6 +53,36 @@ export interface ImageCompressionResult {
   outputBytes: number
   savedBytes: number
   outputFormat: ImageOutputFormat
-  tool: 'sharp' | 'pngquant' | 'jpegoptim'
+  tool: 'sharp' | 'pngquant'
   quality?: number
+  qualityAnalysis: ImageQualityAnalysis
+}
+
+export interface ImageQualityAnalysis {
+  metric: 'ssimulacra2'
+  targetScore: number
+  score: number
+  attempts: number
+  meetsTarget: boolean
+}
+
+export type ImageCompressionOutcome =
+  | { status: 'completed'; result: ImageCompressionResult }
+  | { status: 'cancelled' }
+  | { status: 'error'; error: string }
+
+export const imageChannels = {
+  select: 'image:select',
+  selectPath: 'image:select-path',
+  compress: 'image:compress',
+  cancel: 'image:cancel',
+  reveal: 'image:reveal'
+} as const
+
+export interface ImageApi {
+  select: () => Promise<SelectedImage | null>
+  selectPath: (inputPath: string) => Promise<SelectedImage>
+  compress: (request: ImageStartRequest) => Promise<ImageCompressionOutcome>
+  cancel: (runId: string) => Promise<void>
+  reveal: () => Promise<void>
 }
