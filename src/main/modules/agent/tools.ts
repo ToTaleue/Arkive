@@ -1,7 +1,6 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { shell } from 'electron'
-import { cp, lstat, mkdir, rename } from 'node:fs/promises'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { resolve } from 'node:path'
 import { runBundledTool } from '../../../execution/process'
 import { assertSystemWriteAllowed, resolveFilePath } from '../../system-paths'
 import {
@@ -16,6 +15,7 @@ import {
   runMolePurgePreview
 } from '../mole/service'
 import { getCatalog } from '../catalog/service'
+import { archiveFile, tagArchives } from '../catalog/operations'
 import { normalizeTags } from '../catalog/finder-tags'
 import { inspectOffice } from '../office-compression/service'
 import { compressOfficeInPlace } from '../office-compression/in-place'
@@ -23,27 +23,8 @@ import { inspectImage } from '../image-compression/service'
 import { inspectVideo } from '../video-compression/service'
 import { inspectPdf } from '../pdf-compression/service'
 import { scanDuplicates } from '../duplicate-detection/service'
-import { trashPaths } from '../file-operations/service'
 import { cloneDuplicates } from '../clone-deduplication/service'
-
-function isWithin(root: string, path: string): boolean {
-  const child = relative(root, path)
-  return child === '' || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`))
-}
-
-function hasCode(error: unknown, code: string): boolean {
-  return error instanceof Error && 'code' in error && error.code === code
-}
-
-async function requireNewDestination(path: string): Promise<void> {
-  try {
-    await lstat(path)
-  } catch (error) {
-    if (hasCode(error, 'ENOENT')) return
-    throw error
-  }
-  throw new Error(`目标已存在，未覆盖：${path}`)
-}
+import { copyPath, movePath, createDirectory, trashFiles } from '../file-operations/operations'
 
 export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> {
   // Preserve Pi AI's ESM import in the Electron CommonJS bundle.
@@ -161,7 +142,13 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       }),
       execute: async (_toolCallId, request, signal) => {
         signal?.throwIfAborted()
-        const result = await getCatalog().archive(request.id, request.tags ?? [], request)
+        const result = await archiveFile(
+          getCatalog(),
+          request.id,
+          request.tags ?? [],
+          signal,
+          request
+        )
         return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
       }
     }),
@@ -205,9 +192,13 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       }),
       execute: async (_toolCallId, request, signal) => {
         signal?.throwIfAborted()
-        const catalog = getCatalog()
-        await catalog.editTags(request.ids, request.add ?? [], request.remove ?? [])
-        const result = { items: request.ids.map((id) => catalog.get(id)) }
+        const result = await tagArchives(
+          getCatalog(),
+          request.ids,
+          request.add ?? [],
+          request.remove ?? [],
+          signal
+        )
         return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
       }
     }),
@@ -420,17 +411,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         overwrite: Type.Optional(Type.Boolean())
       }),
       execute: async (_toolCallId, request, signal) => {
-        const sourcePath = await resolveFilePath(request.sourcePath)
-        const destinationPath = await resolveFilePath(request.destinationPath)
-        if (isWithin(sourcePath, destinationPath) || isWithin(destinationPath, sourcePath)) {
-          throw new Error('源路径与目标路径不能相同或互相包含。')
-        }
-        await assertSystemWriteAllowed(sourcePath, true)
-        await assertSystemWriteAllowed(destinationPath, true)
-        if (!request.overwrite) await requireNewDestination(destinationPath)
-        signal?.throwIfAborted()
-        await rename(sourcePath, destinationPath)
-        const details = { sourcePath, destinationPath, operation: 'move' }
+        const details = await movePath(request, signal)
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
     }),
@@ -448,26 +429,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         verbatimSymlinks: Type.Optional(Type.Boolean())
       }),
       execute: async (_toolCallId, request, signal) => {
-        const sourcePath = await resolveFilePath(request.sourcePath)
-        const destinationPath = await resolveFilePath(request.destinationPath)
-        if (isWithin(sourcePath, destinationPath) || isWithin(destinationPath, sourcePath)) {
-          throw new Error('源路径与目标路径不能相同或互相包含。')
-        }
-        await assertSystemWriteAllowed(destinationPath, request.overwrite ?? false)
-        if (!request.overwrite) await requireNewDestination(destinationPath)
-        await cp(sourcePath, destinationPath, {
-          recursive: request.recursive ?? true,
-          force: request.overwrite ?? false,
-          errorOnExist: true,
-          preserveTimestamps: request.preserveTimestamps ?? false,
-          verbatimSymlinks: request.verbatimSymlinks ?? false,
-          filter: async (_source, destination) => {
-            signal?.throwIfAborted()
-            await assertSystemWriteAllowed(destination)
-            return true
-          }
-        })
-        const details = { sourcePath, destinationPath, operation: 'copy' }
+        const details = await copyPath(request, signal)
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
     }),
@@ -481,11 +443,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         mode: Type.Optional(Type.Integer({ minimum: 0, maximum: 0o777 }))
       }),
       execute: async (_toolCallId, request, signal) => {
-        const path = await resolveFilePath(request.path)
-        await assertSystemWriteAllowed(path)
-        signal?.throwIfAborted()
-        await mkdir(path, { recursive: request.recursive ?? true, mode: request.mode })
-        const details = { path, operation: 'mkdir' }
+        const details = await createDirectory(request, signal)
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
     }),
@@ -499,7 +457,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         permanent: Type.Optional(Type.Boolean({ description: '仅在用户明确授权永久删除时使用。' }))
       }),
       execute: async (_toolCallId, { paths, permanent = false }, signal) => {
-        const details = await trashPaths(paths, signal, permanent)
+        const details = await trashFiles(paths, signal, permanent)
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
     }),

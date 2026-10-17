@@ -6,6 +6,7 @@ import {
 } from '../../../shared/contracts/catalog'
 import { normalizeTags } from './finder-tags'
 import type { Catalog } from './service'
+import { archiveFile, retryBackup, tagArchives } from './operations'
 
 function id(value: unknown): string {
   if (typeof value !== 'string' || !/^[\da-f-]{36}$/i.test(value))
@@ -72,13 +73,15 @@ export function registerCatalogIpc(catalog: Catalog): (contents: WebContents) =>
   handle(catalogChannels.query, (request) => catalog.query(query(request)))
   handle(catalogChannels.get, (value) => catalog.get(id(value)))
   handle(catalogChannels.archive, (value, tags, options) =>
-    catalog.archive(id(value), normalizeTags(tags), archiveOptions(options))
+    archiveFile(catalog, id(value), normalizeTags(tags), undefined, archiveOptions(options))
   )
-  handle(catalogChannels.retryBackup, (value) => catalog.retryBackup(id(value)))
+  handle(catalogChannels.retryBackup, (value) => retryBackup(catalog, id(value)))
   handle(catalogChannels.tags, (values, add, remove) => {
     if (!Array.isArray(values) || values.length === 0 || values.length > 100)
       throw new Error('请选择最多 100 个文件。')
-    return catalog.editTags([...new Set(values.map(id))], normalizeTags(add), normalizeTags(remove))
+    return tagArchives(catalog, values.map(id), normalizeTags(add), normalizeTags(remove)).then(
+      () => undefined
+    )
   })
   handle(catalogChannels.refresh, () => catalog.refresh())
   handle(catalogChannels.open, async (value) => {

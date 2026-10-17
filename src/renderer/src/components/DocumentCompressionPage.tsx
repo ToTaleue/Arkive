@@ -76,7 +76,7 @@ export function DocumentCompressionPage(): React.JSX.Element {
     await perform(async (client) => {
       const id = crypto.randomUUID()
       run.current = id
-      if (file.kind === 'pdf') setTaskRequestId(id)
+      setTaskRequestId(id)
       setCancellable(true)
       setStage('正在压缩与校验，完成后处理原件备份…')
       setResult(null)

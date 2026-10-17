@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { runBundledTool } from '../../../execution/process'
+import { TaskCancelled } from '../../tasks/service'
 import { exists, hashFile } from '../catalog/files'
 import { fixture } from './fixtures.test'
 import { compressOffice, inspectOffice } from './service'
@@ -196,7 +197,7 @@ export async function checkOfficeVideos(directory: string): Promise<void> {
   const cancelHash = await hashFile(cancelInput)
   const controller = new AbortController()
   const task = compressOfficeInPlace({ inputPath: cancelInput }, controller.signal)
-  const rejection = assert.rejects(task, { name: 'AbortError' })
+  const rejection = assert.rejects(task, TaskCancelled)
   const deadline = Date.now() + 20_000
   let analyzing = false
   try {

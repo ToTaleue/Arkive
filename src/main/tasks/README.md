@@ -1,12 +1,12 @@
 # Task 内存队列
 
-图片、视频和 PDF 压缩已接入共用队列，按钮和 Agent 均通过 `modules/catalog/compression.ts` 提交同一个业务任务。提供结果判定、防重复提交、查询／取消 IPC 和退出收尾能力。队列和结果只保留在当前进程内，不写 SQLite，退出后不保留历史或自动恢复。`repository.ts` 继续占位。
+图片、视频、PDF、Office 压缩、独立归档、备份重试、批量标签及 Agent 文件写操作已接入共用队列，按钮和 Agent 共用业务入口提交任务。提供结果判定、防重复提交、查询／取消 IPC 和退出收尾能力。队列和结果只保留在当前进程内，不写 SQLite，退出后不保留历史或自动恢复。`repository.ts` 继续占位。
 
-Office、扫描、Mole 和独立归档／重试尚未接入。Office 内部的图片、视频编码继续直接调用底层 Service，避免嵌套排队。
+Mole 和去重（包括重复扫描、APFS 克隆）暂不接入。查询、文件探测、打开／定位、后台 Finder 标签同步和 Pi 上游工具仍直接调用；不把每次 IPC 都包装为 Task。Office 内部的图片、视频编码继续直接调用底层 Service，避免嵌套排队。
 
 ## 已接入的压缩流程
 
-- 选择输出位置后才提交任务，不占用队列等待原生对话框。图片、视频、PDF 跨入口串行执行；排队期间不启动编码或创建 Catalog 记录。
+- 选择输出位置后才提交任务，不占用队列等待原生对话框。图片、视频、PDF、Office 及其他已接入操作跨入口串行执行；排队期间不启动编码或创建 Catalog 记录。
 - 同一个 `realpath` 输入使用 `compress:<路径>` 防重，排队／运行期间拒绝再次提交，即使档位或输出位置不同。它不是通用文件锁，不识别硬链接别名；输入和输出路径在提交前规范化，请求参数复制后再入队。
 - `compressImageAndBackup`／`compressVideoAndBackup`／`compressPdfAndBackup` 仍返回实际业务结果的 Promise，Agent 不能把提交 ID 当作完成。不要在外面再包一个 Task。
 - 编码、校验、原件备份和可选归档属于同一个任务。无体积收益属于成功；备份或请求的归档失败时 Task 标记失败并保留完整结果，原有调用方仍收到业务结果以展示失败信息、按 ID 重试。
@@ -14,6 +14,14 @@ Office、扫描、Mole 和独立归档／重试尚未接入。Office 内部的�
 - 按钮的取消信号和 Agent 工具的信号连接到 Task；从 Task IPC 取消也会传递到编码器。进入发布／备份提交阶段后等待真实结果，不把成功提交误报成取消。
 - 保留现有业务 IPC 的窗口重载／销毁取消行为；普通页面切换不取消压缩。没有新增任务中心或页面重载后的结果恢复界面。
 - 应用退出先 `tasks.close()`，等待任务清理，再关闭其他业务资源与 Catalog；重复退出请求不能绕过收尾。
+
+## 其他已接入操作
+
+- `office-compression/in-place.ts` 的 `compressOfficeInPlace` 将内嵌媒体编码、整份文档校验、备份和原路径发布包成一个 Task，使用同样的 `compress:<realpath>` 防重。排队不创建临时目录或 Catalog 记录；发布失败标记 Task 失败并保留原有 `replacementStatus=error` 结果。Office 页面通过 `requestId` 显示排队状态并支持取消。
+- `catalog/operations.ts` 的 `archiveFile`／`retryBackup`／`tagArchives` 是按钮和 Agent 的显式调度入口。归档与重试对同一个记录共用 `catalog:<id>` 防重；标签请求固定 ID 和增删差量。备份或标签失败标记 Task 失败并保留逐项结果，原有调用方仍收到诊断数据。底层 Catalog 的互斥队列继续负责数据库与恢复一致性，压缩任务中的自动归档和启动恢复直接调用 Catalog，不再次提交 Task。
+- Catalog 操作在排队期间可以取消；一旦开始提交，等待整项完成，保留实际成功／失败结果。批量标签是一个业务 Task，不承诺中途回滚或立即停止 JXA 写入。
+- `file-operations/operations.ts` 提供 `copyPath`／`movePath`／`createDirectory`／`trashFiles`，Agent 工具只做参数接线。路径、参数在入队前固定，系统路径保护和拒绝覆盖在实际执行时重新检查；复制／移动／建目录对同一目标使用 `file-write:<path>` 防重。这些 key 不是通用文件锁，不阻止外部程序或未接入功能修改文件。
+- 复制在逐项检查时响应取消，保留可能已生成的部分副本；移动、建目录及已经开始的单个删除等待真实系统调用结束。批量清理在项目间停止，失败仍继续其他独立项目；Task 的部分结果保留完成、失败与未处理路径。Mole 仍使用原有 `trashPaths`，其入口和调度暂未改动。
 
 ## 主进程调用
 
@@ -143,4 +151,4 @@ await tasks.close()
 
 先执行 `rtk proxy pnpm run build`，再运行 `rtk proxy node scripts/check-tasks.mjs --ipc`，可额外使用真实 Electron 窗口与构建后的 preload 验证查询、订阅、取消、页面重载及窗口校验。这个基础测试只提交内存夹具。
 
-`rtk proxy node scripts/check-compression-tasks.mjs` 使用测试目录中的生成文件及真实 Sharp／FFmpeg／qpdf／Ghostscript／Catalog，验证三类压缩串行、防重、参数固定、排队／运行取消、备份失败后的部分结果及提交阶段取消。`check-processing-ui.mjs` 和 `check-video-compression.mjs --ui` 验证真实页面排队提示、取消和原有结果展示。
+`rtk proxy node scripts/check-compression-tasks.mjs` 使用测试目录中的生成文件及真实 Sharp／FFmpeg／qpdf／Ghostscript／Catalog，验证三类压缩、Office、独立归档、标签和文件操作共用队列，覆盖防重、参数固定、排队无副作用、排队／运行取消、执行时覆盖检查、备份／发布／标签失败后的部分结果与重试，以及提交阶段取消。`check-processing-ui.mjs` 和 `check-video-compression.mjs --ui` 验证真实页面排队提示、取消和原有结果展示。

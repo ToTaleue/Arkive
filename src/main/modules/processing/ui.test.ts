@@ -183,8 +183,26 @@ async function check(): Promise<void> {
     assert.equal((await runBundledTool('qpdf', ['--check', output])).exitCode, 0)
     const pending = catalog.query({ state: 'pending' })
     assert.equal(pending.total, 1)
-    await click('确定归档')
-    await wait("document.querySelector('#documents-page').innerText.includes('已归档：')")
+    let releaseArchive!: () => void
+    const archiveHold = new Promise<void>((done) => {
+      releaseArchive = done
+    })
+    const archiveBlocker = tasks.submitBatch(
+      [{ title: 'hold archive UI queue', run: () => archiveHold }],
+      { onError: 'stop' }
+    )
+    try {
+      await click('确定归档')
+      await wait(
+        `window.api.tasks.list().then(items => items.some(item => item.key === 'catalog:${pending.items[0].id}' && item.status === 'queued'))`
+      )
+      assert.equal(catalog.get(pending.items[0].id).archivePath, null)
+      releaseArchive()
+      await wait("document.querySelector('#documents-page').innerText.includes('已归档：')")
+    } finally {
+      releaseArchive()
+      await tasks.wait(archiveBlocker.taskIds[0])
+    }
     assert.equal(catalog.query({}).total, 1)
     assert.equal(catalog.query({ state: 'pending' }).total, 0)
     await writeFile(join(directory, 'pdf.png'), (await window.webContents.capturePage()).toPNG())
@@ -221,6 +239,35 @@ async function check(): Promise<void> {
       )
       await select()
       await evaluate("document.querySelector('.document-confirm input').click()")
+      if (format === 'docx') {
+        let releaseOffice!: () => void
+        const officeHold = new Promise<void>((done) => {
+          releaseOffice = done
+        })
+        const officeBlocker = tasks.submitBatch(
+          [{ title: 'hold Office UI queue', run: () => officeHold }],
+          { onError: 'stop' }
+        )
+        try {
+          await click('开始文档压缩')
+          await wait(
+            "document.querySelector('.document-running')?.innerText.includes('已加入队列')"
+          )
+          assert.equal(await hashFile(choice), before)
+          const queued = tasks
+            .list()
+            .find((task) => task.status === 'queued' && task.key === `compress:${choice}`)
+          assert.ok(queued)
+          await evaluate(`window.api.tasks.cancel('${queued.id}')`)
+          await wait(
+            "document.querySelector('#documents-page').innerText.includes('已取消') && !document.querySelector('.document-select').disabled"
+          )
+          assert.equal(await hashFile(choice), before)
+        } finally {
+          releaseOffice()
+          await tasks.wait(officeBlocker.taskIds[0])
+        }
+      }
       await click('开始文档压缩')
       await wait(
         "document.querySelector('[aria-label=\"文档压缩结果\"]')?.innerText.includes('replaced')"

@@ -5,7 +5,7 @@
 ## 入口与职责
 
 - `service.ts`：`inspectOffice(inputPath, signal?)` 探测格式和媒体数量；`compressOffice(request, signal?)` 只生成新的完整文档，不登记或处理原件。输出须为不存在的绝对路径，后缀与输入相同。
-- `in-place.ts`：`compressOfficeInPlace({ inputPath, preset? }, signal?)` 是用户授权后的业务入口。整份旧文档复用 Catalog／Original Backup，备份完成后把结果发布回原路径，并让 Catalog 指向最终文档。
+- `in-place.ts`：`compressOfficeInPlace({ inputPath, preset? }, signal?)` 是用户授权后的 Task 业务入口，与图片、视频、PDF 及其他已接入操作共用 FIFO 队列。整份旧文档复用 Catalog／Original Backup，备份完成后把结果发布回原路径，并让 Catalog 指向最终文档。
 - `package.ts`：内部 ZIP／OOXML 读写与校验。不把拆包文件暴露给界面，不调用媒体的备份包装入口。
 - `replacement.ts`：内部持久化发布状态。Catalog 启动时恢复备份前、备份后及发布后尚未完成的任务，独立失败不会阻断其他资料恢复。
 - 共享结果契约：`src/shared/contracts/office.ts`。
@@ -21,6 +21,8 @@ const result = await compressOfficeInPlace(
 // 展示 replacementStatus、media、大小和 catalog 中的备份位置。
 // replacementStatus === 'error' 时不能把候选压缩成功当成替换成功。
 ```
+
+排队期间不创建临时文件或 Catalog 记录，支持取消与按输入真实路径防重。页面和 Agent 均等待实际完成，发布错误在 Task 中标记失败并保留完整业务结果。内部媒体编码直接调用底层 Service，不再次排队；提交阶段的取消规则保持如下。
 
 ## 发布条件与保留行为
 

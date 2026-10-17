@@ -10,6 +10,7 @@ import { Catalog, setCatalog } from './service'
 import { exists, hashFile } from './files'
 import { compressImageAndBackup, compressPdfAndBackup, compressVideoAndBackup } from './compression'
 import type { TaskSnapshot } from '../../../shared/contracts/task'
+import { checkScheduledOperations } from '../../tasks/operations.test'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
@@ -245,6 +246,7 @@ async function check(): Promise<void> {
     console.log(
       'PASS: real backup failure retains recoverable partial results; late cancellation preserves successful commits'
     )
+    await checkScheduledOperations(catalog, directory)
   } finally {
     for (const release of releases) release()
     await tasks.close()
@@ -255,7 +257,7 @@ async function check(): Promise<void> {
 
 const timeout = setTimeout(() => {
   app.exit(1)
-}, 120_000)
+}, 180_000)
 void check().then(
   () => {
     clearTimeout(timeout)

@@ -171,7 +171,8 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
             kind: 'office',
             value: await compressOfficeInPlace(
               { inputPath: selected.path, preset },
-              controller.signal
+              controller.signal,
+              request.runId
             )
           }
         }
