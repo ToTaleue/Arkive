@@ -33,6 +33,7 @@ export interface ArchiveItem extends CompressionRecord {
 }
 
 export interface CatalogQuery {
+  state?: 'archived' | 'pending'
   name?: string
   tags?: string[]
   modifiedFrom?: number

@@ -135,7 +135,15 @@ export class CatalogRepository {
   }
 
   query(query: CatalogQuery): { items: ArchiveItem[]; total: number; tags: string[] } {
-    const conditions = ["archive_status = 'ready'"]
+    // Unpublished Office candidates must never be exposed as ordinary ready outputs.
+    const conditions =
+      query.state === 'pending'
+        ? [
+            "compression_status = 'ready'",
+            "archive_status != 'ready'",
+            "NOT EXISTS (SELECT 1 FROM office_replacements o WHERE o.item_id = catalog_items.id AND o.state != 'replaced')"
+          ]
+        : ["archive_status = 'ready'"]
     const values: SQLInputValue[] = []
     if (query.name) {
       conditions.push(

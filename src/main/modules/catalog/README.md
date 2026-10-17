@@ -16,6 +16,8 @@ Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation
 
 “我的归档”支持原文件名／输出文件名子串匹配、标签 AND、源修改日期和归档日期（本地日期、含起始日和结束日）、每页 50 条、打开及 Finder 定位。SQLite `lower()` 默认只保证 ASCII 大小写转换。无正文、OCR、语义搜索或文件移动／重命名同步；不压缩直接归档未开放。
 
+记录状态可切换为“待归档压缩结果”，对应 `query({ state: 'pending' })`；默认 `archived` 保留原有查询语义。只展示已完成压缩且尚未完成归档的记录，Office 还须完成原路径发布；可直接按原记录归档或重试，无需重新压缩。Agent 的 `search_archives` 使用相同状态参数，`open_archive({ id, action: 'open' | 'reveal' })` 复用归档路径校验，不能打开未归档记录。
+
 ## 验证
 
 ```sh

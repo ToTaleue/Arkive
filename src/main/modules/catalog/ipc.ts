@@ -13,6 +13,11 @@ function query(value: unknown): CatalogQuery {
   if (!value || typeof value !== 'object') throw new Error('无效的检索条件。')
   const request = value as Record<string, unknown>
   const result: CatalogQuery = {}
+  if (request.state !== undefined) {
+    if (request.state !== 'archived' && request.state !== 'pending')
+      throw new Error('无效的归档状态。')
+    result.state = request.state
+  }
   if (request.name !== undefined) {
     if (typeof request.name !== 'string' || request.name.length > 500)
       throw new Error('搜索文本过长。')

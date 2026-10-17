@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import type { ArchiveItem, CatalogQuery, CatalogPage } from '../../../shared/contracts/catalog'
 import { TagPicker } from './TagPicker'
+import { ArchiveAction } from './ArchiveAction'
 
 function dateBound(value: string, next = false): number | undefined {
   if (!value) return undefined
@@ -11,6 +12,7 @@ function dateBound(value: string, next = false): number | undefined {
 }
 
 export function ArchivePage(): React.JSX.Element {
+  const [state, setState] = useState<'archived' | 'pending'>('archived')
   const [name, setName] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [dates, setDates] = useState(['', '', '', ''])
@@ -28,6 +30,7 @@ export function ArchivePage(): React.JSX.Element {
     if (!api) return
     const current = ++generation.current
     const query: CatalogQuery = {
+      state,
       name,
       tags,
       offset,
@@ -42,7 +45,7 @@ export function ArchivePage(): React.JSX.Element {
     } catch (failure) {
       if (current === generation.current) setError(String(failure))
     }
-  }, [api, name, tags, dates, offset])
+  }, [api, name, tags, dates, offset, state])
   useEffect(() => {
     generation.current++
     const timer = setTimeout(() => {
@@ -87,6 +90,23 @@ export function ArchivePage(): React.JSX.Element {
         </button>
       </header>
       <section className="archive-filters" aria-label="检索条件">
+        <label>
+          记录状态
+          <select
+            aria-label="归档记录状态"
+            value={state}
+            onChange={(event) => {
+              setState(event.target.value === 'pending' ? 'pending' : 'archived')
+              setSelected([])
+              setOffset(0)
+              setTags([])
+              setDates(['', '', '', ''])
+            }}
+          >
+            <option value="archived">已归档</option>
+            <option value="pending">待归档压缩结果</option>
+          </select>
+        </label>
         <label>
           文件名
           <input
@@ -153,7 +173,7 @@ export function ArchivePage(): React.JSX.Element {
           清除选择
         </button>
       </div>
-      {selected.length > 0 && (
+      {selected.length > 0 && state === 'archived' && (
         <section className="archive-batch" aria-label="批量添加标签">
           <h2>给选中文件添加公共标签</h2>
           <TagPicker
@@ -182,7 +202,9 @@ export function ArchivePage(): React.JSX.Element {
           <p>
             {name || tags.length || dates.some(Boolean)
               ? '没有符合条件的文件'
-              : '还没有归档文件。压缩完成后点击“确定归档”。'}
+              : state === 'pending'
+                ? '没有待归档的压缩结果。'
+                : '还没有归档文件。压缩完成后点击“确定归档”。'}
           </p>
         </div>
       )}
@@ -204,7 +226,10 @@ export function ArchivePage(): React.JSX.Element {
             <div className="archive-file">
               <strong>{item.name}</strong>
               <small>
-                原文件：{item.originalName} · {(item.outputBytes / 1024 / 1024).toFixed(2)} MB
+                原文件：{item.originalName} ·{' '}
+                {item.outputBytes < 1024 * 1024
+                  ? `${(item.outputBytes / 1024).toFixed(1)} KB`
+                  : `${(item.outputBytes / 1024 / 1024).toFixed(2)} MB`}
               </small>
               <small>
                 修改 {new Date(item.sourceModifiedAt).toLocaleDateString()} · 归档{' '}
@@ -219,33 +244,37 @@ export function ArchivePage(): React.JSX.Element {
                 <small role="alert">标签待同步：{item.tagError}</small>
               )}
             </div>
-            <div className="archive-row-actions">
-              <button
-                disabled={busy}
-                onClick={() => {
-                  if (api) void perform(() => api.open(item.id))
-                }}
-              >
-                打开
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  if (api) void perform(() => api.reveal(item.id))
-                }}
-              >
-                在 Finder 中显示
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  setEditing(item)
-                  setEditedTags(item.tags)
-                }}
-              >
-                编辑标签
-              </button>
-            </div>
+            {state === 'pending' ? (
+              <ArchiveAction key={item.id} record={item} />
+            ) : (
+              <div className="archive-row-actions">
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    if (api) void perform(() => api.open(item.id))
+                  }}
+                >
+                  打开
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    if (api) void perform(() => api.reveal(item.id))
+                  }}
+                >
+                  在 Finder 中显示
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    setEditing(item)
+                    setEditedTags(item.tags)
+                  }}
+                >
+                  编辑标签
+                </button>
+              </div>
+            )}
           </article>
         ))}
       </div>
