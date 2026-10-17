@@ -161,7 +161,7 @@ function blockedFeatures(features: PdfFeatures, preset: PdfCompressionPreset): s
   const blocked: string[] = []
   if (features.hasSignatures) blocked.push('数字签名')
   if (features.hasPdfA) blocked.push('PDF/A')
-  if (preset !== 'lossless') {
+  if (preset === 'balanced' || preset === 'size') {
     if (features.hasForms) blocked.push('表单')
     if (features.hasAnnotations) blocked.push('批注')
     if (features.hasAttachments) blocked.push('附件')
@@ -187,18 +187,20 @@ async function runCompression(
   outputPath: string,
   signal?: AbortSignal
 ): Promise<'qpdf' | 'ghostscript'> {
-  if (preset === 'lossless') {
-    const result = await runBundledTool(
-      'qpdf',
-      [
-        '--object-streams=generate',
-        '--compress-streams=y',
-        '--recompress-flate',
-        inputPath,
-        outputPath
-      ],
-      { signal, killTreeOnAbort: true, maxOutputChars: 64 * 1024 }
-    )
+  if (preset === 'lossless' || preset === 'deep-lossless') {
+    const qpdfArguments = [
+      '--object-streams=generate',
+      '--compress-streams=y',
+      '--recompress-flate',
+      ...(preset === 'deep-lossless' ? ['--compression-level=9'] : []),
+      inputPath,
+      outputPath
+    ]
+    const result = await runBundledTool('qpdf', qpdfArguments, {
+      signal,
+      killTreeOnAbort: true,
+      maxOutputChars: 64 * 1024
+    })
     if (result.exitCode !== 0 || result.signal) {
       const details = (result.stderr || result.stdout).slice(-4096)
       throw new Error(`qpdf 无损优化失败：${details || 'qpdf 处理失败。'}`)
@@ -244,7 +246,8 @@ export async function compressPdf(
 ): Promise<PdfCompressionResult> {
   signal?.throwIfAborted()
   const preset = request.preset ?? 'balanced'
-  if (!['lossless', 'balanced', 'size'].includes(preset)) throw new Error('未知的 PDF 压缩档位。')
+  if (!['lossless', 'deep-lossless', 'balanced', 'size'].includes(preset))
+    throw new Error('未知的 PDF 压缩档位。')
   if (
     typeof request.outputPath !== 'string' ||
     !isAbsolute(request.outputPath) ||

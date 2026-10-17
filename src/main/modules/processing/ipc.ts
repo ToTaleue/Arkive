@@ -44,7 +44,9 @@ function start(value: unknown): DocumentStart {
   if (
     !runId(request.runId) ||
     !runId(request.fileId) ||
-    !['lossless', 'quality', 'balanced', 'size'].includes(String(request.preset)) ||
+    !['lossless', 'deep-lossless', 'quality', 'balanced', 'size'].includes(
+      String(request.preset)
+    ) ||
     (request.replaceConfirmed !== undefined && typeof request.replaceConfirmed !== 'boolean')
   )
     throw new Error('无效的文档参数。')
@@ -128,7 +130,9 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
         throw new Error('PDF 不支持此档位。')
       if (
         selected.kind === 'office' &&
-        (request.preset === 'lossless' || request.replaceConfirmed !== true)
+        (request.preset === 'lossless' ||
+          request.preset === 'deep-lossless' ||
+          request.replaceConfirmed !== true)
       )
         throw new Error('请确认原路径替换和完整原件备份。')
       const controller = new AbortController()
@@ -149,9 +153,11 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
           const preset =
             request.preset === 'lossless'
               ? 'lossless'
-              : request.preset === 'size'
-                ? 'size'
-                : 'balanced'
+              : request.preset === 'deep-lossless'
+                ? 'deep-lossless'
+                : request.preset === 'size'
+                  ? 'size'
+                  : 'balanced'
           result = {
             kind: 'pdf',
             value: await compressPdfAndBackup(

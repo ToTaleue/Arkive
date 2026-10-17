@@ -1,6 +1,6 @@
 # PDF 压缩 Service
 
-主进程调用 `service.ts` 中的 `inspectPdf` 和 `compressPdf`。文档压缩页面通过 `processing` IPC、Agent 通过业务工具调用 `catalog/compression.ts`，共用同一个 Service、归档索引和备份生命周期。页面支持原生文件选择、Finder 拖入、检查、三档压缩、输出选择、取消和后续归档；Agent 的 `inspect_pdf` 只读探测。
+主进程调用 `service.ts` 中的 `inspectPdf` 和 `compressPdf`。文档压缩页面通过 `processing` IPC、Agent 通过业务工具调用 `catalog/compression.ts`，共用同一个 Service、归档索引和备份生命周期。页面支持原生文件选择、Finder 拖入、检查、四档压缩、输出选择、取消和后续归档；Agent 的 `inspect_pdf` 只读探测。
 
 ```ts
 const result = await compressPdf({
@@ -11,6 +11,7 @@ const result = await compressPdf({
 ```
 
 - `lossless` 使用 qpdf 生成对象流并重压缩 Flate 流。
+- `deep-lossless` 在 `lossless` 基础上使用 Flate 压缩等级 9；仍然无损，但更慢，体积收益需按样本验证。
 - `balanced` 使用 Ghostscript `pdfwrite` 的 `/ebook` 预设。
 - `size` 使用 Ghostscript `pdfwrite` 的 `/screen` 预设。
 - 输出始终写入同目录临时文件，通过 qpdf 结构检查、页数检查和特征检查后，以不覆盖方式发布。

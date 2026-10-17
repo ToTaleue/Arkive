@@ -1,4 +1,4 @@
-export type PdfCompressionPreset = 'lossless' | 'balanced' | 'size'
+export type PdfCompressionPreset = 'lossless' | 'deep-lossless' | 'balanced' | 'size'
 
 export interface PdfFeatures {
   encrypted: boolean

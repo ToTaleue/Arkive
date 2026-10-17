@@ -479,12 +479,17 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'compress_pdf',
       label: 'PDF 压缩',
       description:
-        '复用 Arkive PDF 压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。lossless 使用 qpdf 做结构优化；balanced 使用 Ghostscript ebook 预设；size 使用 Ghostscript screen 预设。生成新 PDF，成功且有体积收益后按共用归档生命周期将原件校验后备份到 Arkive Backup，不覆盖已有文件。加密、数字签名和 PDF/A 暂不处理；balanced／size 不处理表单、批注和附件。输出会通过 qpdf 结构检查并比较页面数量与 PDF 特征。',
+        '复用 Arkive PDF 压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。lossless 使用 qpdf 做结构优化；deep-lossless 使用 qpdf 压缩等级 9，仍然无损但更慢；balanced 使用 Ghostscript ebook 预设；size 使用 Ghostscript screen 预设。生成新 PDF，成功且有体积收益后按共用归档生命周期将原件校验后备份到 Arkive Backup，不覆盖已有文件。加密、数字签名和 PDF/A 暂不处理；balanced／size 不处理表单、批注和附件。输出会通过 qpdf 结构检查并比较页面数量与 PDF 特征。',
       parameters: Type.Object({
         inputPath: Type.String({ description: '源 PDF 绝对路径。' }),
         outputPath: Type.String({ description: '用户授权的新 PDF 输出绝对路径，父目录须已存在。' }),
         preset: Type.Optional(
-          Type.Union([Type.Literal('lossless'), Type.Literal('balanced'), Type.Literal('size')])
+          Type.Union([
+            Type.Literal('lossless'),
+            Type.Literal('deep-lossless'),
+            Type.Literal('balanced'),
+            Type.Literal('size')
+          ])
         ),
         ...archiveOptions
       }),

@@ -69,7 +69,7 @@ async function check(): Promise<void> {
     assert.equal(inspection.features.encrypted, false)
     assert.equal(inspection.features.hasSignatures, false)
 
-    for (const preset of ['lossless', 'balanced', 'size'] as const) {
+    for (const preset of ['lossless', 'deep-lossless', 'balanced', 'size'] as const) {
       const outputPath = join(directory, `${preset}.pdf`)
       const result = await compressPdf({ inputPath, outputPath, preset })
       assert.equal(result.outputPath, outputPath)

@@ -667,6 +667,15 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   const pdfBytes = await readFile(pdfInput)
   assert.match(await callTool('inspect_pdf', { inputPath: pdfInput }), /"pageCount":1/)
   assert.deepEqual(await readFile(pdfInput), pdfBytes)
+  const deepPdfOutput = resolve(workspaceDir, 'compressed-deep-lossless.pdf')
+  const deepPdfResult = await callTool('compress_pdf', {
+    inputPath: pdfInput,
+    outputPath: deepPdfOutput,
+    preset: 'deep-lossless'
+  })
+  assert.ok(deepPdfResult.includes('"preset":"deep-lossless"'), deepPdfResult)
+  await access(deepPdfOutput)
+  await checkPreservedOriginal(pdfInput, deepPdfOutput, pdfBytes)
   const pdfOutput = resolve(workspaceDir, 'compressed.pdf')
   let releaseTaskQueue!: () => void
   const queueHold = new Promise<void>((done) => {

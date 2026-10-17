@@ -15,7 +15,7 @@ export type ProcessingOutcome<T> =
 export interface DocumentStart {
   runId: string
   fileId: string
-  preset: 'lossless' | 'quality' | 'balanced' | 'size'
+  preset: 'lossless' | 'deep-lossless' | 'quality' | 'balanced' | 'size'
   replaceConfirmed?: boolean
 }
 export const processingChannels = {

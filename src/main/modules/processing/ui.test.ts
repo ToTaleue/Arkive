@@ -145,6 +145,13 @@ async function check(): Promise<void> {
         '1 页'
       )
     )
+    await evaluate(
+      "const preset=document.querySelector('[aria-label=\"文档压缩档位\"]'); preset.value='deep-lossless'; preset.dispatchEvent(new Event('change',{bubbles:true}))"
+    )
+    assert.equal(
+      await evaluate('document.querySelector(\'[aria-label="文档压缩档位"]\')?.value'),
+      'deep-lossless'
+    )
     cancelSave = true
     await click('开始文档压缩')
     await wait("document.querySelector('#documents-page').innerText.includes('已取消')")

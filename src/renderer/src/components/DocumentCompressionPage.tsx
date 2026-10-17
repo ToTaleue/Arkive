@@ -24,7 +24,9 @@ function size(bytes: number): string {
 export function DocumentCompressionPage(): React.JSX.Element {
   const [kind, setKind] = useState<DocumentKind>('pdf')
   const [selected, setSelected] = useState<SelectedDocument | null>(null)
-  const [preset, setPreset] = useState<'lossless' | 'quality' | 'balanced' | 'size'>('lossless')
+  const [preset, setPreset] = useState<
+    'lossless' | 'deep-lossless' | 'quality' | 'balanced' | 'size'
+  >('lossless')
   const [confirmed, setConfirmed] = useState(false)
   const [result, setResult] = useState<DocumentResult | null>(null)
   const [duplicates, setDuplicates] = useState<DuplicateScanResult | null>(null)
@@ -195,6 +197,7 @@ export function DocumentCompressionPage(): React.JSX.Element {
               const value = event.target.value
               if (
                 value === 'lossless' ||
+                value === 'deep-lossless' ||
                 value === 'quality' ||
                 value === 'balanced' ||
                 value === 'size'
@@ -203,7 +206,10 @@ export function DocumentCompressionPage(): React.JSX.Element {
             }}
           >
             {kind === 'pdf' ? (
-              <option value="lossless">无损结构优化</option>
+              <>
+                <option value="lossless">无损结构优化</option>
+                <option value="deep-lossless">极限无损（更慢）</option>
+              </>
             ) : (
               <option value="quality">质量优先</option>
             )}
