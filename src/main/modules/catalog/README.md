@@ -4,6 +4,10 @@
 
 结果页点击“确定归档”，把输出复制到 `~/Arkive Archive/YYYY-MM-DD/`。文件名附加记录 UUID，禁止覆盖；重复点击复用同一副本。先记录计划路径，再复制、SHA-256 校验并发布。Backup 保存完整原件；Archive 保存可直接打开的压缩副本。没有定期清理。
 
+归档区提供默认关闭的“在原位置保留访问入口（试用）”开关。勾选后，共用 Catalog 归档流程在正式副本校验成功后调用 Node `symlink`，入口只指向 Archive，不指向 Backup。同格式沿用原路径；格式转换时保留原文件名主体、使用输出扩展名。已有普通文件、目录或其他链接一律不覆盖（包括 Office 原位发布后仍在原路径的压缩文档）；归档照常成功，`originalLink` 单独报告入口失败并可重试。保留原件及当前压缩输出的既有策略不变，本开关不负责清理这些文件，也不承诺额外空间收益。
+
+`CatalogApi.archive(id, tags, { keepLinkAtOriginalLocation: true })`、现有 `archive_file` 及带 `archive=true` 的压缩工具共用该开关，无新增 Agent 工具。入口意图、路径及状态通过数据库 v4 迁移持久化；启动时恢复尚未完成的入口创建，已有相同软链接视为成功，失败不覆盖且保留显式重试。普通软链接不会追踪外部移动／重命名；这轮未增加归档移动、删除及链接自动维护能力。
+
 Agent 有两种共用入口：`compress_image`／`compress_video`／`compress_pdf` 接受可选 `archive: true` 和 `tags`，在同一次调用内完成压缩、备份及归档；普通压缩省略该选项。`archive_file({ id, tags? })` 对已有压缩记录执行同一归档流程，并可核对／重试未完成的原件备份，不重新编码、不接受任意文件路径。无体积收益时保留原件原位的默认规则继续有效。
 
 组合调用分别返回编码结果、`catalog` 备份记录与可选的 `archive` 结果。归档失败保留成功的编码结果和记录 ID，重试调用 `archive_file`，不能重新压缩已经移走的源文件。归档成功但标签失败时，通过归档资料的 `tagStatus`／`tagError` 报告。
@@ -21,6 +25,7 @@ Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation
 ## 验证
 
 ```sh
+rtk proxy node scripts/check-archive-links.mjs
 rtk proxy pnpm run build
 rtk proxy node scripts/check-catalog.mjs
 rtk proxy node scripts/check-agent.mts

@@ -5,6 +5,7 @@ import { TagPicker } from './TagPicker'
 export function ArchiveAction({ record }: { record: CompressionRecord }): React.JSX.Element {
   const [item, setItem] = useState<ArchiveItem | null>(null)
   const [tags, setTags] = useState<string[]>([])
+  const [keepLink, setKeepLink] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const api = window.api?.catalog
@@ -17,6 +18,7 @@ export function ArchiveAction({ record }: { record: CompressionRecord }): React.
         if (active) {
           setItem(value)
           setTags(value.tags)
+          setKeepLink(Boolean(value.originalLink))
         }
       })
       .catch((failure: unknown) => {
@@ -66,6 +68,31 @@ export function ArchiveAction({ record }: { record: CompressionRecord }): React.
           {item.tagStatus === 'error' && (
             <p role="alert">文件已归档，标签待同步：{item.tagError}</p>
           )}
+          {item.originalLink && (
+            <div>
+              <p role={item.originalLink.status === 'error' ? 'alert' : 'status'}>
+                {item.originalLink.status === 'ready'
+                  ? '原位置访问入口已创建：'
+                  : item.originalLink.status === 'error'
+                    ? `归档已完成，原位置入口未创建：${item.originalLink.error ?? ''}`
+                    : '原位置入口待创建：'}
+                <span className="archive-path">{item.originalLink.path}</span>
+              </p>
+              {item.originalLink.status !== 'ready' && (
+                <button
+                  disabled={busy || !api}
+                  onClick={() => {
+                    if (api)
+                      void perform(() =>
+                        api.archive(record.id, [], { keepLinkAtOriginalLocation: true })
+                      )
+                  }}
+                >
+                  重试原位置入口
+                </button>
+              )}
+            </div>
+          )}
           <button
             disabled={busy}
             onClick={() => {
@@ -85,6 +112,20 @@ export function ArchiveAction({ record }: { record: CompressionRecord }): React.
             <summary>归档标签（可选）</summary>
             <TagPicker value={tags} onChange={setTags} disabled={busy} />
           </details>
+          <label className="archive-link-option">
+            <input
+              type="checkbox"
+              checked={keepLink}
+              disabled={busy || !api || !item}
+              onChange={(event) => {
+                setKeepLink(event.target.checked)
+              }}
+            />
+            在原位置保留访问入口（试用）
+          </label>
+          {keepLink && (
+            <small>入口指向正式归档文件。格式转换时使用新扩展名；原位置已有文件时不会覆盖。</small>
+          )}
           <button
             className="archive-primary"
             disabled={
@@ -95,7 +136,10 @@ export function ArchiveAction({ record }: { record: CompressionRecord }): React.
               item.backupStatus === 'pending'
             }
             onClick={() => {
-              if (api) void perform(() => api.archive(record.id, tags))
+              if (api)
+                void perform(() =>
+                  api.archive(record.id, tags, { keepLinkAtOriginalLocation: keepLink })
+                )
             }}
           >
             {busy ? '处理中…' : '确定归档'}

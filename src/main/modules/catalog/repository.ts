@@ -26,6 +26,9 @@ export interface CatalogRow {
   inherit_tags_pending: number
   pending_add: string
   pending_remove: string
+  original_link_path: string | null
+  original_link_status: 'none' | 'pending' | 'ready' | 'error'
+  original_link_error: string | null
 }
 
 export class CatalogRepository {
@@ -118,7 +121,16 @@ export class CatalogRepository {
       backupError: row.backup_error,
       tags: this.tags(id),
       tagStatus: row.tag_status,
-      tagError: row.tag_error
+      tagError: row.tag_error,
+      ...(row.original_link_path && row.original_link_status !== 'none'
+        ? {
+            originalLink: {
+              path: row.original_link_path,
+              status: row.original_link_status,
+              error: row.original_link_error
+            }
+          }
+        : {})
     }
   }
 

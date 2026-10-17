@@ -12,6 +12,7 @@ import {
 } from '../office-compression/replacement'
 import { CatalogRepository } from './repository'
 import { fileTags, normalizeTags } from './finder-tags'
+import { createOriginalLink, originalLinkPath } from './original-link'
 import {
   assertManagedFile,
   copyVerified,
@@ -23,6 +24,7 @@ import {
 } from './files'
 import type {
   ArchiveItem,
+  ArchiveOptions,
   CatalogQuery,
   CompressionRecord
 } from '../../../shared/contracts/catalog'
@@ -84,6 +86,9 @@ export class Catalog {
             /* Recorded path is retained for an explicit retry. */
           }
         }
+      }
+      for (const id of this.repo.archivedIds()) {
+        if (this.repo.get(id).original_link_status === 'pending') await this.createOriginalLink(id)
       }
     })
     await this.refresh()
@@ -227,10 +232,39 @@ export class Catalog {
     this.repo.update(id, { archive_status: 'ready', archived_at: Date.now() })
   }
 
-  archive(id: string, tags: string[]): Promise<ArchiveItem> {
+  private async createOriginalLink(id: string): Promise<void> {
+    const row = this.repo.get(id)
+    if (!row.original_link_path || row.original_link_status === 'none') return
+    try {
+      const target = await this.archivePath(id)
+      if (!row.output_hash || (await hashFile(target)) !== row.output_hash)
+        throw new Error('归档内容已变化，未创建原位置入口。')
+      await createOriginalLink(row.original_link_path, target)
+      this.repo.update(id, { original_link_status: 'ready', original_link_error: null })
+    } catch (error) {
+      this.repo.update(id, {
+        original_link_status: 'error',
+        original_link_error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  archive(id: string, tags: string[], options: ArchiveOptions = {}): Promise<ArchiveItem> {
+    if (
+      options.keepLinkAtOriginalLocation !== undefined &&
+      typeof options.keepLinkAtOriginalLocation !== 'boolean'
+    )
+      throw new Error('原位置入口选项必须为布尔值。')
     const chosen = normalizeTags(tags)
     return this.exclusive(async () => {
       const before = this.repo.get(id)
+      if (options.keepLinkAtOriginalLocation) {
+        this.repo.update(id, {
+          original_link_path: originalLinkPath(before.original_path, before.output_path),
+          original_link_status: 'pending',
+          original_link_error: null
+        })
+      }
       if (
         before.compression_status === 'ready' &&
         (before.backup_status === 'pending' || before.backup_status === 'error')
@@ -245,6 +279,7 @@ export class Catalog {
       } else if (chosen.length) this.queueTagEdit(id, chosen, [])
       await this.archiveFile(id)
       await this.syncTags(id)
+      await this.createOriginalLink(id)
       this.changed()
       return this.repo.item(id)
     })

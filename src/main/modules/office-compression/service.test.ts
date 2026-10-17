@@ -192,13 +192,17 @@ async function check(): Promise<void> {
     )
     await checkOfficeVideos(directory)
 
-    // Exercise the v2 upgrade with existing catalog data, not just a fresh v3 database.
-    catalog.repo.db.exec('DROP TABLE office_replacements; PRAGMA user_version = 2;')
+    // Reconstruct v2 before testing the upgrade with existing catalog records.
+    catalog.repo.db.exec(`DROP TABLE office_replacements;
+      ALTER TABLE catalog_items DROP COLUMN original_link_path;
+      ALTER TABLE catalog_items DROP COLUMN original_link_status;
+      ALTER TABLE catalog_items DROP COLUMN original_link_error;
+      PRAGMA user_version = 2;`)
     await catalog.close()
     catalog = new Catalog(options)
     setCatalog(catalog)
     await catalog.start()
-    assert.equal(catalog.repo.db.prepare('PRAGMA user_version').get()?.user_version, 3)
+    assert.equal(catalog.repo.db.prepare('PRAGMA user_version').get()?.user_version, 4)
     assert.equal(catalog.get(replacement.catalog.id).outputPath, inPlace)
     assert.ok(catalog.get(replacement.catalog.id).archivePath)
     console.log('PASS: v2 database upgrade preserves existing compression/archive records')

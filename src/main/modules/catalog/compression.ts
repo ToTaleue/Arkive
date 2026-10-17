@@ -41,6 +41,13 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
   signal?.throwIfAborted()
   if (request.archive !== undefined && typeof request.archive !== 'boolean')
     throw new Error('归档选项必须为布尔值。')
+  if (
+    request.keepLinkAtOriginalLocation !== undefined &&
+    typeof request.keepLinkAtOriginalLocation !== 'boolean'
+  )
+    throw new Error('原位置入口选项必须为布尔值。')
+  if (request.keepLinkAtOriginalLocation && !request.archive)
+    throw new Error('原位置入口需与 archive=true 一起使用。')
   const tags = normalizeTags(request.tags ?? [])
   if (tags.length && !request.archive) throw new Error('归档标签需与 archive=true 一起使用。')
   const catalog = getCatalog()
@@ -74,7 +81,7 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
               try {
                 if (record.backupStatus === 'error')
                   throw new Error(record.backupError ?? '原件备份未完成。')
-                archive = { status: 'ready', item: await catalog.archive(id, tags) }
+                archive = { status: 'ready', item: await catalog.archive(id, tags, request) }
               } catch (error) {
                 archive = {
                   status: 'error',
@@ -88,7 +95,9 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
                 ? `压缩已完成，但原件备份失败：${record.backupError ?? '请重试备份。'}`
                 : archive?.status === 'error'
                   ? `压缩已完成，但归档失败：${archive.error}`
-                  : undefined
+                  : archive?.status === 'ready' && archive.item.originalLink?.status === 'error'
+                    ? `归档已完成，但原位置入口未创建：${archive.item.originalLink.error ?? '请重试入口创建。'}`
+                    : undefined
             if (failure) throw new TaskFailure(failure, completed)
             return completed
           })

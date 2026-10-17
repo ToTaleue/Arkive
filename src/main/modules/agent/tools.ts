@@ -57,7 +57,13 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
     archive: Type.Optional(
       Type.Boolean({ description: '用户要求压缩后归档时设为 true，默认只压缩并备份原件。' })
     ),
-    tags: Type.Optional({ ...tags, description: '归档标签，与 archive=true 一起使用；可省略。' })
+    tags: Type.Optional({ ...tags, description: '归档标签，与 archive=true 一起使用；可省略。' }),
+    keepLinkAtOriginalLocation: Type.Optional(
+      Type.Boolean({
+        description:
+          '仅在用户要求归档后保留原位置入口时设为 true，需 archive=true。默认关闭；不覆盖已有文件，检查归档结果 originalLink 的状态。'
+      })
+    )
   }
   return [
     ...[
@@ -101,7 +107,6 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       }
     }),
     defineTool({
-    defineTool({
       name: 'clone_duplicates',
       label: 'APFS 无损去重',
       description:
@@ -118,6 +123,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
       }
     }),
+    defineTool({
       name: 'open_archive',
       label: '打开或定位归档文件',
       description:
@@ -145,11 +151,17 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         '用户授权后，按压缩结果的 catalog.id 归档已有结果。先核对或重试未完成的原件备份，再复制压缩结果到 Arkive Archive，不重新压缩，不覆盖文件。只接受已有压缩记录，不支持任意文件直接归档。重复调用复用同一副本；标签可选，合并原件已有标签。核对 backupStatus、archivePath、tagStatus，标签待同步不代表归档文件失败。',
       parameters: Type.Object({
         id: { ...recordId, description: '压缩工具返回的 catalog.id，或检索结果中的 id。' },
-        tags: Type.Optional(tags)
+        tags: Type.Optional(tags),
+        keepLinkAtOriginalLocation: Type.Optional(
+          Type.Boolean({
+            description:
+              '用户要求时，在原目录创建指向正式归档的软链接。默认关闭，已有文件不覆盖；入口失败不代表归档失败，检查 originalLink。'
+          })
+        )
       }),
       execute: async (_toolCallId, request, signal) => {
         signal?.throwIfAborted()
-        const result = await getCatalog().archive(request.id, request.tags ?? [])
+        const result = await getCatalog().archive(request.id, request.tags ?? [], request)
         return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
       }
     }),

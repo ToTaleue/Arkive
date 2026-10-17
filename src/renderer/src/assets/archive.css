@@ -157,6 +157,12 @@
 .archive-action details {
   margin: 10px 0;
 }
+.archive-link-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0;
+}
 .archive-path {
   display: block;
   overflow-wrap: anywhere;

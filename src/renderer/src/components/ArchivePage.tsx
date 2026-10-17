@@ -243,11 +243,32 @@ export function ArchivePage(): React.JSX.Element {
               {item.tagStatus === 'error' && (
                 <small role="alert">标签待同步：{item.tagError}</small>
               )}
+              {item.originalLink && (
+                <small role={item.originalLink.status === 'error' ? 'alert' : undefined}>
+                  {item.originalLink.status === 'ready'
+                    ? '原位置入口：'
+                    : `原位置入口未完成：${item.originalLink.error ?? '待创建'} · `}
+                  {item.originalLink.path}
+                </small>
+              )}
             </div>
             {state === 'pending' ? (
               <ArchiveAction key={item.id} record={item} />
             ) : (
               <div className="archive-row-actions">
+                {item.originalLink && item.originalLink.status !== 'ready' && (
+                  <button
+                    disabled={busy || !api}
+                    onClick={() => {
+                      if (api)
+                        void perform(() =>
+                          api.archive(item.id, [], { keepLinkAtOriginalLocation: true })
+                        )
+                    }}
+                  >
+                    重试原位置入口
+                  </button>
+                )}
                 <button
                   disabled={busy}
                   onClick={() => {

@@ -75,8 +75,8 @@ const api: ArkiveApi = {
     localFilePath: (file) => webUtils.getPathForFile(file)
   },
   catalog: {
-    archive: (id, tags) =>
-      ipcRenderer.invoke(catalogChannels.archive, id, tags) as Promise<ArchiveItem>,
+    archive: (id, tags, options) =>
+      ipcRenderer.invoke(catalogChannels.archive, id, tags, options) as Promise<ArchiveItem>,
     query: (query) => ipcRenderer.invoke(catalogChannels.query, query) as Promise<CatalogPage>,
     get: (id) => ipcRenderer.invoke(catalogChannels.get, id) as Promise<ArchiveItem>,
     tags: (ids, add, remove) =>

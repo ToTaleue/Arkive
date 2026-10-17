@@ -1016,15 +1016,6 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
     /"duplicateFileCount":1/
   )
   assert.deepEqual(await readdir(duplicatesDirectory), ['a.txt', 'b.txt'])
-  assert.match(await callTool('scan_duplicates', { directoryPath: '/' }), /根目录受保护/)
-  assert.match(await callTool('inspect_pdf', { inputPath: imageInput }), /PDF|pdf/)
-  assert.ok(
-    updates.some(
-      (update) => update.tool?.name === 'inspect_pdf' && update.tool.status === 'completed'
-    )
-  )
-  assert.ok(
-    updates.some(
   const cloned = await callTool('clone_duplicates', {
     sourcePath: resolve(duplicatesDirectory, 'a.txt'),
     duplicatePaths: [resolve(duplicatesDirectory, 'b.txt')]
@@ -1042,6 +1033,15 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
     }),
     /系统关键路径受保护/
   )
+  assert.match(await callTool('scan_duplicates', { directoryPath: '/' }), /根目录受保护/)
+  assert.match(await callTool('inspect_pdf', { inputPath: imageInput }), /PDF|pdf/)
+  assert.ok(
+    updates.some(
+      (update) => update.tool?.name === 'inspect_pdf' && update.tool.status === 'completed'
+    )
+  )
+  assert.ok(
+    updates.some(
       (update) => update.tool?.name === 'scan_duplicates' && update.tool.status === 'error'
     )
   )

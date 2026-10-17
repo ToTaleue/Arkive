@@ -1,5 +1,9 @@
 import { BrowserWindow, ipcMain, shell, type WebContents } from 'electron'
-import { catalogChannels, type CatalogQuery } from '../../../shared/contracts/catalog'
+import {
+  catalogChannels,
+  type ArchiveOptions,
+  type CatalogQuery
+} from '../../../shared/contracts/catalog'
 import { normalizeTags } from './finder-tags'
 import type { Catalog } from './service'
 
@@ -41,6 +45,17 @@ function query(value: unknown): CatalogQuery {
   return result
 }
 
+function archiveOptions(value: unknown): ArchiveOptions {
+  if (value === undefined) return {}
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('无效的归档选项。')
+  const request = value as Record<string, unknown>
+  if (request.keepLinkAtOriginalLocation === undefined) return {}
+  if (typeof request.keepLinkAtOriginalLocation !== 'boolean')
+    throw new Error('原位置入口选项必须为布尔值。')
+  return { keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation }
+}
+
 export function registerCatalogIpc(catalog: Catalog): (contents: WebContents) => void {
   const windows = new Set<WebContents>()
   function handle(channel: string, operation: (...args: unknown[]) => unknown): void {
@@ -56,7 +71,9 @@ export function registerCatalogIpc(catalog: Catalog): (contents: WebContents) =>
   }
   handle(catalogChannels.query, (request) => catalog.query(query(request)))
   handle(catalogChannels.get, (value) => catalog.get(id(value)))
-  handle(catalogChannels.archive, (value, tags) => catalog.archive(id(value), normalizeTags(tags)))
+  handle(catalogChannels.archive, (value, tags, options) =>
+    catalog.archive(id(value), normalizeTags(tags), archiveOptions(options))
+  )
   handle(catalogChannels.retryBackup, (value) => catalog.retryBackup(id(value)))
   handle(catalogChannels.tags, (values, add, remove) => {
     if (!Array.isArray(values) || values.length === 0 || values.length > 100)
