@@ -5,6 +5,7 @@ import type { Readable } from 'node:stream'
 import { app } from 'electron'
 
 const toolFiles = {
+  'ab-av1': 'ab-av1',
   ffmpeg: 'ffmpeg',
   ffprobe: 'ffprobe',
   mole: 'mole/mo',
@@ -21,6 +22,9 @@ export type ToolProcess = ChildProcessByStdio<null, Readable, Readable>
 export interface ToolProcessOptions {
   cwd?: string
   signal?: AbortSignal
+  env?: NodeJS.ProcessEnv
+  /** Put an orchestrator and its subprocesses in a private group; cancel the whole group. */
+  killTreeOnAbort?: boolean
 }
 
 export interface ToolRunOptions extends ToolProcessOptions {
@@ -56,11 +60,31 @@ export function spawnBundledTool(
   args: readonly string[],
   options: ToolProcessOptions = {}
 ): ToolProcess {
-  return spawn(getBundledToolPath(tool), args, {
-    ...options,
+  const { killTreeOnAbort = false, ...spawnOptions } = options
+  const child = spawn(getBundledToolPath(tool), args, {
+    ...spawnOptions,
+    detached: killTreeOnAbort,
     shell: false,
     stdio: ['ignore', 'pipe', 'pipe']
   })
+  if (killTreeOnAbort && options.signal) {
+    const abort = (): void => {
+      if (!child.pid) return
+      try {
+        // The task owns all temporary files. Kill descendants too before their pipes close
+        // and the caller removes that directory, even if the parent already received SIGTERM.
+        process.kill(-child.pid, 'SIGKILL')
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) {
+          child.emit('error', error)
+        }
+      }
+    }
+    options.signal.addEventListener('abort', abort, { once: true })
+    child.once('close', () => options.signal?.removeEventListener('abort', abort))
+    if (options.signal.aborted) abort()
+  }
+  return child
 }
 
 /**

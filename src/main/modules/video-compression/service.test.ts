@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,6 +7,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { app } from 'electron'
 import { runBundledTool } from '../../../execution/process'
+import { checkAbAv1Results } from '../../../execution/ab-av1.test'
 import { compressVideo, inspectVideo } from './service'
 import type { VideoCompressionProgress } from '../../../shared/contracts/video'
 import { checkProgressEstimates } from './progress.test'
@@ -43,6 +45,7 @@ async function timestamps(path: string): Promise<number[]> {
 async function check(): Promise<void> {
   await app.whenReady()
   checkProgressEstimates()
+  checkAbAv1Results()
   const directory = await mkdtemp(join(tmpdir(), 'arkive-video-check-'))
   try {
     const source = join(directory, 'source $ [clip].mov')
@@ -93,6 +96,13 @@ async function check(): Promise<void> {
         result.outputBytes < result.inputBytes ? 'compressed' : 'no-savings'
       )
       assert.equal(result.savedBytes, Math.max(0, result.inputBytes - result.outputBytes))
+      assert.ok(result.qualityAnalysis.sampleVmaf >= result.qualityAnalysis.targetVmaf)
+      assert.ok(result.qualityAnalysis.quality >= 0 && result.qualityAnalysis.quality <= 100)
+      const analysis = updates.filter((update) => update.stage === 'analyzing')
+      assert.ok(analysis.length > 0)
+      assert.ok(
+        analysis.every((update) => update.percent === null && update.remainingSeconds === null)
+      )
     }
     console.log('PASS: all three HEVC presets with real VideoToolbox, AAC and output decoding')
 
@@ -230,8 +240,7 @@ async function check(): Promise<void> {
     )
     console.log('PASS: existing files protected; unresolved compatibility/audio/4:2:2 rejected')
 
-    // Wait until the private output directory exists: cancellation must reach active FFmpeg,
-    // rather than only exercising an already-aborted request.
+    // Wait for ab-av1 to start creating its private samples, then cancel during analysis.
     const longSource = join(directory, 'long.mov')
     await ffmpeg([
       '-f',
@@ -252,12 +261,24 @@ async function check(): Promise<void> {
     )
     const rejection = assert.rejects(cancelled, { name: 'AbortError' })
     const deadline = Date.now() + 10_000
-    while (!(await readdir(directory)).some((name) => name.startsWith('.arkive-video-'))) {
-      assert.ok(Date.now() < deadline, 'Timed out waiting for encoding to start')
-      await delay(10)
+    let analysisStarted = false
+    while (!analysisStarted) {
+      const task = (await readdir(directory)).find((name) => name.startsWith('.arkive-video-'))
+      analysisStarted = Boolean(
+        task && (await readdir(join(directory, task))).some((name) => name.startsWith('.ab-av1-'))
+      )
+      assert.ok(Date.now() < deadline, 'Timed out waiting for automatic quality analysis to start')
+      if (!analysisStarted) await delay(10)
     }
+    const processLine = execFileSync('/bin/ps', ['-axo', 'pid,pgid,command'], { encoding: 'utf8' })
+      .split('\n')
+      .find((line) => line.includes('ab-av1 crf-search') && line.includes(directory))
+    assert.ok(processLine, 'Expected an active ab-av1 search process')
+    const [pid, group] = processLine.trim().split(/\s+/).map(Number)
+    assert.equal(pid, group, 'Search must own a private process group')
     controller.abort()
     await rejection
+    assert.throws(() => process.kill(-group, 0), { code: 'ESRCH' })
     await assert.rejects(stat(cancelledOutput), { code: 'ENOENT' })
     assert.ok(!(await readdir(directory)).some((name) => name.startsWith('.arkive-video-')))
     assert.equal(
@@ -266,7 +287,9 @@ async function check(): Promise<void> {
         .digest('hex'),
       originalHash
     )
-    console.log('PASS: active cancellation cleans temporary output and originals remain unchanged')
+    console.log(
+      'PASS: cancellation stops the search process group, cleans temporary files and preserves originals'
+    )
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

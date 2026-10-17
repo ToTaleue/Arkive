@@ -42,8 +42,8 @@ async function check(): Promise<void> {
     const value: unknown = await window.webContents.executeJavaScript(expression)
     return value
   }
-  async function waitFor(expression: string): Promise<void> {
-    const deadline = Date.now() + 20_000
+  async function waitFor(expression: string, timeout = 20_000): Promise<void> {
+    const deadline = Date.now() + timeout
     while (!(await evaluate(expression))) {
       assert.ok(
         Date.now() < deadline,
@@ -122,7 +122,18 @@ async function check(): Promise<void> {
     await assert.rejects(stat(outputPath), { code: 'ENOENT' })
     cancelSave = false
     await click('.video-primary-button')
-    await waitFor('Boolean(document.querySelector(".video-result"))')
+    await waitFor('document.querySelector(".video-running")?.textContent.includes("正在分析画质")')
+    assert.equal(
+      await evaluate('document.querySelector(".video-running progress").hasAttribute("value")'),
+      false
+    )
+    await waitFor('Boolean(document.querySelector(".video-result"))', 120_000)
+    assert.equal(
+      await evaluate(
+        'document.querySelector(".video-result").textContent.includes("抽样画质评分")'
+      ),
+      true
+    )
     assert.ok((await stat(outputPath)).size > 0)
     assert.equal(await evaluate('document.querySelector(".video-primary-button").disabled'), false)
     assert.equal(
@@ -165,7 +176,10 @@ async function check(): Promise<void> {
       'document.querySelector(".video-selected-file strong").textContent === "long.mov"'
     )
     await click('.video-primary-button')
-    await waitFor('document.querySelector(".video-running")?.textContent.includes("正在压缩视频")')
+    await waitFor(
+      'document.querySelector(".video-running")?.textContent.includes("正在压缩视频")',
+      120_000
+    )
     await waitFor(
       'document.querySelector(".video-progress-details")?.textContent.includes("本阶段预计还需约")'
     )

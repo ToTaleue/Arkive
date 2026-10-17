@@ -30,6 +30,25 @@
       "licenseFile": "licenses/GPL-3.0.txt"
     },
     {
+      "name": "ab-av1",
+      "version": "0.11.7",
+      "executable": "ab-av1",
+      "download": "https://ghcr.io/v2/homebrew/core/ab-av1/blobs/sha256:2e97a9d9e3ac6be4a163ad333fa4abcc0997a7e8a7e99d02489a44c832415f02",
+      "archiveSha256": "2e97a9d9e3ac6be4a163ad333fa4abcc0997a7e8a7e99d02489a44c832415f02",
+      "archiveMember": "ab-av1/0.11.7/bin/ab-av1",
+      "binarySha256": "e253f452f331116cac692891d5b593426146a492ea3d9c24946e0f107f3ddec4",
+      "binaryBytes": 2129888,
+      "architecture": "arm64",
+      "minimumMacOSFromMachO": "11.0",
+      "license": "MIT",
+      "licenseFile": "licenses/ab-av1-MIT.txt",
+      "upstreamSource": "https://github.com/alexheretic/ab-av1/tree/v0.11.7",
+      "binaryProvider": "Homebrew core, macOS Sonoma ARM64 bottle",
+      "checksumUrl": "https://formulae.brew.sh/api/formula/ab-av1.json",
+      "downloadedOn": "2026-10-16",
+      "notes": "Archive SHA-256 verified against Homebrew metadata. Only system dylibs; no Homebrew runtime paths. Uses Arkive bundled ffmpeg/ffprobe via child PATH; crf-search only, HEVC VideoToolbox hardware required."
+    },
+    {
       "name": "mole",
       "version": "1.59.1",
       "executable": "mole/mo",

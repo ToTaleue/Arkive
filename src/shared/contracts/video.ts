@@ -13,9 +13,18 @@ export interface VideoCompressionResult {
   inputBytes: number
   outputBytes: number
   savedBytes: number
+  qualityAnalysis: VideoQualityAnalysis
 }
 
-export type VideoCompressionStage = 'probing' | 'encoding' | 'validating'
+export interface VideoQualityAnalysis {
+  quality: number
+  targetVmaf: number
+  sampleVmaf: number
+  predictedVideoBytes: number
+  predictedEncodingSeconds: number
+}
+
+export type VideoCompressionStage = 'probing' | 'analyzing' | 'encoding' | 'validating'
 export interface VideoCompressionProgress {
   stage: VideoCompressionStage
   /** Progress and ETA apply to the current stage, not the whole task. */

@@ -2,7 +2,7 @@
 // Run with: rtk proxy node scripts/check-video-compression.mjs
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import electron from 'electron'
 import { build } from 'vite'
 
@@ -29,8 +29,18 @@ try {
       }
     }
   })
-  // Electron treats the entry directory as app.getAppPath(); reuse actual bundled tools.
-  await symlink(resolve('resources'), resolve(buildDirectory, 'resources'), 'dir')
+  // Optionally test the tools copied into a built .app, without an installed toolchain.
+  const toolsOption = process.argv.indexOf('--packaged-tools')
+  if (toolsOption !== -1) {
+    const toolsPath = process.argv[toolsOption + 1]
+    if (!toolsPath || toolsPath.startsWith('--')) throw new Error('--packaged-tools needs a path')
+    const toolsDirectory = join(buildDirectory, 'resources', 'tools')
+    await mkdir(toolsDirectory, { recursive: true })
+    await symlink(resolve(toolsPath), join(toolsDirectory, 'darwin-arm64'), 'dir')
+  } else {
+    // Electron treats the entry directory as app.getAppPath(); reuse actual bundled tools.
+    await symlink(resolve('resources'), resolve(buildDirectory, 'resources'), 'dir')
+  }
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   await new Promise((resolveCheck, reject) => {

@@ -1,12 +1,14 @@
 import { link, lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { searchWithAbAv1 } from '../../../execution/ab-av1'
 import { spawnFfmpeg } from '../../../execution/ffmpeg'
 import { runBundledTool } from '../../../execution/process'
 import type {
   VideoCompressionRequest,
   VideoCompressionResult,
   VideoCompressionProgress,
+  VideoQualityAnalysis,
   VideoInspection
 } from '../../../shared/contracts/video'
 import { createProgressReader } from './progress'
@@ -28,8 +30,8 @@ interface VideoInfo extends VideoInspection {
   color: { option: string; value: string }[]
 }
 
-// HEVC VideoToolbox 起始值，尚未完成真实素材的画质标定；不是 CRF 或保真百分比。
-const hevcQuality = { quality: 80, balanced: 65, size: 50 } as const
+// 抽样 VMAF 试验目标，尚待更多素材标定；不是整片画质保证或画质保留百分比。
+const targetVmaf = { quality: 98, balanced: 95, size: 90 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -209,7 +211,7 @@ export async function compressVideo(
   if (compatibility) {
     throw new Error('H.264 兼容优先模式的三档参数尚待单独验证，当前不套用 HEVC 参数。')
   }
-  if (!Object.hasOwn(hevcQuality, preset)) throw new Error('未知的视频压缩档位。')
+  if (!Object.hasOwn(targetVmaf, preset)) throw new Error('未知的视频压缩档位。')
   if (
     !isAbsolute(inputPath) ||
     !isAbsolute(outputPath) ||
@@ -232,6 +234,98 @@ export async function compressVideo(
   const temporaryDirectory = await mkdtemp(join(dirname(outputPath), '.arkive-video-'))
   const temporaryOutput = join(temporaryDirectory, 'compressed.mp4')
   try {
+    const analysisStarted = performance.now()
+    const reportAnalysis = (): void =>
+      onUpdate?.({
+        stage: 'analyzing',
+        percent: null,
+        elapsedSeconds: (performance.now() - analysisStarted) / 1000,
+        remainingSeconds: null
+      })
+    reportAnalysis()
+    const analysisTimer = setInterval(reportAnalysis, 500)
+    let qualityAnalysis: VideoQualityAnalysis
+    try {
+      // A video-only, lossless remux prevents covers/DJI data from affecting ab-av1's
+      // stream selection. Analysis and final encoding both use the original image data.
+      const analysisInput = join(temporaryDirectory, 'analysis-input.mkv')
+      await runFfmpeg(
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-xerror',
+          '-n',
+          '-i',
+          input,
+          '-map',
+          `0:${String(before.videoIndex)}`,
+          '-c:v',
+          'copy',
+          '-map_metadata',
+          '-1',
+          '-map_chapters',
+          '-1',
+          analysisInput
+        ],
+        signal
+      )
+      const search = await searchWithAbAv1(
+        [
+          'crf-search',
+          '--input',
+          analysisInput,
+          '--encoder',
+          'hevc_videotoolbox',
+          '--min-vmaf',
+          String(targetVmaf[preset]),
+          // Savings are determined from the actual final file, including retained audio.
+          '--max-encoded-percent',
+          'inf',
+          '--min-crf',
+          '20',
+          '--max-crf',
+          '100',
+          '--crf-increment',
+          '5',
+          '--samples',
+          '2',
+          '--sample-duration',
+          '1s',
+          '--cache',
+          'false',
+          '--temp-dir',
+          temporaryDirectory,
+          '--stdout-format',
+          'json',
+          '--vmaf-fps',
+          '0',
+          '--vmaf',
+          'n_subsample=12',
+          '--vmaf',
+          'n_threads=8',
+          '--enc',
+          'allow_sw=0',
+          '--enc',
+          'enc_time_base:v=demux',
+          '--enc',
+          'g=250',
+          '--enc',
+          `pix_fmt:v:0=${before.bitDepth === 10 ? 'p010le' : 'nv12'}`,
+          '--enc',
+          `profile:v=${before.bitDepth === 10 ? 'main10' : 'main'}`,
+          ...before.color.flatMap(({ option, value }) => ['--enc', `${option.slice(1)}=${value}`])
+        ],
+        { signal, cwd: temporaryDirectory }
+      )
+      if (search.sampleVmaf < targetVmaf[preset]) {
+        throw new Error('自动选参结果未达到所选档位的抽样画质目标。')
+      }
+      qualityAnalysis = { ...search, targetVmaf: targetVmaf[preset] }
+    } finally {
+      clearInterval(analysisTimer)
+    }
+    signal?.throwIfAborted()
     // 所有业务参数集中在此；不接受调用方传入任意 FFmpeg 参数。
     await runFfmpeg(
       [
@@ -264,13 +358,15 @@ export async function compressVideo(
         'hevc_videotoolbox',
         '-allow_sw',
         '0',
+        '-g',
+        '250',
         '-pix_fmt',
         before.bitDepth === 10 ? 'p010le' : 'nv12',
         '-profile:v',
         before.bitDepth === 10 ? 'main10' : 'main',
         ...before.color.flatMap(({ option, value }) => [option, value]),
         '-q:v',
-        String(hevcQuality[preset]),
+        String(qualityAnalysis.quality),
         '-tag:v',
         'hvc1',
         '-fps_mode:v',
@@ -348,7 +444,8 @@ export async function compressVideo(
       outputPath,
       inputBytes: inputStat.size,
       outputBytes: outputStat.size,
-      savedBytes: Math.max(0, inputStat.size - outputStat.size)
+      savedBytes: Math.max(0, inputStat.size - outputStat.size),
+      qualityAnalysis
     }
   } finally {
     // 仅清理本次创建的私有临时目录，绝不处理原件或已有目标文件。

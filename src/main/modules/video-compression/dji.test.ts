@@ -79,6 +79,10 @@ async function check(): Promise<void> {
       undefined,
       (update) => updates.push(update)
     )
+    const analysis = updates.filter((update) => update.stage === 'analyzing')
+    assert.ok(analysis.length > 1)
+    assert.ok(result.qualityAnalysis.sampleVmaf >= result.qualityAnalysis.targetVmaf)
+    console.log(`PASS: DJI automatic quality analysis received ${String(analysis.length)} updates`)
     for (const stage of ['encoding', 'validating'] as const) {
       const reports = updates.filter((update) => update.stage === stage)
       assert.ok(
@@ -127,7 +131,21 @@ async function check(): Promise<void> {
     console.log(
       'PASS: actual DJI Pocket 3; 4K/59.94fps/10bit/color preserved, AAC packets unchanged, extra streams removed, full decode passed, original unchanged'
     )
-    console.log(JSON.stringify({ ...result, elapsedSeconds }, null, 2))
+    console.log(
+      JSON.stringify(
+        {
+          ...result,
+          elapsedSeconds,
+          analysisSeconds: analysis.at(-1)?.elapsedSeconds,
+          encodingSeconds: updates.filter((update) => update.stage === 'encoding').at(-1)
+            ?.elapsedSeconds,
+          validationSeconds: updates.filter((update) => update.stage === 'validating').at(-1)
+            ?.elapsedSeconds
+        },
+        null,
+        2
+      )
+    )
   } catch (error) {
     await rm(directory, { recursive: true, force: true })
     throw error

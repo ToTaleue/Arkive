@@ -15,6 +15,7 @@ const presets: { value: VideoCompressionPreset; title: string; description: stri
 ]
 const stageLabels: Record<VideoCompressionStage, string> = {
   probing: '正在读取视频信息…',
+  analyzing: '正在分析画质并自动选择压缩参数…',
   encoding: '正在压缩视频…',
   validating: '正在检查并解码压缩结果…'
 }
@@ -193,7 +194,9 @@ export function VideoCompressionPage(): React.JSX.Element {
             </button>
           </div>
         )}
-        <p className="video-hint">文件仅在本机处理，始终保留原视频。</p>
+        <p className="video-hint">
+          文件仅在本机处理，自动分析画质后使用 Apple 硬件压缩，始终保留原视频。
+        </p>
         {selected && (
           <p className="video-hint" role="note">
             仅保留主视频和音频。
@@ -268,6 +271,12 @@ export function VideoCompressionPage(): React.JSX.Element {
                 }
               />
             )}
+            {phase === 'analyzing' && progress && (
+              <div className="video-progress-details">
+                <span>本阶段已用 {formatDuration(progress.elapsedSeconds)}</span>
+                <p>正在抽样试压和比较画质，可能需要几分钟；分析完成后开始压缩和校验。</p>
+              </div>
+            )}
             {(phase === 'encoding' || phase === 'validating') && progress && (
               <div className="video-progress-details">
                 <span>
@@ -332,6 +341,10 @@ export function VideoCompressionPage(): React.JSX.Element {
             {result.status === 'compressed'
               ? '已检查文件并完成解码验证，原视频已保留。'
               : '本次没有体积收益；输出文件和原视频均已保留。'}
+          </p>
+          <p>
+            抽样画质评分 {result.qualityAnalysis.sampleVmaf.toFixed(1)} / 100 （目标{' '}
+            {result.qualityAnalysis.targetVmaf}）。评分来自抽样分析，不代表整片画质保证。
           </p>
           <p className="video-output-path">{result.outputPath}</p>
           <button className="video-text-button" onClick={() => void reveal()}>
