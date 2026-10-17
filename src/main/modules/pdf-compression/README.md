@@ -1,6 +1,6 @@
 # PDF 压缩 Service
 
-主进程调用 `service.ts` 中的 `inspectPdf` 和 `compressPdf`。Agent 通过 `catalog/compression.ts` 调用同一个 Service，保留归档索引和备份生命周期。
+主进程调用 `service.ts` 中的 `inspectPdf` 和 `compressPdf`。文档压缩页面通过 `processing` IPC、Agent 通过业务工具调用 `catalog/compression.ts`，共用同一个 Service、归档索引和备份生命周期。页面支持原生文件选择、Finder 拖入、检查、三档压缩、输出选择、取消和后续归档；Agent 的 `inspect_pdf` 只读探测。
 
 ```ts
 const result = await compressPdf({
@@ -22,6 +22,7 @@ const result = await compressPdf({
 
 ```sh
 rtk proxy node scripts/check-pdf-compression.mjs
+rtk proxy node scripts/check-processing-ui.mjs
 ```
 
 Ghostscript 当前随包工具是预发布 AGPL 构建，正式分发前仍需完成版本、来源和授权审核；qpdf 的版本和校验信息见 `resources/tools/darwin-arm64/manifest.json`。

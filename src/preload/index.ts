@@ -1,5 +1,12 @@
 import { catalogChannels, type ArchiveItem, type CatalogPage } from '../shared/contracts/catalog'
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import {
+  processingChannels,
+  type SelectedDocument,
+  type ProcessingOutcome,
+  type DocumentResult
+} from '../shared/contracts/processing'
+import type { DuplicateScanResult } from '../shared/contracts/duplicates'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {} from './index.d'
 import {
@@ -28,6 +35,25 @@ import {
 
 // Custom APIs for renderer
 const api: ArkiveApi = {
+  processing: {
+    select: (kind) =>
+      ipcRenderer.invoke(processingChannels.select, kind) as Promise<SelectedDocument | null>,
+    selectPath: (kind, path) =>
+      ipcRenderer.invoke(processingChannels.selectPath, kind, path) as Promise<SelectedDocument>,
+    compress: (request) =>
+      ipcRenderer.invoke(processingChannels.compress, request) as Promise<
+        ProcessingOutcome<DocumentResult>
+      >,
+    selectFolder: () =>
+      ipcRenderer.invoke(processingChannels.selectFolder) as Promise<string | null>,
+    duplicates: (id, path) =>
+      ipcRenderer.invoke(processingChannels.duplicates, id, path) as Promise<
+        ProcessingOutcome<DuplicateScanResult>
+      >,
+    cancel: (id) => ipcRenderer.invoke(processingChannels.cancel, id) as Promise<void>,
+    reveal: () => ipcRenderer.invoke(processingChannels.reveal) as Promise<void>,
+    localFilePath: (file) => webUtils.getPathForFile(file)
+  },
   catalog: {
     archive: (id, tags) =>
       ipcRenderer.invoke(catalogChannels.archive, id, tags) as Promise<ArchiveItem>,

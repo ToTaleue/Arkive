@@ -63,14 +63,15 @@ export function ImageCompressionPage(): React.JSX.Element {
     event.preventDefault()
     setDragging(false)
     if (busy || !api) return
-    const file = event.dataTransfer.files[0] as (File & { path?: string }) | undefined
-    if (!file?.path) {
+    const file = event.dataTransfer.files.item(0)
+    const path = file ? (window.api?.processing.localFilePath(file) ?? '') : ''
+    if (!path) {
       setError('请从本机文件管理器拖入图片。')
       return
     }
     setError(null)
     try {
-      const selectedFile = await api.selectPath(file.path)
+      const selectedFile = await api.selectPath(path)
       setSelected(selectedFile)
       setResult(null)
       setNotice(null)
@@ -185,7 +186,9 @@ export function ImageCompressionPage(): React.JSX.Element {
             </button>
           </div>
         )}
-        <p className="image-hint">文件仅在本机处理。压缩会写入新文件，原图片始终保留。</p>
+        <p className="image-hint">
+          文件仅在本机处理。压缩写入新文件；有体积收益后，完整原件移入备份目录。
+        </p>
         {!api && (
           <p className="image-error" role="alert">
             请在 Electron 桌面应用中打开；开发中更新后请重启应用。

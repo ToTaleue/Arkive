@@ -9,6 +9,7 @@ import { registerAgentIpc } from './modules/agent/ipc'
 import { registerMoleIpc } from './modules/mole/ipc'
 import { registerVideoCompressionIpc } from './modules/video-compression/ipc'
 import { registerImageCompressionIpc } from './modules/image-compression/ipc'
+import { registerProcessingIpc } from './modules/processing/ipc'
 
 function createWindow(attachWindow: (contents: Electron.WebContents) => void): void {
   // Create the browser window.
@@ -82,11 +83,13 @@ app
     registerMoleIpc()
     const attachVideo = registerVideoCompressionIpc()
     const attachImage = registerImageCompressionIpc()
+    const attachProcessing = registerProcessingIpc()
     const attachWindow = (contents: Electron.WebContents): void => {
       attachCatalog(contents)
       attachAgent(contents)
       attachVideo(contents)
       attachImage(contents)
+      attachProcessing(contents)
     }
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.electron')

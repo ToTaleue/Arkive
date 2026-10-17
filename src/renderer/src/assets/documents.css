@@ -1,0 +1,106 @@
+.documents-main[hidden] {
+  display: none;
+}
+.documents-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: #191c1a;
+  color: #d7dfd9;
+}
+.documents-page {
+  max-width: 960px;
+  margin: auto;
+  padding: 40px;
+}
+.documents-page h1 {
+  font-size: 26px;
+  margin-bottom: 12px;
+}
+.documents-page h2 {
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+.documents-page p {
+  line-height: 1.6;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.document-tabs {
+  display: flex;
+  gap: 10px;
+  margin: 28px 0 16px;
+}
+.documents-page button,
+.documents-page select {
+  border: 1px solid #435347;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #29382d;
+  color: inherit;
+  cursor: pointer;
+}
+.documents-page button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.document-tabs button[aria-pressed='true'] {
+  background: #435d49;
+}
+.documents-page button:focus-visible,
+.documents-page select:focus-visible {
+  outline: 2px solid #adceab;
+  outline-offset: 3px;
+}
+.document-card {
+  border-top: 1px solid #37443b;
+  padding: 24px 0;
+}
+.document-select {
+  width: 100%;
+  min-height: 80px;
+  border-style: dashed !important;
+  margin-bottom: 16px;
+}
+.document-selected {
+  padding: 14px;
+  background: #232b25;
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
+.document-preset {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 16px;
+}
+.document-confirm {
+  display: flex;
+  gap: 10px;
+  line-height: 1.6;
+  margin: 20px 0;
+}
+.documents-page li {
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  margin: 5px 0;
+}
+.document-card > button + button {
+  margin-left: 12px;
+}
+.document-error {
+  color: #ffa7a1;
+}
+.document-running {
+  position: sticky;
+  bottom: 0;
+  background: #29382d;
+  padding: 12px 18px;
+  border: 1px solid #667d6a;
+  border-radius: 8px;
+}
+@media (max-width: 800px) {
+  .documents-page {
+    padding: 24px 18px;
+  }
+}

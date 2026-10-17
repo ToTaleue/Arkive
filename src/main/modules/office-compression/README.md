@@ -40,7 +40,7 @@ const result = await compressOfficeInPlace(
 
 只支持普通 DOCX／PPTX；旧版 DOC／PPT、宏文档、签名文档、加密包拒绝处理。包处理上限为 20,000 个条目、展开 4 GiB、单份 XML 16 MiB。XML 当前按 UTF-8 读取，未做完整 OOXML Schema 校验。
 
-Agent 工具入口已接入，独立 Office IPC／压缩界面仍待接入。图片沿用现有 Service 的方向固化、sRGB 转换和元数据移除策略；复杂素材、Office 版本及跨平台显示效果还需样本标定。包校验不能替代 Word／PowerPoint 的打开、编辑与播放验收。
+Agent 工具入口及文档压缩页面已接入；页面通过 `processing` IPC 共用本模块的探测和原路径替换，勾选替换及完整备份确认后才能执行，主进程同时校验确认。结果显示替换状态、媒体跳过原因和可选归档入口。图片沿用现有 Service 的方向固化、sRGB 转换和元数据移除策略；复杂素材、Office 版本及跨平台显示效果还需样本标定。包校验不能替代 Word／PowerPoint 的打开、编辑与播放验收。
 
 ## 已执行验证（2026-10-17）
 
