@@ -107,6 +107,8 @@ const api: ArkiveApi = {
   agent: {
     status: () => ipcRenderer.invoke(agentChannels.status) as Promise<AgentStatus>,
     send: (request) => ipcRenderer.invoke(agentChannels.send, request) as Promise<AgentResult>,
+    retrySummary: (request) =>
+      ipcRenderer.invoke(agentChannels.retrySummary, request) as Promise<AgentResult>,
     stop: (request) => ipcRenderer.invoke(agentChannels.stop, request) as Promise<void>,
     onUpdate: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, update: AgentUpdate): void => {

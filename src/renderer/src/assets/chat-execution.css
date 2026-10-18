@@ -1,0 +1,125 @@
+.chat-execution {
+  margin-bottom: 14px;
+  white-space: normal;
+}
+.assistant-message .chat-tool-activity {
+  max-height: none;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+.chat-tool-activity > summary {
+  line-height: 1.8;
+}
+.chat-tool-activity > summary > .chat-execution-phase {
+  display: inline;
+  margin-left: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.chat-tool-activity ol {
+  padding-left: 20px;
+  margin: 12px 0 0;
+}
+.chat-tool-activity li + li {
+  margin-top: 12px;
+}
+.chat-tool-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.chat-tool-heading code {
+  font-size: 11px;
+}
+.chat-tool-stage {
+  margin: 3px 0 0;
+}
+.chat-execution-phase {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-tool-log,
+.chat-tool-result-details pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 8px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-tool-results {
+  display: grid;
+  gap: 10px;
+}
+.chat-tool-result {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.chat-tool-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+.chat-tool-result[data-status='error'] .chat-tool-result-title {
+  color: var(--danger);
+}
+.chat-tool-result p {
+  margin-top: 5px;
+  white-space: pre-wrap;
+}
+.chat-tool-result-details {
+  margin-top: 8px;
+  color: var(--muted);
+}
+.chat-tool-result-details summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.chat-summary-error {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  white-space: normal;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.chat-summary-retry {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 9px;
+}
+.chat-summary-retry button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--control-line);
+  border-radius: 6px;
+  background: var(--control);
+  color: var(--accent);
+}
+.chat-summary-retry button:disabled {
+  opacity: 0.5;
+}
+.chat-summary-retry span {
+  font-size: 11px;
+}

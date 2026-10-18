@@ -265,7 +265,7 @@ async function check(): Promise<void> {
     const injectionRun = transcript.at(-1) as { tools: { name: string }[] }
     assert.ok(injectionRun.tools.every((t) => ['read', 'ls', 'grep', 'find'].includes(t.name)))
     // Native UI stop must settle, leave controls usable, and permit the next turn.
-    await evaluate('document.querySelector(\'[aria-label="新对话"]\').click()')
+    await evaluate("document.querySelector('.new-conversation').click()")
     await evaluate(
       "(()=>{const e=document.querySelector('.conversation-view:not([hidden]) [aria-label=\"输入消息\"]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'请详细解释图像压缩原理，写一篇长文。不访问文件。');e.dispatchEvent(new Event('input',{bubbles:true}));})()"
     )

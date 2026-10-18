@@ -2,6 +2,7 @@ import { ipcMain, type WebContents } from 'electron'
 import {
   agentChannels,
   isAgentRequest,
+  isAgentSummaryRequest,
   isAgentRunId,
   type AgentResult
 } from '../../../shared/contracts/agent'
@@ -31,6 +32,14 @@ export function registerAgentIpc(cwd: string): (contents: WebContents) => void {
   ipcMain.handle(agentChannels.stop, async (event, request: unknown) => {
     if (event.senderFrame !== event.sender.mainFrame || !isAgentRunId(request)) return
     await services.get(event.sender.id)?.stop(request)
+  })
+  ipcMain.handle(agentChannels.retrySummary, (event, request: unknown): Promise<AgentResult> => {
+    const service = services.get(event.sender.id)
+    if (!service || event.senderFrame !== event.sender.mainFrame || !isAgentSummaryRequest(request))
+      return Promise.resolve({ status: 'error', text: '', error: '总结重试请求无效。' })
+    return service.retrySummary(request, (update) => {
+      if (!event.sender.isDestroyed()) event.sender.send(agentChannels.update, update)
+    })
   })
   return (contents) => {
     const reset = (): void => {

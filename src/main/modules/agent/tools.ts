@@ -219,8 +219,10 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       description:
         '预览当前 Mac 中 Mole 建议清理的缓存、日志和临时文件。固定运行 clean --dry-run，不删除清理目标，不接受命令参数。仅在用户要求检查清理机会或预览清理时使用；结果只代表预览，不代表已经释放空间。',
       parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal) => {
-        const result = await runMoleDryRun(() => undefined, signal)
+      execute: async (_toolCallId, _params, signal, onUpdate) => {
+        const result = await runMoleDryRun((progress) => {
+          onUpdate?.({ content: [], details: { progress } })
+        }, signal)
         const maxChars = 16_384
         const details = {
           dryRun: true,
@@ -230,7 +232,8 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
           stdout: result.stdout.slice(0, maxChars),
           stderr: result.stderr.slice(0, maxChars),
           stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
-          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars
+          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars,
+          incomplete: result.blocks.some((block) => block.partial)
         }
         if (result.exitCode !== 0) {
           throw new Error(`Mole 清理预览失败：${JSON.stringify(details)}`)
@@ -242,7 +245,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'mole_authorize_system',
       label: 'Mole 系统权限授权',
       description:
-        '仅在用户明确要求检查或清理系统级 Mole 项目后调用。弹出 macOS 原生隐藏密码对话框，用 sudo -S -v 建立当前用户的短期授权；密码不会返回给 Agent，也不会执行删除。授权成功后重新调用 mole_clean_preview 获取系统级候选。用户取消或失败时继续使用用户级结果。',
+        '用户明确要求给 Mole 授权、检查或清理系统级 Mole 项目时调用。复用有效缓存凭据，或弹出 macOS 原生隐藏密码对话框建立当前用户的短期 sudo 授权；密码不会返回给 Agent，也不会执行删除。仅要求授权时报告结果即可，不自动扫描或预览；用户同时要求预览系统级候选时，授权成功后才调用 mole_clean_preview。',
       parameters: Type.Object({}, { additionalProperties: false }),
       execute: async (_toolCallId, _params, signal) => {
         signal?.throwIfAborted()
@@ -257,8 +260,10 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       description:
         '只读预览 Mole 发现的安装包。返回完整路径、文件名和来源，固定运行 installer --dry-run，不删除文件。Agent 可以根据用户目标从 candidates 选择路径，再在用户明确授权后调用 trash；不要把普通下载文件当作安装包。',
       parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal) => {
-        const result = await runMoleInstallerPreview(() => undefined, signal)
+      execute: async (_toolCallId, _params, signal, onUpdate) => {
+        const result = await runMoleInstallerPreview((progress) => {
+          onUpdate?.({ content: [], details: { progress } })
+        }, signal)
         const maxChars = 16_384
         const details = {
           dryRun: true,
@@ -268,7 +273,8 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
           stdout: result.stdout.slice(0, maxChars),
           stderr: result.stderr.slice(0, maxChars),
           stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
-          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars
+          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars,
+          incomplete: result.blocks.some((block) => block.partial)
         }
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
@@ -279,8 +285,10 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       description:
         '只读预览 Mole 在已配置项目目录中发现的可重建开发产物，例如 node_modules、target、dist、.venv 和构建缓存。固定运行 purge --dry-run，不删除文件。归档开发项目或用户明确询问开发目录空间时使用；先展示项目、路径、大小和“可重建但可能需要联网恢复”的影响，再由用户决定是否调用 trash。不要把 Purge 候选自动当作归档内容，也不要调用 --yes 或永久删除。',
       parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal) => {
-        const result = await runMolePurgePreview(() => undefined, signal)
+      execute: async (_toolCallId, _params, signal, onUpdate) => {
+        const result = await runMolePurgePreview((progress) => {
+          onUpdate?.({ content: [], details: { progress } })
+        }, signal)
         const maxChars = 16_384
         const details = {
           dryRun: true,
@@ -290,7 +298,8 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
           stdout: result.stdout.slice(0, maxChars),
           stderr: result.stderr.slice(0, maxChars),
           stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
-          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars
+          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars,
+          incomplete: result.blocks.some((block) => block.partial)
         }
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }

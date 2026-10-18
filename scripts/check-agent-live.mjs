@@ -14,10 +14,32 @@ try {
     osFixture,
     `export * from 'os'; export const homedir = () => ${JSON.stringify(state)}`
   )
+  const aliases = { 'node:os': osFixture }
+  if (process.argv.includes('--authorization-fixture')) {
+    const childProcessFixture = resolve(directory, 'child-process-fixture.mjs')
+    await writeFile(
+      childProcessFixture,
+      `export * from 'child_process'
+import { spawn as realSpawn } from 'child_process'
+export function spawn(file, args, options) {
+  if (file === '/usr/bin/sudo') {
+    if (!args.includes('-n')) throw new Error('Password authorization must not run in this fixture')
+    return realSpawn(process.execPath, ['-e', 'process.exit(0)'], {
+      ...options,
+      env: { ...process.env, ...options.env, ELECTRON_RUN_AS_NODE: '1' }
+    })
+  }
+  if (file.endsWith('/mole/mo')) throw new Error('Authorization-only fixture must not start a Mole scan')
+  if (file === '/usr/bin/osascript' || file === 'osascript') throw new Error('Native dialogs must not run in this fixture')
+  return realSpawn(file, args, options)
+}`
+    )
+    aliases['node:child_process'] = childProcessFixture
+  }
   await build({
     configFile: false,
     logLevel: 'warn',
-    resolve: { alias: { 'node:os': osFixture } },
+    resolve: { alias: aliases },
     build: {
       ssr: true,
       target: 'node22',
@@ -35,6 +57,7 @@ try {
   })
   await symlink(resolve('resources'), resolve(directory, 'resources'), 'dir')
   const env = { ...process.env }
+  if (process.argv.includes('--authorization-fixture')) env.ARKIVE_AGENT_AUTHORIZATION_FIXTURE = '1'
   delete env.ELECTRON_RUN_AS_NODE
   await new Promise((done, reject) => {
     const child = spawn(electron, [resolve(directory, 'check.cjs'), `--user-data-dir=${state}`], {

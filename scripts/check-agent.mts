@@ -468,13 +468,19 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
     status: 'completed',
     text: '用户轮次=1；首条=独立会话'
   })
-  assert.equal(updates.filter((update) => update.requestId === 'a1').length, 2)
+  assert.ok(
+    updates.some((update) => update.requestId === 'a1' && update.execution?.phase === 'completed')
+  )
 
   await writeFile(resolve(workspaceDir, toolFile), 'first-line\nafter-tool-edit\nlast-line\n')
-  assert.deepEqual(await send('tools', 'tools1', 'TOOLS'), {
-    status: 'completed',
-    text: '工具验证完成'
-  })
+  const toolsReply = await send('tools', 'tools1', 'TOOLS')
+  assert.deepEqual(
+    { status: toolsReply.status, text: toolsReply.text },
+    {
+      status: 'completed',
+      text: '工具验证完成'
+    }
+  )
   assert.equal(
     await readFile(resolve(workspaceDir, toolFile), 'utf8'),
     'first-line\nafter-tool-edit\nlast-line\n'
@@ -1099,16 +1105,24 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   assert.equal((await analysisPending).status, 'cancelled')
 
   await writeFile(moleModeFile, 'success')
-  assert.deepEqual(await send('mole', 'mole1', 'MOLE'), {
-    status: 'completed',
-    text: '清理预览完成，尚未释放空间'
-  })
+  const moleReply = await send('mole', 'mole1', 'MOLE')
+  assert.deepEqual(
+    { status: moleReply.status, text: moleReply.text },
+    {
+      status: 'completed',
+      text: '清理预览完成，尚未释放空间'
+    }
+  )
   assert.equal(await readFile(moleArgumentsFile, 'utf8'), '["clean","--dry-run"]')
   await writeFile(moleModeFile, 'fail')
-  assert.deepEqual(await send('mole-failure', 'mole2', 'MOLE_FAIL'), {
-    status: 'completed',
-    text: '预览失败，不能声称已清理'
-  })
+  const moleFailureReply = await send('mole-failure', 'mole2', 'MOLE_FAIL')
+  assert.deepEqual(
+    { status: moleFailureReply.status, text: moleFailureReply.text },
+    {
+      status: 'completed',
+      text: '预览失败，不能声称已清理'
+    }
+  )
   await rm(moleStartedFile)
   await writeFile(moleModeFile, 'slow')
   const molePending = send('mole-cancel', 'mole3', 'MOLE_CANCEL')

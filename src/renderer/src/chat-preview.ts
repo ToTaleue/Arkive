@@ -1,5 +1,13 @@
 // In-memory UI data; seeded examples are read-only and never sent to Pi.
-export type PreviewMessage = { id: string; role: 'user' | 'assistant'; content: string }
+import type { AgentExecution } from '../../shared/contracts/agent'
+
+export type PreviewMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  execution?: AgentExecution
+  sourceRequestId?: string
+}
 export type Conversation = {
   id: string
   title: string

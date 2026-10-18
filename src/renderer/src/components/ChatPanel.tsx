@@ -22,6 +22,7 @@ import { type Conversation, type PreviewMessage } from '../chat-preview'
 import { useRef } from 'react'
 import { useAgentChat } from './useAgentChat'
 import { MessageMarkdown } from './MessageMarkdown'
+import { AgentExecutionDetails, AgentExecutionError } from './AgentExecutionDetails'
 import type { AgentStatus } from '../../../shared/contracts/agent'
 
 const suggestions = [
@@ -65,16 +66,32 @@ function UserMessage(): React.JSX.Element {
   )
 }
 
-function AssistantMessage(): React.JSX.Element {
+function AssistantMessage({
+  message,
+  retryDisabled,
+  onRetry
+}: {
+  message?: PreviewMessage
+  retryDisabled: boolean
+  onRetry: () => void
+}): React.JSX.Element {
   return (
     <MessagePrimitive.Root className="message assistant-message">
       <div className="assistant-identity">
         <Archive size={16} />
         <span>Arkive</span>
       </div>
+      {message?.execution && <AgentExecutionDetails execution={message.execution} />}
       <div className="assistant-message-content">
         <MessagePrimitive.Parts components={{ Text: MessageMarkdown }} />
       </div>
+      {message?.execution && (
+        <AgentExecutionError
+          execution={message.execution}
+          retryDisabled={retryDisabled}
+          onRetry={onRetry}
+        />
+      )}
     </MessagePrimitive.Root>
   )
 }
@@ -93,7 +110,7 @@ export function ChatPanel({
   onUpdate
 }: ChatPanelProps): React.JSX.Element {
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const { isRunning, error, notice, activities, send, stop } = useAgentChat({
+  const { isRunning, error, notice, send, retrySummary, stop } = useAgentChat({
     conversation,
     status,
     onAppend,
@@ -145,38 +162,20 @@ export function ChatPanel({
             <ThreadPrimitive.Messages>
               {({ message }) => {
                 if (message.role === 'user') return <UserMessage />
-                if (message.role === 'assistant') return <AssistantMessage />
+                if (message.role === 'assistant')
+                  return (
+                    <AssistantMessage
+                      message={conversation.messages.find((item) => item.id === message.id)}
+                      retryDisabled={isRunning || !status?.configured}
+                      onRetry={() => void retrySummary(message.id)}
+                    />
+                  )
                 return null
               }}
             </ThreadPrimitive.Messages>
           </div>
         </ThreadPrimitive.Viewport>
         <div className="composer-area">
-          {activities.length > 0 && (
-            <details className="chat-tool-activity" open={isRunning}>
-              <summary>本轮工具操作（{activities.length}）</summary>
-              <ul aria-label="工具执行状态" aria-live="polite">
-                {activities.map((item) => (
-                  <li key={item.id} data-status={item.status}>
-                    <code>{item.name}</code> ·{' '}
-                    {
-                      {
-                        running: '执行中',
-                        completed: '已返回，请核对结果',
-                        error: '执行失败',
-                        stopped: '已停止，请核对实际结果'
-                      }[item.status]
-                    }
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-          {isRunning && (
-            <p className="chat-notice" role="status">
-              Arkive 正在回复…
-            </p>
-          )}
           {!isRunning && notice && (
             <p className="chat-notice" role="status">
               {notice}

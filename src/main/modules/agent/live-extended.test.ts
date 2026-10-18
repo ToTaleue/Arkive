@@ -117,6 +117,27 @@ async function check(): Promise<void> {
     0
   )
   try {
+    if (process.env.ARKIVE_AGENT_AUTHORIZATION_FIXTURE === '1') {
+      await scenario('authorization-only', async () => {
+        await call('authorization', '我现在需要给我的 Mole 授权。')
+        const entry = transcript.at(-1) as {
+          events: { type: string; toolName?: string; isError?: boolean }[]
+        }
+        const starts = entry.events.filter((event) => event.type === 'tool_execution_start')
+        assert.deepEqual(
+          starts.map((event) => event.toolName),
+          ['mole_authorize_system']
+        )
+        assert.ok(
+          entry.events.some(
+            (event) =>
+              event.type === 'tool_execution_end' &&
+              event.toolName === 'mole_authorize_system' &&
+              event.isError === false
+          )
+        )
+      })
+    }
     await scenario('read-only-proposal', async () => {
       await call('proposal', `看看这张图 ${image}，告诉我压缩方案，先别执行。`)
       assert.equal(await hashFile(image), imageHash)
