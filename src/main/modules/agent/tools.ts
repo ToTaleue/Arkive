@@ -342,7 +342,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'compress_office',
       label: 'Office 原路径压缩',
       description:
-        '用户明确授权后，压缩普通 DOCX／PPTX 内嵌媒体并替换原路径上的整份文档，保持文件名及文档格式。调用前说明有损压缩、原路径替换和完整原件移动到 Arkive Backup。JPEG／PNG 保持格式，MP4 输出 H.264 8bit 并复制 AAC；外链不访问，不支持或质量未达标的媒体保留原样。默认质量优先，只有媒体和完整文档变小且校验通过才替换；无收益返回 unchanged。必须检查 replacementStatus、replacementError、media 和 catalog.backupStatus，不能只根据 status 宣称替换成功。选参和编码可取消；进入备份发布提交阶段后完成提交。归档须在 replaced 后用返回的 catalog.id 调用 archive_file，不再压缩。',
+        '用户明确授权后，压缩普通 DOCX／PPTX 内嵌媒体并替换原路径上的整份文档，保持文件名及文档格式。调用前说明有损压缩、原路径替换和完整原件移动到 Arkive Backup。JPEG／PNG 保持格式，MP4 输出 H.264 8bit 并复制 AAC；外链不访问；图片评分仅供参考，图片只要变小且校验通过就回填，不因评分低而跳过。不支持或视频质量未达标的媒体保留原样。默认质量优先，只有媒体和完整文档变小且校验通过才替换；无收益返回 unchanged。必须检查 replacementStatus、replacementError、media 和 catalog.backupStatus，不能只根据 status 宣称替换成功。选参和编码可取消；进入备份发布提交阶段后完成提交。归档须在 replaced 后用返回的 catalog.id 调用 archive_file，不再压缩。',
       parameters: Type.Object(
         {
           inputPath: Type.String({ description: '已授权原路径替换的 DOCX／PPTX 文档绝对路径。' }),
@@ -364,16 +364,20 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'compress_video',
       label: '视频压缩',
       description:
-        '复用 Arkive 视频压缩业务。仅在用户已授权输入、输出位置和压缩操作后调用；生成新 MP4，不覆盖已有文件；成功且有体积收益后会将原件移动到 Arkive Backup，调用前明确告知用户。默认使用硬件 HEVC；compatibility=true 输出硬件 H.264 8bit，调用前须明确说明 10bit 原片将转为 8bit、体积可能更大；两种模式均保留原分辨率、帧时间关系与 AAC 音轨，HDR 等未支持特性仍拒绝。会移除字幕、章节、封面及其他辅助流，调用前向用户说明。结构和解码检查不代表感知画质验收。',
-      parameters: Type.Object({
-        inputPath: Type.String({ description: '源视频绝对路径。' }),
-        outputPath: Type.String({ description: '用户授权的新 MP4 输出绝对路径，父目录须已存在。' }),
-        preset: Type.Optional(
-          Type.Union([Type.Literal('quality'), Type.Literal('balanced'), Type.Literal('size')])
-        ),
-        compatibility: Type.Optional(Type.Boolean()),
-        ...archiveOptions
-      }),
+        '复用 Arkive 视频压缩业务。仅在用户已授权输入、输出位置和压缩操作后调用；生成新 MP4，不覆盖已有文件；成功且有体积收益后会将原件移动到 Arkive Backup，调用前明确告知用户。仅支持硬件 HEVC 输出，暂不支持 H.264 转换；保留原分辨率、帧时间关系、支持的原片位深与 AAC 音轨，HDR 等未支持特性仍拒绝。会移除字幕、章节、封面及其他辅助流，调用前向用户说明。结构和解码检查不代表感知画质验收。',
+      parameters: Type.Object(
+        {
+          inputPath: Type.String({ description: '源视频绝对路径。' }),
+          outputPath: Type.String({
+            description: '用户授权的新 MP4 输出绝对路径，父目录须已存在。'
+          }),
+          preset: Type.Optional(
+            Type.Union([Type.Literal('quality'), Type.Literal('balanced'), Type.Literal('size')])
+          ),
+          ...archiveOptions
+        },
+        { additionalProperties: false }
+      ),
       execute: async (_toolCallId, request, signal) => {
         signal?.throwIfAborted()
         await assertSystemWriteAllowed(request.outputPath)
@@ -386,7 +390,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'compress_image',
       label: '图片压缩',
       description:
-        '复用 Arkive 图片压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。默认使用 Sharp 输出 WebP；preserveFormat 会保持 JPEG、PNG 或 WebP 原格式，其中 PNG 使用 pngquant，其余使用 Sharp。元数据会被丢弃，生成新文件、不覆盖已有文件；成功且有体积收益后会将原件移动到 Arkive Backup，调用前明确告知用户；所有输出都使用 SSIMULACRA2 评估，最多尝试两个候选质量。',
+        '复用 Arkive 图片压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。默认使用 Sharp 输出 WebP；preserveFormat 会保持 JPEG、PNG 或 WebP 原格式，其中 PNG 使用 pngquant，其余使用 Sharp。元数据会被丢弃，生成新文件、不覆盖已有文件；成功且有体积收益后会将原件移动到 Arkive Backup，调用前明确告知用户；以体积收益为首要目标，遇到无收益逐级下调编码质量；SSIMULACRA2 仅供参考，低分或评分不可用不阻止输出，更小才采用；持平或变大则保留原件，不宣称压缩成功。',
       parameters: Type.Object({
         inputPath: Type.String({ description: '源图片绝对路径。' }),
         outputPath: Type.String({ description: '用户授权的新输出绝对路径，父目录须已存在。' }),
@@ -403,7 +407,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
           Type.Integer({
             minimum: 1,
             maximum: 100,
-            description: '显式编码质量；省略时按 preset 最多尝试两个候选质量。'
+            description: '起始编码质量；省略时按 preset 起步，无收益时会逐级下调。'
           })
         ),
         jpegBackground: Type.Optional(Type.String({ description: '透明图片转 JPEG 的背景色。' })),

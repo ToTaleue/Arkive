@@ -83,6 +83,38 @@ async function check(): Promise<void> {
       'PASS: DOCX/PPTX real JPEG/PNG compression, alpha, external links untouched, XML/objects preserved, no overwrite'
     )
 
+    const noise = Buffer.alloc(128 * 128 * 3)
+    let seed = 42
+    for (let index = 0; index < noise.length; index++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+      noise[index] = seed >>> 24
+    }
+    const noisyPng = await sharp(noise, { raw: { width: 128, height: 128, channels: 3 } })
+      .png()
+      .toBuffer()
+    for (const format of ['docx', 'pptx'] as const) {
+      const input = path(`below-reference.${format}`)
+      await fixture(input, format, [noisyPng])
+      const originalHash = await hashFile(input)
+      const result = await compressOfficeInPlace({ inputPath: input, preset: 'quality' })
+      assert.equal(result.replacementStatus, 'replaced', result.replacementError)
+      assert.ok(result.outputBytes < result.originalBytes)
+      const media = result.media.find((item) => item.part.endsWith('/image0.png'))
+      assert.ok(media)
+      assert.equal(media.status, 'compressed')
+      assert.equal(media.qualityAnalysis?.meetsTarget, false)
+      assert.ok(media.outputBytes < media.originalBytes)
+      const after = await readOfficePackage(input, await mkdtemp(path('below-reference-after-')))
+      const imagePart = after.parts.find((part) => part.name === media.part)
+      assert.ok(imagePart)
+      assert.notDeepEqual(await readFile(imagePart.path), noisyPng)
+      assert.ok(result.catalog?.backupPath)
+      assert.equal(await hashFile(result.catalog.backupPath), originalHash)
+    }
+    console.log(
+      'PASS: DOCX/PPTX replace below-reference images when smaller, with whole-document backups'
+    )
+
     const empty = path('no-media.docx')
     await fixture(empty, 'docx', [])
     const emptyHash = await hashFile(empty)

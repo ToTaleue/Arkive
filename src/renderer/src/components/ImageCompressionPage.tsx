@@ -290,16 +290,22 @@ export function ImageCompressionPage(): React.JSX.Element {
           <p>
             {result.status === 'compressed'
               ? '已完成格式和解码校验。原件位置见下方备份状态。'
-              : '本次没有体积收益；输出文件和原图片均已保留。'}
+              : '本次没有体积收益，继续使用原图片。'}
           </p>
           <p>
-            {`SSIMULACRA2 ${result.qualityAnalysis.score.toFixed(1)} / 100，目标 ${String(result.qualityAnalysis.targetScore)}，尝试 ${String(result.qualityAnalysis.attempts)} 次${result.qualityAnalysis.meetsTarget ? '' : '（未达到目标，已使用最高候选质量）'}。`}
+            {result.qualityAnalysis.score === null
+              ? '画质评分暂不可用，按体积收益采用结果。'
+              : `SSIMULACRA2 ${result.qualityAnalysis.score.toFixed(1)} / 100，参考值 ${String(result.qualityAnalysis.targetScore)}，尝试 ${String(result.qualityAnalysis.attempts)} 次。评分仅供参考，按体积收益采用结果。`}
           </p>
-          <p className="image-output-path">{result.outputPath}</p>
+          <p className="image-output-path">
+            {result.status === 'compressed' ? result.outputPath : result.inputPath}
+          </p>
           <button className="image-text-button" onClick={() => void reveal()}>
             <FolderOpen size={15} />在 Finder 中显示
           </button>
-          {result.catalog && <ArchiveAction key={result.catalog.id} record={result.catalog} />}
+          {result.status === 'compressed' && result.catalog && (
+            <ArchiveAction key={result.catalog.id} record={result.catalog} />
+          )}
         </section>
       )}
     </div>

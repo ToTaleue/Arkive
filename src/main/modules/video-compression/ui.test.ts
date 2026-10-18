@@ -144,10 +144,7 @@ async function check(): Promise<void> {
       'sample.mov'
     )
     assert.equal(await evaluate('document.querySelector("input[value=balanced]").checked'), true)
-    assert.equal(
-      await evaluate('document.querySelector(".video-compatibility input").checked'),
-      false
-    )
+    assert.equal(await evaluate('Boolean(document.querySelector(".video-compatibility"))'), false)
     assert.equal(
       await evaluate(
         'document.querySelector("[role=note]").textContent.includes("仅保留主视频和音频")'
@@ -215,26 +212,7 @@ async function check(): Promise<void> {
       'PASS: full compression → original backup → one-click archive → archive search page through real UI/IPC'
     )
 
-    outputPath = join(directory, 'compatible.mp4')
-    await click('.video-compatibility input')
-    await waitFor('document.querySelector(".video-format").textContent.includes("H.264")')
-    assert.equal(
-      await evaluate(
-        'document.querySelector(".video-page").textContent.includes("10bit 原片将转为 8bit")'
-      ),
-      true
-    )
-    await click('.video-primary-button')
-    await waitFor('document.querySelector(".video-running")?.textContent.includes("正在分析画质")')
-    assert.equal(
-      await evaluate('document.querySelector(".video-compatibility input").disabled'),
-      true
-    )
-    await waitFor(
-      'document.querySelector(".video-result")?.textContent.includes("H.264 · 8bit")',
-      120_000
-    )
-    const compatible = await runBundledTool('ffprobe', [
+    const encoded = await runBundledTool('ffprobe', [
       '-v',
       'error',
       '-select_streams',
@@ -245,27 +223,33 @@ async function check(): Promise<void> {
       'json',
       outputPath
     ])
-    assert.equal(compatible.exitCode, 0, compatible.stderr)
-    const compatibleData: unknown = JSON.parse(compatible.stdout)
-    assert.ok(
-      typeof compatibleData === 'object' && compatibleData !== null && 'streams' in compatibleData
-    )
-    assert.deepEqual(compatibleData.streams, [{ codec_name: 'h264', pix_fmt: 'yuv420p' }])
-    await checkOriginal(hash)
-    await writeFile(
-      resolve('out/video-compression-h264.png'),
-      (await window.webContents.capturePage()).toPNG()
-    )
-    await click('.video-compatibility input')
-    await waitFor('document.querySelector(".video-format").textContent.includes("HEVC")')
+    assert.equal(encoded.exitCode, 0, encoded.stderr)
+    const encodedData: unknown = JSON.parse(encoded.stdout)
+    assert.ok(typeof encodedData === 'object' && encodedData !== null && 'streams' in encodedData)
+    assert.deepEqual(encodedData.streams, [{ codec_name: 'hevc', pix_fmt: 'yuv420p' }])
     assert.equal(
-      await evaluate(
-        'document.querySelector(".video-result").textContent.includes("H.264 · 8bit")'
-      ),
+      await evaluate('document.querySelector(".video-result").textContent.includes("HEVC · 8bit")'),
       true
     )
+
+    outputPath = join(directory, 'unsupported-h264.mp4')
+    const tasksBeforeH264 = tasks.list().length
+    await assert.rejects(
+      evaluate(
+        '(async () => { const selected = await window.api.video.select(); return window.api.video.compress({runId:"removed-h264",fileId:selected.id,preset:"balanced",compatibility:true}); })()'
+      ),
+      /无效的视频压缩请求/
+    )
+    assert.equal(tasks.list().length, tasksBeforeH264)
+    await assert.rejects(stat(outputPath), { code: 'ENOENT' })
+    assert.equal(
+      createHash('sha256')
+        .update(await readFile(source))
+        .digest('hex'),
+      hash
+    )
     console.log(
-      'PASS: H.264 option reaches real encoder through IPC; busy option locked and result retains actual codec'
+      'PASS: standalone video outputs HEVC; removed H.264 requests fail without queue or file effects'
     )
 
     await assert.rejects(

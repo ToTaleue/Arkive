@@ -899,7 +899,6 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
     inputPath: videoInput,
     outputPath: videoOutput,
     preset: 'size',
-    compatibility: false,
     archive: true,
     tags: ['演唱会']
   })
@@ -944,8 +943,10 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
       preset: 'quality',
       compatibility: true
     }),
-    /"videoCodec":"h264"/
+    /compatibility|additional|暂不支持/i
   )
+  await assert.rejects(access(resolve(workspaceDir, 'h264.mp4')))
+  assert.deepEqual(await readFile(videoInput), videoBytes, 'Rejected H.264 preserves source')
 
   // Drive the registered tools through Pi, then verify full-document side effects.
   const officePng = await sharp({

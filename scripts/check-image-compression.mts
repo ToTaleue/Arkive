@@ -82,8 +82,9 @@ try {
   assert.equal(defaults.tool, 'sharp')
   assert.equal(defaults.outputFormat, 'webp')
   assert.equal(defaults.qualityAnalysis.metric, 'ssimulacra2')
+  assert.ok(defaults.qualityAnalysis.score !== null)
   assert.ok(defaults.qualityAnalysis.score >= 0 && defaults.qualityAnalysis.score <= 100)
-  assert.ok(defaults.qualityAnalysis.attempts >= 1 && defaults.qualityAnalysis.attempts <= 2)
+  assert.ok(defaults.qualityAnalysis.attempts >= 1 && defaults.qualityAnalysis.attempts <= 6)
   const webpMeta = await sharp(defaults.outputPath).metadata()
   assert.equal(webpMeta.hasAlpha, true)
   const webpPixels = await sharp(defaults.outputPath).raw().toBuffer()
@@ -96,8 +97,9 @@ try {
   })
   assert.equal(palette.tool, 'pngquant')
   assert.equal(palette.qualityAnalysis.metric, 'ssimulacra2')
+  assert.ok(palette.qualityAnalysis.score !== null)
   assert.ok(palette.qualityAnalysis.score >= 0 && palette.qualityAnalysis.score <= 100)
-  assert.ok(palette.qualityAnalysis.attempts >= 1 && palette.qualityAnalysis.attempts <= 2)
+  assert.ok(palette.qualityAnalysis.attempts >= 1 && palette.qualityAnalysis.attempts <= 5)
   assert.equal((await sharp(palette.outputPath).metadata()).isPalette, true)
   assert.equal((await sharp(palette.outputPath).raw().toBuffer())[3], 0)
 
@@ -127,6 +129,65 @@ try {
   assert.equal(lossy.qualityAnalysis.metric, 'ssimulacra2')
   assert.equal(lossy.qualityAnalysis.attempts, 1)
   assert.ok(lossy.outputBytes < lossy.originalBytes)
+
+  const noise = Buffer.alloc(128 * 128 * 3)
+  let seed = 42
+  for (let index = 0; index < noise.length; index++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    noise[index] = seed >>> 24
+  }
+  const noisyInput = path('noise.png')
+  await sharp(noise, { raw: { width: 128, height: 128, channels: 3 } })
+    .png()
+    .toFile(noisyInput)
+  const belowReference = await compressImage({
+    inputPath: noisyInput,
+    outputPath: path('noise.compressed.png'),
+    preserveFormat: true,
+    preset: 'quality'
+  })
+  assert.equal(belowReference.status, 'compressed')
+  assert.equal(belowReference.qualityAnalysis.meetsTarget, false)
+  assert.ok(belowReference.outputBytes < belowReference.originalBytes)
+  assert.equal(
+    belowReference.qualityAnalysis.attempts,
+    1,
+    'A smaller output is not re-encoded to chase a score'
+  )
+
+  const lowQualityJpeg = path('already-low-quality.jpg')
+  await sharp(noise, { raw: { width: 128, height: 128, channels: 3 } })
+    .jpeg({ quality: 10 })
+    .toFile(lowQualityJpeg)
+  const lowered = await compressImage({
+    inputPath: lowQualityJpeg,
+    outputPath: path('lowered.jpg'),
+    preserveFormat: true,
+    quality: 100
+  })
+  assert.equal(lowered.status, 'compressed')
+  assert.ok(lowered.outputBytes < lowered.originalBytes)
+  assert.ok(lowered.qualityAnalysis.attempts > 1)
+  assert.ok(lowered.quality !== undefined && lowered.quality < 100)
+
+  const tinyWebp = path('tiny.webp')
+  await sharp({ create: { width: 1, height: 1, channels: 3, background: '#000000' } })
+    .webp({ quality: 1 })
+    .toFile(tinyWebp)
+  const tinyHash = await hash(tinyWebp)
+  const noSavings = await compressImage({
+    inputPath: tinyWebp,
+    outputPath: path('tiny-result.webp')
+  })
+  assert.equal(noSavings.status, 'no-savings')
+  assert.equal(noSavings.savedBytes, 0)
+  assert.equal(noSavings.qualityAnalysis.score, null)
+  assert.equal(noSavings.qualityAnalysis.meetsTarget, null)
+  assert.match(noSavings.qualityAnalysis.error ?? '', /SSIMULACRA2/)
+  assert.equal(await hash(tinyWebp), tinyHash)
+  console.log(
+    'PASS: below-reference image is published; larger candidates lower quality until smaller; no-savings retains source'
+  )
   const jpegWebp = await compressImage({ inputPath: jpeg, outputPath: path('photo.webp') })
   assert.equal(jpegWebp.tool, 'sharp')
   const jpegWebpMeta = await sharp(jpegWebp.outputPath).metadata()

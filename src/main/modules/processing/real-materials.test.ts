@@ -90,8 +90,7 @@ async function check(): Promise<void> {
               : await compressVideoAndBackup({
                   inputPath: input,
                   outputPath: output,
-                  preset: 'balanced',
-                  compatibility: true
+                  preset: 'balanced'
                 })
       assert.equal(expectedRejection, false, 'Protected input must be rejected')
       let record: CompressionRecord | undefined = result.catalog
@@ -177,7 +176,7 @@ async function check(): Promise<void> {
         await run(source, 'quality', 'image')
     if (kinds.includes('video'))
       for (const source of originalFiles.filter((p) => /^(11|12|13) /.test(basename(p))))
-        await run(source, 'balanced-h264', 'video')
+        await run(source, 'balanced-hevc', 'video')
     for (const original of originals) assert.equal(await hashFile(original.path), original.hash)
     await writeFile(join(cases, 'source-integrity.json'), JSON.stringify(originals, null, 2))
     assert.deepEqual(failures, [])

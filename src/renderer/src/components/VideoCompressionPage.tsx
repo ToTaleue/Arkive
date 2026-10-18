@@ -47,7 +47,6 @@ function formatDuration(seconds: number): string {
 export function VideoCompressionPage(): React.JSX.Element {
   const [selected, setSelected] = useState<SelectedVideo | null>(null)
   const [preset, setPreset] = useState<VideoCompressionPreset>('balanced')
-  const [compatibility, setCompatibility] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [progress, setProgress] = useState<VideoCompressionProgress | null>(null)
   const [result, setResult] = useState<VideoCompressionResult | null>(null)
@@ -108,7 +107,7 @@ export function VideoCompressionPage(): React.JSX.Element {
     setError(null)
     setNotice(null)
     try {
-      const outcome = await api.compress({ runId: id, fileId: selected.id, preset, compatibility })
+      const outcome = await api.compress({ runId: id, fileId: selected.id, preset })
       if (!mounted.current) return
       if (outcome.status === 'completed') setResult(outcome.result)
       else if (outcome.status === 'error') setError(outcome.error)
@@ -168,7 +167,7 @@ export function VideoCompressionPage(): React.JSX.Element {
           <p>成功且体积减小后，原件移入 Arkive Backup；压缩结果保留在选定位置。</p>
           <p>选一个视频，从一小次压缩开始。</p>
         </div>
-        <span className="video-format">MP4 · {compatibility ? 'H.264' : 'HEVC'}</span>
+        <span className="video-format">MP4 · HEVC</span>
       </header>
 
       <section className="video-card" aria-labelledby="video-file-heading">
@@ -247,22 +246,7 @@ export function VideoCompressionPage(): React.JSX.Element {
             </label>
           ))}
         </fieldset>
-        <label className="video-compatibility">
-          <input
-            type="checkbox"
-            checked={compatibility}
-            disabled={busy}
-            onChange={(event) => {
-              setCompatibility(event.target.checked)
-            }}
-          />
-          兼容优先（H.264）
-        </label>
-        <p className="video-hint">
-          {compatibility
-            ? '输出 8bit H.264，便于在更多设备播放；10bit 原片将转为 8bit，体积可能比 HEVC 更大。保留原分辨率与帧率，老设备仍可能无法播放高规格视频。'
-            : '默认输出 HEVC，侧重节省空间，并保留支持的原片位深。'}
-        </p>
+        <p className="video-hint">输出 HEVC，侧重节省空间，并保留支持的原片位深。</p>
         <div className="video-actions">
           <p>
             保留原分辨率与帧率

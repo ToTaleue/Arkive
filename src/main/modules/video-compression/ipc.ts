@@ -40,7 +40,7 @@ function isStartRequest(value: unknown): value is VideoStartRequest {
     'preset' in value &&
     typeof value.preset === 'string' &&
     ['quality', 'balanced', 'size'].includes(value.preset) &&
-    (!('compatibility' in value) || typeof value.compatibility === 'boolean')
+    !('compatibility' in value)
   )
 }
 
@@ -120,8 +120,7 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
           {
             inputPath: input,
             outputPath: output,
-            preset: request.preset,
-            compatibility: request.compatibility
+            preset: request.preset
           },
           controller.signal,
           (progress) => {

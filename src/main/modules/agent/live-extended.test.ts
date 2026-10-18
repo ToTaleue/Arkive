@@ -218,7 +218,7 @@ async function check(): Promise<void> {
       const hash = await hashFile(input)
       await call(
         'video',
-        `明确授权将 ${input} 压缩到 ${output}，balanced 档、H.264 兼容模式。允许丢弃辅助流；有收益后完整原件移至 Backup，不归档。立即执行不再次确认。`
+        `明确授权将 ${input} 压缩到 ${output}，balanced 档、HEVC 输出。允许丢弃辅助流；有收益后完整原件移至 Backup，不归档。立即执行不再次确认。`
       )
       const record = catalog.query({ state: 'pending', name: 'video.mp4' }).items[0]
       assert.ok(record)

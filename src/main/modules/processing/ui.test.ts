@@ -83,8 +83,13 @@ async function check(): Promise<void> {
   registerImageCompressionIpc()(window.webContents)
   registerTasksIpc(tasks)(window.webContents)
   ipcMain.handle('agent:status', () => ({ configured: false, model: '' }))
-  const evaluate = async (expression: string): Promise<unknown> =>
-    window.webContents.executeJavaScript(expression)
+  const evaluate = async (expression: string): Promise<unknown> => {
+    try {
+      return await window.webContents.executeJavaScript(expression)
+    } catch (error) {
+      throw new Error(`Renderer evaluation failed: ${expression}`, { cause: error })
+    }
+  }
   async function wait(expression: string, timeout = 90_000): Promise<void> {
     const until = Date.now() + timeout
     while (!(await evaluate(expression))) {
@@ -405,6 +410,28 @@ async function check(): Promise<void> {
       await hashFile(savePath)
     )
     await writeFile(join(directory, 'image.png'), (await window.webContents.capturePage()).toPNG())
+    const tinyImage = join(directory, 'tiny-original.webp')
+    await sharp({ create: { width: 1, height: 1, channels: 3, background: '#000000' } })
+      .webp({ quality: 1 })
+      .toFile(tinyImage)
+    const tinyHash = await hashFile(tinyImage)
+    choice = tinyImage
+    await click('更换图片', '.image-page')
+    await wait(
+      "document.querySelector('.image-selected-file')?.innerText.includes('tiny-original.webp')"
+    )
+    savePath = join(directory, 'tiny-candidate.webp')
+    await click('开始压缩', '.image-page')
+    await wait(
+      "document.querySelector('.image-page .image-result')?.innerText.includes('继续使用原图片')"
+    )
+    assert.equal(
+      await evaluate("document.querySelector('.image-output-path').textContent"),
+      tinyImage
+    )
+    assert.equal(await evaluate("document.querySelector('.image-page .archive-action')"), null)
+    assert.equal(await hashFile(tinyImage), tinyHash)
+    console.log('PASS: no-savings image UI selects the original and hides candidate archiving')
     // The document drop uses the same real File bridge, including Unicode and spaces.
     await evaluate('document.querySelector(\'[aria-label="文档压缩与重复检测"]\').click()')
     await click('PDF')

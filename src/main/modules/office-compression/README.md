@@ -1,6 +1,6 @@
 # Office 嵌入媒体压缩
 
-本模块负责普通 `.docx`／`.pptx` 的包读取、媒体筛选、回填校验和原路径发布。JPEG／PNG 复用图片 Service 的原格式编码与感知质量判断；包内 MP4 复用视频 Service 的 H.264 兼容压缩。未支持的媒体保留原样并返回跳过原因。
+本模块负责普通 `.docx`／`.pptx` 的包读取、媒体筛选、回填校验和原路径发布。JPEG／PNG 复用图片 Service 的原格式编码与体积收益选择；包内 MP4 复用视频 Service 的 H.264 兼容压缩。未支持的媒体保留原样并返回跳过原因。
 
 ## 入口与职责
 
@@ -26,7 +26,7 @@ const result = await compressOfficeInPlace(
 
 ## 发布条件与保留行为
 
-图片保持 JPEG／PNG 格式，默认 `quality` 预设。仅接受质量达标且实际变小的候选；失败、未达标、无收益的媒体保持原字节。正文、关系 XML 和未处理对象也保持原字节，外链不访问。
+图片保持 JPEG／PNG 格式，默认 `quality` 预设。只要实际变小且文件校验通过就回填；图片评分仅供参考，低于参考分或评分不可用均不阻止采用，并在媒体结果的 `qualityAnalysis` 中记录。失败或无收益的图片保持原字节。正文、关系 XML 和未处理对象也保持原字节，外链不访问。
 
 视频仅筛选后缀 `.mp4` 且内容类型为 `video/mp4` 的包内条目，编码为 MP4／H.264 8bit，AAC 音轨直接复制。默认 `quality` 预设，沿用视频 Service 的自适应选参和抽样 VMAF 98 目标，再校验输出属性及完整解码；质量分数是抽样指标，不等于所有画面视觉无损。回填保留原条目名称、内容类型、媒体关系和播放时间 XML。[微软推荐的 PowerPoint 视频格式](https://support.microsoft.com/en-us/powerpoint/video-and-audio-file-formats-supported-in-powerpoint)也是 MP4／H.264／AAC，具体文档仍需原生播放验收。
 

@@ -6,6 +6,7 @@ export interface VideoCompressionRequest {
   inputPath: string
   outputPath: string
   preset?: VideoCompressionPreset
+  /** Internal Office media encoding only; standalone compression supports HEVC only. */
   compatibility?: boolean
 }
 
@@ -56,7 +57,6 @@ export interface VideoStartRequest {
   runId: string
   fileId: string
   preset: VideoCompressionPreset
-  compatibility?: boolean
 }
 export type VideoCompressionOutcome =
   | { status: 'completed'; result: VideoCompressionResult }

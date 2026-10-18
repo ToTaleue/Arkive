@@ -97,6 +97,18 @@ async function check(): Promise<void> {
       0
     )
 
+    const tasksBeforeH264 = tasks.list().length
+    await assert.rejects(
+      compressVideoAndBackup({
+        inputPath: video,
+        outputPath: file('unsupported-h264.mp4'),
+        compatibility: true
+      }),
+      /暂不支持 H.264/
+    )
+    assert.equal(tasks.list().length, tasksBeforeH264)
+    assert.equal(await exists(file('unsupported-h264.mp4')), false)
+
     const gate = deferred()
     releases.push(gate.resolve)
     const blocker = tasks.submitBatch(
@@ -171,6 +183,24 @@ async function check(): Promise<void> {
     console.log(
       'PASS: image/PDF/video use one real FIFO queue, preserve typed results, canonical deduplication and immutable requests'
     )
+
+    const tinyInput = file('no-savings.webp')
+    await sharp({ create: { width: 1, height: 1, channels: 3, background: '#000000' } })
+      .webp({ quality: 1 })
+      .toFile(tinyInput)
+    const tinyHash = await hashFile(tinyInput)
+    const noSavings = await compressImageAndBackup({
+      inputPath: tinyInput,
+      outputPath: file('no-savings-result.webp'),
+      archive: true,
+      keepLinkAtOriginalLocation: true
+    })
+    assert.equal(noSavings.status, 'no-savings')
+    assert.equal(noSavings.archive, undefined)
+    assert.equal(noSavings.catalog.backupStatus, 'skipped')
+    assert.equal(catalog.get(noSavings.catalog.id).archivePath, null)
+    assert.equal(await hashFile(tinyInput), tinyHash)
+    console.log('PASS: no-savings image keeps the original and skips requested candidate archiving')
 
     const cancelledInput = await image('queued-cancel.png')
     const pause = deferred()

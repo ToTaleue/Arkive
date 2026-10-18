@@ -1,5 +1,5 @@
 import type { CompressionRecord } from './catalog'
-import type { ImageCompressionPreset } from './image'
+import type { ImageCompressionPreset, ImageQualityAnalysis } from './image'
 
 export type OfficeFormat = 'docx' | 'pptx'
 
@@ -24,6 +24,7 @@ export interface OfficeMediaResult {
   reason?: string
   originalBytes: number
   outputBytes: number
+  qualityAnalysis?: ImageQualityAnalysis
 }
 
 export interface OfficeCompressionResult {

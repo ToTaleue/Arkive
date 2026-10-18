@@ -10,9 +10,9 @@ export interface ImageCompressionRequest {
   outputFormat?: ImageOutputFormat
   /** Keep the input format for JPEG, PNG, or WebP; PNG uses pngquant, others use Sharp. */
   preserveFormat?: boolean
-  /** Perceptual quality target used to choose a candidate with at most one fallback. */
+  /** Starting encoding quality preset; perceptual scores are advisory, byte savings decide adoption. */
   preset?: ImageCompressionPreset
-  /** Sharp or pngquant encoding quality. */
+  /** Starting Sharp quality; lower qualities may be tried if the output is not smaller. */
   quality?: number
   /** Required for transparent input when exporting JPEG, e.g. #ffffff. */
   jpegBackground?: string
@@ -60,10 +60,14 @@ export interface ImageCompressionResult {
 
 export interface ImageQualityAnalysis {
   metric: 'ssimulacra2'
+  /** Advisory reference score only; never blocks a smaller, validated output. */
   targetScore: number
-  score: number
+  /** Null when the optional metric cannot evaluate this image. */
+  score: number | null
   attempts: number
-  meetsTarget: boolean
+  /** Informational comparison with targetScore, not an acceptance condition. */
+  meetsTarget: boolean | null
+  error?: string
 }
 
 export type ImageCompressionOutcome =

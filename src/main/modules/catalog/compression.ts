@@ -36,7 +36,8 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
     paths: CompressionPaths
   ) => Promise<T>,
   signal?: AbortSignal,
-  requestId?: string
+  requestId?: string,
+  archiveOnNoSavings = true
 ): Promise<T & CompressionLifecycleResult> {
   signal?.throwIfAborted()
   if (request.archive !== undefined && typeof request.archive !== 'boolean')
@@ -76,7 +77,7 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
             report({ message: '正在处理原件备份…' })
             const record = await catalog.finishCompression(id, result.status === 'compressed')
             let archive: ArchiveAttempt | undefined
-            if (request.archive) {
+            if (request.archive && (result.status === 'compressed' || archiveOnNoSavings)) {
               report({ message: '正在归档…' })
               try {
                 if (record.backupStatus === 'error')
@@ -123,7 +124,8 @@ export function compressImageAndBackup(
     request,
     (taskSignal, _report, paths) => compressImage({ ...request, ...paths }, taskSignal),
     signal,
-    requestId
+    requestId,
+    false
   )
 }
 
@@ -133,6 +135,9 @@ export function compressVideoAndBackup(
   report?: (update: VideoCompressionProgress) => void,
   requestId?: string
 ): Promise<VideoCompressionResult & CompressionLifecycleResult> {
+  if (request.compatibility) {
+    return Promise.reject(new Error('暂不支持 H.264 转换；视频压缩仅支持 HEVC 输出。'))
+  }
   request = structuredClone(request)
   return complete(
     '视频压缩',

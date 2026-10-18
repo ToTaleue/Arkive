@@ -26,22 +26,22 @@ export type {
 
 type ImageMetadata = Awaited<ReturnType<typeof readImageMetadata>>
 
-// Start from conservative qualities and allow at most one fallback. Each candidate requires
-// a full encode and SSIMULACRA2 pass, so a long quality ladder would make large photos slow.
+// Scores are advisory. Start with the preset's encoding quality and lower it only when
+// the candidate does not save bytes; score only the final selected output.
 const targetScore: Record<ImageCompressionPreset, number> = {
   quality: 90,
   balanced: 85,
   size: 80
 }
-const sharpQualityCandidates: Record<ImageCompressionPreset, number[]> = {
-  quality: [92, 98],
-  balanced: [85, 95],
-  size: [80, 92]
+const startingQuality: Record<ImageCompressionPreset, number> = {
+  quality: 92,
+  balanced: 85,
+  size: 80
 }
-const pngquantQualityCandidates: Record<ImageCompressionPreset, string[]> = {
-  quality: ['80-95', '90-100'],
-  balanced: ['75-90', '85-100'],
-  size: ['65-85', '80-95']
+const startingPngQuality: Record<ImageCompressionPreset, number> = {
+  quality: 95,
+  balanced: 90,
+  size: 85
 }
 const outputExtensions = { webp: ['.webp'], jpeg: ['.jpg', '.jpeg'], png: ['.png'] }
 const supportedInputs = ['jpeg', 'png', 'webp', 'tiff', 'gif', 'heif']
@@ -138,9 +138,14 @@ function candidatesFor(
   request: ImageCompressionRequest,
   preset: ImageCompressionPreset
 ): Candidate[] {
-  if (request.quality !== undefined) return [request.quality]
-  if (tool === 'pngquant') return pngquantQualityCandidates[preset]
-  return sharpQualityCandidates[preset]
+  if (tool === 'pngquant') {
+    const start = startingPngQuality[preset]
+    return [start, ...[80, 60, 40, 20].filter((quality) => quality < start)].map(
+      (quality) => `0-${String(quality)}`
+    )
+  }
+  const start = request.quality ?? startingQuality[preset]
+  return [start, ...[75, 60, 40, 20, 1].filter((quality) => quality < start)]
 }
 
 function qualityNumber(candidate: Candidate): number | undefined {
@@ -212,8 +217,9 @@ function checkOutputImage(
 /**
  * User-confirmed main-process execution API. Does not register an Agent tool or create a task queue.
  * Writes only a new, validated copy. Metadata is intentionally discarded. Lossy candidates are
- * evaluated from the original input and the least aggressive candidate meeting the selected
- * SSIMULACRA2 target is published.
+ * selected by byte savings. SSIMULACRA2 describes the final output; its reference score is
+ * never a publication gate. If no candidate is smaller, publish the smallest valid candidate
+ * as no-savings so product callers retain the original.
  */
 export async function compressImage(
   request: ImageCompressionRequest,
@@ -254,18 +260,9 @@ export async function compressImage(
   const temporaryDirectory = await mkdtemp(join(directory, '.arkive-image-'))
   try {
     const metricSource = join(temporaryDirectory, 'metric-source.png')
-    await writeQualityImage(
-      info.inputPath,
-      metricSource,
-      {
-        hasAlpha: info.hasAlpha && format !== 'jpeg',
-        flattenBackground: info.hasAlpha && format === 'jpeg' ? request.jpegBackground : undefined
-      },
-      signal
-    )
     let selectedOutput: string | undefined
     let selectedQuality: number | undefined
-    let selectedScore = 0
+    let selectedBytes = Infinity
     let attempts = 0
     let outputHasAlpha = false
 
@@ -294,22 +291,41 @@ export async function compressImage(
       const candidateStat = await stat(candidatePath)
       if (candidateStat.size === 0) throw new Error('压缩输出为空。')
 
-      selectedOutput = candidatePath
-      selectedQuality = qualityNumber(candidate)
-      outputHasAlpha = after.hasAlpha
-      selectedScore = await scoreCandidate(
-        candidatePath,
-        metricSource,
-        outputHasAlpha,
-        temporaryDirectory,
-        index,
-        signal
-      )
-      if (selectedScore >= target || candidates.length === 1) break
+      if (candidateStat.size < selectedBytes) {
+        selectedOutput = candidatePath
+        selectedQuality = qualityNumber(candidate)
+        outputHasAlpha = after.hasAlpha
+        selectedBytes = candidateStat.size
+      }
+      if (candidateStat.size < info.originalBytes) break
     }
 
     if (!selectedOutput) {
-      throw new Error('没有生成可用的压缩输出，请提高输入质量或检查图片内容。')
+      throw new Error('没有生成可用的压缩输出，请检查输入格式或图片内容。')
+    }
+    let selectedScore: number | null = null
+    let scoreError: string | undefined
+    try {
+      await writeQualityImage(
+        info.inputPath,
+        metricSource,
+        {
+          hasAlpha: info.hasAlpha && format !== 'jpeg',
+          flattenBackground: info.hasAlpha && format === 'jpeg' ? request.jpegBackground : undefined
+        },
+        signal
+      )
+      selectedScore = await scoreCandidate(
+        selectedOutput,
+        metricSource,
+        outputHasAlpha,
+        temporaryDirectory,
+        0,
+        signal
+      )
+    } catch (error) {
+      signal?.throwIfAborted()
+      scoreError = error instanceof Error ? error.message : String(error)
     }
     const outputStat = await stat(selectedOutput)
     if (outputStat.size === 0) throw new Error('压缩输出为空。')
@@ -331,7 +347,8 @@ export async function compressImage(
         targetScore: target,
         score: selectedScore,
         attempts,
-        meetsTarget: selectedScore >= target
+        meetsTarget: selectedScore === null ? null : selectedScore >= target,
+        ...(scoreError ? { error: scoreError } : {})
       }
     }
   } finally {

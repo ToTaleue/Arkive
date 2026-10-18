@@ -154,8 +154,8 @@ export async function compressOffice(
           },
           signal
         )
-        if (!encoded.qualityAnalysis.meetsTarget) result.reason = '感知质量未达标，保留原媒体。'
-        else if (encoded.status !== 'compressed') result.reason = '媒体体积未减少，保留原媒体。'
+        result.qualityAnalysis = encoded.qualityAnalysis
+        if (encoded.status !== 'compressed') result.reason = '媒体体积未减少，保留原媒体。'
         else {
           replacements.set(part.name, candidate)
           result.status = 'compressed'

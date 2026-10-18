@@ -191,7 +191,7 @@ export function registerImageCompressionIpc(): (contents: WebContents) => void {
           controller.signal,
           request.runId
         )
-        state.outputPath = result.outputPath
+        state.outputPath = result.status === 'compressed' ? result.outputPath : result.inputPath
         return { status: 'completed', result }
       } catch (error) {
         if (
