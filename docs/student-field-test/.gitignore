@@ -1,3 +1,7 @@
-# The original stays local; its verified LFS parts are committed instead.
-/00-originals/地上设计888.zip
+# Test materials belong outside the source repository.
+/00-originals/
+/01-course-pdf/
+/02-group-ppt/
+/03-club-images/
+/04-concert-video/
 *.restoring

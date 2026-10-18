@@ -3,6 +3,8 @@ productName: arkive
 directories:
   buildResources: build
 files:
+  - '!dist/**'
+  - '!docs/student-field-test/**'
   - '!out/*-check*/**'
   - '!resources/tools/**'
   - '!**/.vscode/*'
