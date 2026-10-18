@@ -19,7 +19,7 @@ import {
 } from './service'
 import { getMoleAuthorization, runMoleClean as cleanOutput } from './service'
 
-/** Real Clean is page-only. Recheck sudo after queueing, immediately before the process starts. */
+/** UI and Agent share Clean. Recheck sudo immediately before the process starts. */
 export async function runMoleClean(
   mode: MoleCleanMode,
   onUpdate: (event: MoleOutputEvent) => void,

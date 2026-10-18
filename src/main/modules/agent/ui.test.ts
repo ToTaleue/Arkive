@@ -45,7 +45,7 @@ async function check(): Promise<void> {
         messages: Message[]
         tools: { function: { name: string } }[]
       }
-      assert.equal(body.tools.length, 28)
+      assert.equal(body.tools.length, 33)
       assert.ok(!body.tools.some((t) => ['bash', 'write', 'edit'].includes(t.function.name)))
       const user = body.messages.filter((m) => m.role === 'user').at(-1)
       assert.ok(user)

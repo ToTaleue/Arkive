@@ -2,7 +2,7 @@
 
 UI 和 Agent 统一从 `operations.ts` 调用占用分析、清理预览、安装包预览、开发产物预览、应用清单及回收站操作。它们与压缩、归档、去重共用 Task FIFO；`service.ts` 保留工具调用和解析，产品调用方不直接启动工具。
 
-独立“清理”页面通过 `runMoleClean` 使用 `preview`／`clean` 两种模式，分别运行 `clean --dry-run`／`clean`，与既有预览共用防重 key。真实 Clean 仅在页面提供，不新增 Agent 工具；主进程在出队后检查 sudo，有效才启动。原生密码授权不自动清理，状态检查不延长闲置 sudo 会话。以普通用户运行 Mole，由 Mole 采用 sudo 处理系统级步骤。
+独立“清理”页面通过 `runMoleClean` 使用 `preview`／`clean` 两种模式，分别运行 `clean --dry-run`／`clean`，与既有预览共用防重 key。完整 Clean 的 Agent 入口与页面共用 Service；主进程在出队后检查 sudo，有效才启动。原生密码授权不自动清理，状态检查不延长闲置 sudo 会话。以普通用户运行 Mole，由 Mole 采用 sudo 处理系统级步骤。
 
 此页面直接保留 Mole 的自动删除行为，常驻提示直接删除及默认清空回收站、无法从回收站恢复，不插入候选勾选或 Arkive 回收站流程。逐行输出按 Mole 分类展示，支持失败／取消后保留日志，切换页面不丢失运行。真实清理最长 30 分钟，预览仍为 120 秒；取消关闭整个子进程组，已发生的删除无法回滚。旧工作区中的 Clean 入口改为打开清理页，其他 Mole 工具保留。
 
@@ -20,7 +20,7 @@ UI 和 Agent 统一从 `operations.ts` 调用占用分析、清理预览、安�
 
 工具箱的 Analyze、Purge、Uninstall、Installer 经 `toolbox-ipc.ts` 使用上述业务入口。Analyze 展示 JSON、目录钻取与大文件；其余三项通过 `MoleWorkflowService` 保存候选、审阅精确选择，再移入回收站。窗口独立拥有方案和 AbortController，刷新／导航／退出会取消运行并丢弃旧方案。页面切换则保留运行、结果和选择。
 
-所有执行使用预览 ID 和候选 ID，不接受 Renderer 传入任意删除路径。使用身份复查、系统路径保护、共享副本保护、单次方案消费及部分结果。未知的项目活动时间不推算，Purge 默认不勾选；应用数据默认保留。安装包普通文件的容量来自 lstat，目录容量未提供时显示未知；移动到回收站不宣称已释放空间。
+所有执行使用预览 ID 和候选 ID，不接受 Renderer 传入任意删除路径。与 Agent 共用身份复查、系统路径保护、共享副本保护、单次方案消费及部分结果。未知的项目活动时间不推算，Purge 默认不勾选；应用数据默认保留。安装包普通文件的容量来自 lstat，目录容量未提供时显示未知；移动到回收站不宣称已释放空间。
 
 运行 `rtk proxy node scripts/check-mole-toolbox-ui.mjs` 验证真实 Renderer／Preload／IPC／Workflow／Task／进程链路。Mole 发现和回收站使用隔离夹具，只操作 `arkive-test` 中生成的文件。覆盖扫描／目录钻取／未知容量、确认前无写入、逐项选择、个人数据保留、部分失败、停止恢复、跨窗口方案隔离、刷新取消，以及日夜主题和窄窗口截图。真实应用卸载和主机扫描不在此自动测试中执行。
 

@@ -51,7 +51,8 @@ async function check(): Promise<void> {
     let expectedRejection = false
     if (kind === 'pdf') {
       const preflight = await runBundledTool('qpdf', ['--check', input])
-      expectedRejection = preflight.exitCode !== 0
+      // qpdf exit code 3 means the operation succeeded with warnings.
+      expectedRejection = preflight.exitCode !== 0 && preflight.exitCode !== 3
       if (!expectedRejection) {
         const { features } = await inspectPdf({ inputPath: input })
         expectedRejection =

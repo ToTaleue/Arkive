@@ -1,20 +1,12 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { shell } from 'electron'
-import { resolve } from 'node:path'
 import { assertSystemWriteAllowed, resolveFilePath } from '../../system-paths'
 import {
   compressImageAndBackup as compressImage,
   compressPdfAndBackup as compressPdf,
   compressVideoAndBackup as compressVideo
 } from '../catalog/compression'
-import {
-  analyzeMole,
-  listMoleApps,
-  runMoleDryRun,
-  runMoleInstallerPreview,
-  runMolePurgePreview
-} from '../mole/operations'
-import { authorizeMoleSystem } from '../mole/service'
+import { createMoleTools } from '../mole/agent-tools'
 import { getCatalog } from '../catalog/service'
 import { archiveFile, tagArchives } from '../catalog/operations'
 import { normalizeTags } from '../catalog/finder-tags'
@@ -200,121 +192,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
       }
     }),
-    defineTool({
-      name: 'mole_analyze',
-      label: 'Mole 磁盘占用分析',
-      description:
-        '分析指定目录的占用、大目录和大文件，供进一步检查用途和提出处理方案。运行 Mole analyze --json，不删除文件。保留 scan_status 等原始报告信息；partial 或 unavailable 不代表空目录，也不代表扫描完整。',
-      parameters: Type.Object({
-        path: Type.Optional(Type.String({ description: '要分析的目录，省略时使用会话工作目录。' }))
-      }),
-      execute: async (_toolCallId, { path }, signal) => {
-        const details = await analyzeMole(resolve(cwd, path ?? '.'), signal)
-        return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
-      }
-    }),
-    {
-      name: 'mole_clean_preview',
-      label: 'Mole 清理预览',
-      description:
-        '预览当前 Mac 中 Mole 建议清理的缓存、日志和临时文件。固定运行 clean --dry-run，不删除清理目标，不接受命令参数。仅在用户要求检查清理机会或预览清理时使用；结果只代表预览，不代表已经释放空间。',
-      parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal, onUpdate) => {
-        const result = await runMoleDryRun((progress) => {
-          onUpdate?.({ content: [], details: { progress } })
-        }, signal)
-        const maxChars = 16_384
-        const details = {
-          dryRun: true,
-          candidates: result.candidates,
-          exitCode: result.exitCode,
-          signal: result.signal,
-          stdout: result.stdout.slice(0, maxChars),
-          stderr: result.stderr.slice(0, maxChars),
-          stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
-          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars,
-          incomplete: result.blocks.some((block) => block.partial)
-        }
-        if (result.exitCode !== 0) {
-          throw new Error(`Mole 清理预览失败：${JSON.stringify(details)}`)
-        }
-        return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
-      }
-    },
-    {
-      name: 'mole_authorize_system',
-      label: 'Mole 系统权限授权',
-      description:
-        '用户明确要求给 Mole 授权、检查或清理系统级 Mole 项目时调用。复用有效缓存凭据，或弹出 macOS 原生隐藏密码对话框建立当前用户的短期 sudo 授权；密码不会返回给 Agent，也不会执行删除。仅要求授权时报告结果即可，不自动扫描或预览；用户同时要求预览系统级候选时，授权成功后才调用 mole_clean_preview。',
-      parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal) => {
-        signal?.throwIfAborted()
-        const result = await authorizeMoleSystem()
-        signal?.throwIfAborted()
-        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
-      }
-    },
-    {
-      name: 'mole_installer_preview',
-      label: 'Mole 安装包预览',
-      description:
-        '只读预览 Mole 发现的安装包。返回完整路径、文件名和来源，固定运行 installer --dry-run，不删除文件。Agent 可以根据用户目标从 candidates 选择路径，再在用户明确授权后调用 trash；不要把普通下载文件当作安装包。',
-      parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal, onUpdate) => {
-        const result = await runMoleInstallerPreview((progress) => {
-          onUpdate?.({ content: [], details: { progress } })
-        }, signal)
-        const maxChars = 16_384
-        const details = {
-          dryRun: true,
-          candidates: result.candidates,
-          exitCode: result.exitCode,
-          signal: result.signal,
-          stdout: result.stdout.slice(0, maxChars),
-          stderr: result.stderr.slice(0, maxChars),
-          stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
-          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars,
-          incomplete: result.blocks.some((block) => block.partial)
-        }
-        return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
-      }
-    },
-    {
-      name: 'mole_purge_preview',
-      label: 'Mole 开发产物预览',
-      description:
-        '只读预览 Mole 在已配置项目目录中发现的可重建开发产物，例如 node_modules、target、dist、.venv 和构建缓存。固定运行 purge --dry-run，不删除文件。归档开发项目或用户明确询问开发目录空间时使用；先展示项目、路径、大小和“可重建但可能需要联网恢复”的影响，再由用户决定是否调用 trash。不要把 Purge 候选自动当作归档内容，也不要调用 --yes 或永久删除。',
-      parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal, onUpdate) => {
-        const result = await runMolePurgePreview((progress) => {
-          onUpdate?.({ content: [], details: { progress } })
-        }, signal)
-        const maxChars = 16_384
-        const details = {
-          dryRun: true,
-          candidates: result.candidates,
-          exitCode: result.exitCode,
-          signal: result.signal,
-          stdout: result.stdout.slice(0, maxChars),
-          stderr: result.stderr.slice(0, maxChars),
-          stdoutTruncated: result.stdoutTruncated || result.stdout.length > maxChars,
-          stderrTruncated: result.stderrTruncated || result.stderr.length > maxChars,
-          incomplete: result.blocks.some((block) => block.partial)
-        }
-        return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
-      }
-    },
-    {
-      name: 'mole_uninstall_list',
-      label: 'Mole 应用清单',
-      description:
-        '只读获取 Mole 可识别的已安装应用清单，返回应用路径、Bundle ID、来源和大小。Agent 先向用户展示并确认要移除的 App，再把选中的 path 交给 trash 移入回收站；移除后可重新运行 mole_clean_preview 检查残留。不要猜测残留路径或直接运行 Mole 交互式卸载 TUI。',
-      parameters: Type.Object({}, { additionalProperties: false }),
-      execute: async (_toolCallId, _params, signal) => {
-        const apps = await listMoleApps(signal)
-        return { content: [{ type: 'text', text: JSON.stringify({ apps }) }], details: { apps } }
-      }
-    },
+    ...(await createMoleTools(cwd)),
     defineTool({
       name: 'inspect_office',
       label: 'Office 嵌入媒体探测',
@@ -381,7 +259,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'compress_image',
       label: '图片压缩',
       description:
-        '复用 Arkive 图片压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。默认使用 Sharp 输出 WebP；preserveFormat 会保持 JPEG、PNG 或 WebP 原格式，其中 PNG 使用 pngquant，其余使用 Sharp。元数据会被丢弃，生成新文件、不覆盖已有文件；成功且有体积收益后会将原件移动到 Arkive Backup，调用前明确告知用户；以体积收益为首要目标，遇到无收益逐级下调编码质量；SSIMULACRA2 仅供参考，低分或评分不可用不阻止输出，更小才采用；持平或变大则保留原件，不宣称压缩成功。',
+        '复用 Arkive 图片压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。默认使用 Sharp 输出 WebP；preserveFormat 会保持 JPEG、PNG 或 WebP 原格式，其中 PNG 使用 pngquant，其余使用 Sharp。保留未受处理影响的元数据，更新变化字段并通过 metadataWarnings 报告无法保留的项目；生成新文件、不覆盖已有文件；成功且有体积收益后会将原件移动到 Arkive Backup，调用前明确告知用户；以体积收益为首要目标，遇到无收益逐级下调编码质量；SSIMULACRA2 仅供参考，低分或评分不可用不阻止输出，更小才采用；持平或变大则保留原件，不宣称压缩成功。',
       parameters: Type.Object({
         inputPath: Type.String({ description: '源图片绝对路径。' }),
         outputPath: Type.String({ description: '用户授权的新输出绝对路径，父目录须已存在。' }),

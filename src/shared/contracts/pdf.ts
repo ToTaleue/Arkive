@@ -15,6 +15,8 @@ export interface PdfInspection {
   originalBytes: number
   pageCount: number
   features: PdfFeatures
+  /** qpdf repaired or tolerated structural issues while reading the PDF. */
+  warnings?: string[]
 }
 
 export interface PdfCompressionRequest {

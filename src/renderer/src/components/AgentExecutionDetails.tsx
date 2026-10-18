@@ -63,7 +63,7 @@ export function AgentExecutionDetails({
           tool.result ? (
             <section
               className="chat-tool-result"
-              aria-label="工具结果"
+              aria-label={`${tool.name} 工具结果`}
               data-tool-id={tool.id}
               data-status={tool.status}
               key={tool.id}
@@ -74,6 +74,7 @@ export function AgentExecutionDetails({
                 ) : (
                   <CircleAlert size={15} aria-hidden="true" />
                 )}
+                <code className="chat-tool-result-tool">{tool.name}</code>
                 <strong>{tool.result.title}</strong>
               </div>
               <p>{tool.result.summary}</p>

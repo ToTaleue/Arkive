@@ -24,9 +24,11 @@ try {
       outDir: directory,
       rollupOptions: {
         input: resolve(
-          process.argv.includes('--workflow')
-            ? 'src/main/modules/agent/workflow-ui.test.ts'
-            : 'src/main/modules/agent/ui.test.ts'
+          process.argv.includes('--skills')
+            ? 'src/main/modules/agent/skills-ui.test.ts'
+            : process.argv.includes('--workflow')
+              ? 'src/main/modules/agent/workflow-ui.test.ts'
+              : 'src/main/modules/agent/ui.test.ts'
         ),
         external: ['electron', 'sharp'],
         output: { format: 'cjs', entryFileNames: 'check.cjs' }

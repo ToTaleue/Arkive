@@ -39,9 +39,11 @@ ARKIVE_AI_API_KEY=your-api-key
 Use `openai-compatible` only for endpoints implementing streaming Chat Completions.
 The URL is the API root, not `/chat/completions`. For native Pi providers such as
 `openai`, `anthropic` or `google`, set that provider and its exact model ID; leave
-`ARKIVE_AI_BASE_URL` empty for the official endpoint. The compatible integration
-uses a conservative 32K context budget and 4096 maximum output tokens; native
-providers use Pi's model catalog. Other API protocols need their matching adapter.
+`ARKIVE_AI_BASE_URL` empty for the official endpoint. The configured DeepSeek V4.1
+Flash model is declared with its 1M context window and 384K maximum output; other
+OpenAI-compatible model IDs keep a conservative fallback until their limits are
+verified. Arkive still bounds displayed tool details and retry-summary input so a
+long tool run remains readable. Other API protocols need their matching adapter.
 
 `.env.local` is ignored by Git and read only by the main process at development
 startup. Do not prefix keys with `VITE_` or `MAIN_VITE_`, put them in renderer code,
@@ -63,7 +65,7 @@ apps use runtime environment variables; an end-user credentials UI is not added 
 
 Pi enables the native `read`, `grep`, `find` and `ls` tools, plus Arkive's compression,
 archive, tag, file-operation and Mole tools. `edit`, `write` and shell tools are disabled.
-There are 23 enabled tools, including `inspect_image`, `inspect_video`, `inspect_pdf`,
+There are 33 enabled tools, including `inspect_image`, `inspect_video`, `inspect_pdf`,
 `inspect_office`, `scan_duplicates` and `open_archive` (open or Finder reveal by archive
 record ID). `search_archives` accepts `state: 'pending'` for later archive/retry.
 Chat shows each tool's running/returned/error state. A returned result can still
@@ -82,7 +84,11 @@ is not exposed. The system prompt
 requires user authorization for file access, confirmation before modifying user
 files, and preservation of originals; these are prompt instructions, not a filesystem
 sandbox or an enforced confirmation dialog. Shell tools are disabled. Pi does not
-discover local extensions, Skills or project instructions.
+discover local extensions, Skills or project instructions. It explicitly loads three
+bundled scenario Skills from [resources/skills](resources/skills/README.md).
+Type `/` in the chat composer to choose a scenario, or send `/concert`, `/wechat`
+or `/photos` followed by a path or request. Native `/skill:<name>` commands also work.
+Selecting a scenario fills the composer without sending or authorizing file operations.
 SDK examples: https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/sdk
 
 Run `rtk proxy node scripts/check-agent.mts` (Node 22.19+ with TypeScript stripping)
@@ -100,6 +106,7 @@ Additional integration checks (run `rtk proxy pnpm run build` first):
 ```sh
 rtk proxy node scripts/check-processing-ui.mjs
 rtk proxy node scripts/check-agent-ui.mjs
+rtk proxy node scripts/check-agent-ui.mjs --skills
 rtk proxy node scripts/check-agent-live.mjs
 rtk proxy node scripts/check-packaged-runtime.mjs
 ```

@@ -2,6 +2,7 @@ import type { AgentSession, ResourceLoader } from '@earendil-works/pi-coding-age
 import { createConfiguredModel } from './model'
 import { arkiveSystemPrompt } from './prompt'
 import { createArkiveTools } from './tools'
+import { loadBuiltInSkills } from './skills'
 
 export async function createChatSession(cwd: string): Promise<AgentSession> {
   const [{ modelRuntime, model }, sdk] = await Promise.all([
@@ -9,10 +10,11 @@ export async function createChatSession(cwd: string): Promise<AgentSession> {
     import('@earendil-works/pi-coding-agent')
   ])
 
-  // No discovery of project/global extensions, skills, prompts or context files.
+  const skills = await loadBuiltInSkills(cwd)
+  // Only bundled skills; no project/global resources or extensions are discovered.
   const resourceLoader: ResourceLoader = {
     getExtensions: () => ({ extensions: [], errors: [], runtime: sdk.createExtensionRuntime() }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
+    getSkills: () => skills,
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
     getAgentsFiles: () => ({ agentsFiles: [] }),

@@ -76,7 +76,7 @@ exit 0
         assert.equal(saved.results[0].name, 'mole_clean_preview')
         assert.equal(saved.results[0].status, 'completed')
         assert.ok(saved.results[0].result.details.includes(candidate))
-      } else assert.equal(body.tools?.length, 28)
+      } else assert.equal(body.tools?.length, 33)
       const lastUser = body.messages.filter((message) => message.role === 'user').at(-1)
       assert.ok(lastUser)
       const scenario = textOf(lastUser)
@@ -273,6 +273,12 @@ exit 0
       await evaluate<number>(`document.querySelectorAll('${scope} .chat-tool-result').length`),
       1
     )
+    assert.equal(
+      await evaluate<string>(
+        `document.querySelector('${scope} .chat-tool-result').getAttribute('aria-label')`
+      ),
+      'mole_clean_preview 工具结果'
+    )
     await fresh()
     await send('UI_EMPTY')
     await complete()
@@ -282,6 +288,12 @@ exit 0
     assert.equal(
       await evaluate<number>(`document.querySelectorAll('${scope} .chat-tool-result').length`),
       1
+    )
+    assert.match(
+      await evaluate<string>(
+        `document.querySelector('${scope} .assistant-message-content').innerText`
+      ),
+      /工具操作|mole_clean_preview/
     )
     await writeFile(
       join(directory, 'summary-empty.png'),

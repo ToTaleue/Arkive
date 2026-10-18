@@ -16,14 +16,16 @@ import {
   Image,
   MessageSquare,
   ShieldCheck,
+  Slash,
   Square
 } from 'lucide-react'
 import { type Conversation, type PreviewMessage } from '../chat-preview'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useAgentChat } from './useAgentChat'
 import { MessageMarkdown } from './MessageMarkdown'
 import { AgentExecutionDetails, AgentExecutionError } from './AgentExecutionDetails'
 import type { AgentStatus } from '../../../shared/contracts/agent'
+import { agentSkills } from '../../../shared/agent-skills'
 
 const suggestions = [
   {
@@ -110,6 +112,8 @@ export function ChatPanel({
   onUpdate
 }: ChatPanelProps): React.JSX.Element {
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [skillQuery, setSkillQuery] = useState('')
+  const [skillIndex, setSkillIndex] = useState(0)
   const { isRunning, error, notice, send, retrySummary, stop } = useAgentChat({
     conversation,
     status,
@@ -124,6 +128,19 @@ export function ChatPanel({
     onNew: send,
     onCancel: stop
   })
+  const skillChoices =
+    !isRunning && !conversation.example && status?.configured && /^\/\S*$/.test(skillQuery)
+      ? agentSkills.filter(
+          (skill) =>
+            skill.command.startsWith(skillQuery) || `/skill:${skill.name}`.startsWith(skillQuery)
+        )
+      : []
+  const selectedSkill = skillChoices.length > 0 ? skillChoices[skillIndex] : undefined
+  function selectSkill(command: string): void {
+    runtime.thread.composer.setText(`${command} `)
+    setSkillQuery('')
+    inputRef.current?.focus()
+  }
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -144,6 +161,7 @@ export function ChatPanel({
                     className="suggestion-card"
                     onClick={() => {
                       runtime.thread.composer.setText(prompt)
+                      setSkillQuery('')
                       inputRef.current?.focus()
                     }}
                   >
@@ -199,11 +217,66 @@ export function ChatPanel({
             <ArrowDown size={17} />
           </ThreadPrimitive.ScrollToBottom>
           <ComposerPrimitive.Root className="composer">
+            {skillChoices.length > 0 && (
+              <div
+                className="skill-commands"
+                id={`skills-${conversation.id}`}
+                role="listbox"
+                aria-label="场景快捷指令"
+              >
+                {skillChoices.map((skill) => (
+                  <button
+                    type="button"
+                    role="option"
+                    id={`skill-${conversation.id}-${skill.name}`}
+                    aria-selected={selectedSkill?.name === skill.name}
+                    key={skill.name}
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                    }}
+                    onClick={() => {
+                      selectSkill(skill.command)
+                    }}
+                  >
+                    <strong>
+                      {skill.title}
+                      <code>{skill.command}</code>
+                    </strong>
+                    <small>{skill.description}</small>
+                  </button>
+                ))}
+              </div>
+            )}
             <ComposerPrimitive.Input
               ref={inputRef}
               className="composer-input"
-              placeholder="告诉 Arkive，你想整理什么？"
+              placeholder="告诉 Arkive，你想整理什么？输入 / 选择场景"
               aria-label="输入消息"
+              aria-controls={skillChoices.length ? `skills-${conversation.id}` : undefined}
+              aria-expanded={skillChoices.length > 0}
+              aria-activedescendant={
+                selectedSkill ? `skill-${conversation.id}-${selectedSkill.name}` : undefined
+              }
+              onChange={(event) => {
+                setSkillQuery(event.target.value)
+                setSkillIndex(0)
+              }}
+              onKeyDown={(event) => {
+                if (!selectedSkill || event.nativeEvent.isComposing) return
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  const step = event.key === 'ArrowDown' ? 1 : -1
+                  setSkillIndex(
+                    (index) => (index + step + skillChoices.length) % skillChoices.length
+                  )
+                } else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setSkillQuery('')
+                } else if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+                  event.preventDefault()
+                  selectSkill(selectedSkill.command)
+                }
+              }}
               rows={2}
               maxLength={32_000}
               disabled={isRunning || conversation.example || !status?.configured}
@@ -213,6 +286,23 @@ export function ChatPanel({
               <span className="composer-mode">
                 <ShieldCheck size={14} />
                 {conversation.example ? '示例对话 · 只读' : 'Pi 对话'}
+                {!conversation.example && (
+                  <button
+                    type="button"
+                    className="skill-toggle"
+                    aria-label="选择场景 Skill"
+                    title="输入 / 选择场景"
+                    disabled={isRunning || !status?.configured}
+                    onClick={() => {
+                      runtime.thread.composer.setText('/')
+                      setSkillQuery('/')
+                      setSkillIndex(0)
+                      inputRef.current?.focus()
+                    }}
+                  >
+                    <Slash size={12} /> 场景
+                  </button>
+                )}
               </span>
               <div className="composer-actions">
                 <span className="composer-shortcut">Enter 发送 · Shift + Enter 换行</span>

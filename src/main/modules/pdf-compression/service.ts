@@ -24,6 +24,13 @@ interface JsonRecord {
   [key: string]: unknown
 }
 
+interface QpdfInspectionResult {
+  document: JsonRecord
+  warnings: string[]
+}
+
+const qpdfWarningExitCode = 3
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -56,13 +63,31 @@ async function containsAsciiMarker(path: string, markers: readonly string[]): Pr
   }
 }
 
-async function runQpdfJson(inputPath: string, signal?: AbortSignal): Promise<JsonRecord> {
+function qpdfWarnings(result: { stdout: string; stderr: string }): string[] {
+  return [result.stderr, result.stdout]
+    .flatMap((output) => output.split(/\r?\n/))
+    .map((line) => line.trim())
+    .filter((line) => /^WARNING:/i.test(line))
+    .filter((line, index, lines) => lines.indexOf(line) === index)
+}
+
+function qpdfSucceeded(result: {
+  exitCode: number | null
+  signal: NodeJS.Signals | null
+}): boolean {
+  // qpdf uses exit code 3 when the operation succeeded but emitted warnings.
+  return (
+    result.signal === null && (result.exitCode === 0 || result.exitCode === qpdfWarningExitCode)
+  )
+}
+
+async function runQpdfJson(inputPath: string, signal?: AbortSignal): Promise<QpdfInspectionResult> {
   const result = await runBundledTool('qpdf', ['--json', inputPath], {
     signal,
     killTreeOnAbort: true,
     maxOutputChars: qpdfJsonOutputLimit
   })
-  if (result.exitCode !== 0 || result.signal) {
+  if (!qpdfSucceeded(result)) {
     const details = (result.stderr || result.stdout).slice(-4096)
     throw new Error(`无法读取 PDF 结构：${details || 'qpdf 处理失败。'}`)
   }
@@ -74,19 +99,20 @@ async function runQpdfJson(inputPath: string, signal?: AbortSignal): Promise<Jso
     throw new Error('PDF 结构报告格式无效，未生成压缩输出。')
   }
   if (!isRecord(parsed)) throw new Error('PDF 结构报告格式无效，未生成压缩输出。')
-  return parsed
+  return { document: parsed, warnings: qpdfWarnings(result) }
 }
 
-async function checkQpdf(inputPath: string, signal?: AbortSignal): Promise<void> {
+async function checkQpdf(inputPath: string, signal?: AbortSignal): Promise<string[]> {
   const result = await runBundledTool('qpdf', ['--check', inputPath], {
     signal,
     killTreeOnAbort: true,
     maxOutputChars: 64 * 1024
   })
-  if (result.exitCode !== 0 || result.signal) {
+  if (!qpdfSucceeded(result)) {
     const details = (result.stderr || result.stdout).slice(-4096)
     throw new Error(`PDF 结构检查失败：${details || 'qpdf 检查失败。'}`)
   }
+  return qpdfWarnings(result)
 }
 
 function extractFeatures(document: JsonRecord, hasPdfA: boolean): PdfFeatures {
@@ -140,8 +166,8 @@ async function inspectInput(inputPath: string, signal?: AbortSignal): Promise<Pd
   if (await containsAsciiMarker(input, ['/Encrypt'])) {
     throw new Error('当前不处理加密 PDF；请提供未加密副本。')
   }
-  await checkQpdf(input, signal)
-  const document = await runQpdfJson(input, signal)
+  const checkWarnings = await checkQpdf(input, signal)
+  const { document, warnings: jsonWarnings } = await runQpdfJson(input, signal)
   const encrypt = isRecord(document.encrypt) ? document.encrypt : undefined
   if (encrypt?.encrypted === true) throw new Error('当前不处理加密 PDF；请提供未加密副本。')
   const pages = document.pages
@@ -149,11 +175,13 @@ async function inspectInput(inputPath: string, signal?: AbortSignal): Promise<Pd
   const hasPdfA =
     hasNestedEntry(document, (key) => key === '/OutputIntents') ||
     (await containsAsciiMarker(input, ['pdfaid:part', 'pdfaid:conformance', 'GTS_PDFA']))
+  const warnings = [...new Set([...checkWarnings, ...jsonWarnings])]
   return {
     inputPath: input,
     originalBytes: inputStat.size,
     pageCount: pages.length,
-    features: extractFeatures(document, hasPdfA)
+    features: extractFeatures(document, hasPdfA),
+    ...(warnings.length > 0 ? { warnings } : {})
   }
 }
 

@@ -1,6 +1,7 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { Api, Model } from '@earendil-works/pi-ai'
 import { readAgentConfig } from './config'
+import { compatibleModelLimits } from './limits'
 
 /** Shared model setup for chat sessions and bounded, tool-free inference. */
 export async function createConfiguredModel(
@@ -22,6 +23,7 @@ export async function createConfiguredModel(
   let provider = config.provider
   if (provider === 'openai-compatible') {
     provider = 'arkive-compatible'
+    const limits = compatibleModelLimits(config.model)
     modelRuntime.registerProvider(provider, {
       baseUrl: config.baseUrl,
       api: 'openai-completions',
@@ -31,9 +33,10 @@ export async function createConfiguredModel(
           name: config.model,
           reasoning: false,
           input: ['text'],
-          // Conservative integration limits; no price estimate is shown in the UI.
-          contextWindow: 32_768,
-          maxTokens: 4096,
+          // No price estimate is shown in the UI. Keep the declared limits aligned with
+          // DeepSeek V4.1 Flash so long tool runs do not get truncated by Pi's catalog.
+          contextWindow: limits.contextWindow,
+          maxTokens: limits.maxTokens,
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           compat: {
             supportsStore: false,

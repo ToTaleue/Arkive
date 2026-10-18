@@ -1,5 +1,5 @@
 import { stripVTControlCharacters } from 'node:util'
-import type { AgentToolActivity } from '../../../shared/contracts/agent'
+import type { AgentExecution, AgentToolActivity } from '../../../shared/contracts/agent'
 
 function object(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -20,6 +20,35 @@ function resultText(value: unknown): string {
         })
         .join('\n')
     : ''
+}
+
+const nativeFileTools = new Set(['read', 'grep', 'find', 'ls'])
+
+function nativeToolSummary(name: string, raw: string): string | undefined {
+  if (!nativeFileTools.has(name)) return undefined
+  const lines = raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  if (name === 'grep') {
+    if (lines.some((line) => /^no matches found$/i.test(line))) return '无匹配内容。'
+    const limit = raw.match(/\[(\d+)\s+(?:match|matches)\s+limit reached/i)
+    const count =
+      limit?.[1] ?? String(lines.filter((line) => !/^\[.*limit reached/i.test(line)).length)
+    return `返回 ${count} 条匹配结果${limit ? '，已达到结果上限，请缩小范围或继续分页。' : '。'}`
+  }
+  const more = raw.match(/\[(\d+)\s+more lines? in file\.\s+Use offset=(\d+)/i)
+  const readMarker = raw.search(/\[\d+\s+more lines? in file\.\s+Use offset=\d+/i)
+  const readBody = readMarker >= 0 ? raw.slice(0, readMarker) : raw
+  const readContent = readMarker >= 0 ? readBody.replace(/\n{2}$/, '') : readBody
+  const visible = readContent.length === 0 ? 0 : readContent.split('\n').length
+  if (name === 'read')
+    return `返回 ${String(visible)} 行${more ? `，还有 ${more[1]} 行，可用 offset=${more[2]} 继续读取。` : '。'}`
+  const listedLines = lines.filter(
+    (line) => !/^\[.*(?:more lines|内容已截断|limit reached)/i.test(line)
+  )
+  const truncated = /(?:内容已截断|limit reached|Use limit=|结果已截断)/i.test(raw)
+  return `返回约 ${String(listedLines.length)} 项${truncated ? '，结果已截断，请缩小范围或继续分页。' : '。'}`
 }
 
 /** Display facts from the tool boundary, independently of the model's later answer. */
@@ -54,15 +83,82 @@ export function toolResult(
     const success = details.exitCode === 0 && !details.signal && !incomplete
     return {
       title: success ? '预览已完成' : '预览结果不完整',
-      summary: `${Array.isArray(details.candidates) ? `返回 ${String(details.candidates.length)} 个候选。` : ''}未执行删除。${name === 'mole_clean_preview' ? '系统权限是否实际用于扫描：未验证。' : ''}${incomplete ? '输出有截断，请查看详情。' : ''}`,
+      summary: `${Array.isArray(details.candidates) ? `返回 ${String(details.candidates.length)} 个候选。` : ''}未执行删除。${name === 'mole_clean_preview' ? '系统权限是否实际用于扫描：未验证。' : ''}${incomplete ? '输出有截断，请查看详情。' : details.outputExcerpted === true ? '日志为摘录。' : ''}`,
       details: boundedText(raw)
     }
   }
+  if (name === 'mole_uninstall_preview') {
+    return {
+      title: '卸载范围已检查',
+      summary: `返回 ${Array.isArray(details.candidates) ? String(details.candidates.length) : '0'} 个候选。未执行删除；应用数据默认保留，系统级残留仅供审阅。`,
+      details: boundedText(raw)
+    }
+  }
+  if (name === 'mole_clean') {
+    const status = details.status
+    return {
+      title:
+        status === 'completed'
+          ? 'Mole 清理已完成'
+          : status === 'authorization-required'
+            ? '需要重新授权'
+            : status === 'cancelled'
+              ? '清理已停止'
+              : '清理未正常完成',
+      summary:
+        status === 'authorization-required'
+          ? '本次未启动清理。'
+          : '按 Mole 规则直接删除；请核对实际日志，已删除内容不会自动恢复。',
+      details: boundedText(raw)
+    }
+  }
+  if (['mole_installer', 'mole_purge', 'mole_uninstall'].includes(name)) {
+    return {
+      title:
+        details.status === 'completed'
+          ? '所选项目已移入回收站'
+          : details.status === 'cancelled'
+            ? '操作已停止'
+            : '所选项目未全部完成',
+      summary: `已完成 ${Array.isArray(details.completed) ? String(details.completed.length) : '0'} 项，失败 ${Array.isArray(details.failed) ? String(details.failed.length) : '0'} 项，未处理 ${Array.isArray(details.unprocessed) ? String(details.unprocessed.length) : '0'} 项。未永久删除，移入回收站不等于已释放空间。`,
+      details: boundedText(raw)
+    }
+  }
+  if (name === 'inspect_pdf') {
+    const warnings = Array.isArray(details.warnings) ? details.warnings.length : 0
+    return {
+      title: warnings > 0 ? 'PDF 探测完成（有警告）' : 'PDF 探测完成',
+      summary: `${typeof details.pageCount === 'number' ? `检测到 ${String(details.pageCount)} 页。` : '已返回 PDF 结构信息。'}${warnings > 0 ? `qpdf 返回 ${String(warnings)} 条结构警告，结果仍可用于审阅。` : '未报告结构警告。'}`,
+      details: boundedText(raw)
+    }
+  }
+  const nativeSummary = nativeToolSummary(name, raw)
+  if (nativeSummary)
+    return {
+      title: '已完成',
+      summary: nativeSummary,
+      details: boundedText(raw)
+    }
   return {
     title: '工具已返回',
     summary: '请核对返回结果中的状态及未完成项目。',
     details: boundedText(raw)
   }
+}
+
+/** A deterministic summary keeps a tool run useful when the model emits no final text. */
+export function executionFallback(execution: AgentExecution): string {
+  const lines = execution.tools.map((tool) => {
+    const status =
+      tool.result?.summary ??
+      (tool.status === 'running'
+        ? '仍在执行。'
+        : tool.status === 'stopped'
+          ? '已停止。'
+          : '未返回结果。')
+    return `- ${tool.name}（${tool.status}）：${status}`
+  })
+  return [`已记录 ${String(execution.tools.length)} 项工具操作结果。`, ...lines].join('\n')
 }
 
 export function toolProgress(value: unknown, previous: AgentToolActivity): AgentToolActivity {
