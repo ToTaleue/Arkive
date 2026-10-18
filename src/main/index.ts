@@ -24,7 +24,7 @@ function createWindow(attachWindow: (contents: Electron.WebContents) => void): v
     height: 760,
     minWidth: 800,
     minHeight: 620,
-    backgroundColor: '#f3f5f3',
+    backgroundColor: '#ffffff',
     title: 'Arkive',
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
     show: false,

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, constants, type Stats } from 'node:fs'
 import { copyFile, link, lstat, mkdir, open, realpath, unlink } from 'node:fs/promises'
-import { dirname, join, parse } from 'node:path'
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path'
 import { runSystemTool } from '../../../execution/process'
 
 export function hasCode(error: unknown, code: string): boolean {
@@ -32,7 +32,8 @@ export async function hashFile(path: string): Promise<string> {
 }
 
 export async function syncFile(path: string): Promise<void> {
-  const handle = await open(path, 'r')
+  // Windows FlushFileBuffers requires write access; r+ never creates/truncates a file.
+  const handle = await open(path, process.platform === 'win32' ? 'r+' : 'r')
   try {
     await handle.sync()
   } finally {
@@ -41,14 +42,15 @@ export async function syncFile(path: string): Promise<void> {
 }
 
 export async function managedDirectory(root: string, date?: string): Promise<string> {
+  if (!isAbsolute(root)) throw new Error('受管理目录须为本地绝对路径。')
   await mkdir(root, { recursive: true })
-  if ((await lstat(root)).isSymbolicLink() || (await realpath(root)) !== root) {
+  if ((await lstat(root)).isSymbolicLink() || relative(root, await realpath(root)) !== '') {
     throw new Error('受管理目录不能是符号链接。')
   }
   if (!date) return root
   const path = join(root, date)
   await mkdir(path, { recursive: true })
-  if ((await lstat(path)).isSymbolicLink() || (await realpath(path)) !== path) {
+  if ((await lstat(path)).isSymbolicLink() || relative(path, await realpath(path)) !== '') {
     throw new Error('日期目录不能是符号链接。')
   }
   return path
@@ -97,10 +99,22 @@ export async function copyVerified(
 }
 
 export async function assertManagedFile(root: string, path: string): Promise<void> {
-  await managedDirectory(root)
-  await managedDirectory(root, parse(dirname(path)).base)
-  if ((await realpath(dirname(path))) !== dirname(path) || !path.startsWith(`${root}/`)) {
+  const target = resolve(path)
+  const child = relative(root, target)
+  // Check membership before any mkdir, including siblings with a matching prefix.
+  if (
+    !isAbsolute(path) ||
+    child === '' ||
+    isAbsolute(child) ||
+    child === '..' ||
+    child.startsWith(`..${sep}`)
+  ) {
     throw new Error('文件已离开受管理目录。')
   }
-  await fileInfo(path)
+  await managedDirectory(root)
+  const parent = dirname(target)
+  if (relative(parent, await realpath(parent)) !== '') {
+    throw new Error('文件已离开受管理目录。')
+  }
+  await fileInfo(target)
 }

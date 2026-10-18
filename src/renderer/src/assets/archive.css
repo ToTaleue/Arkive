@@ -79,12 +79,13 @@
   justify-content: center;
   gap: 6px;
   padding: 7px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-line);
   border-radius: 7px;
-  background: var(--surface);
-  color: var(--muted);
+  background: var(--control);
+  color: var(--ink);
   font: inherit;
   font-size: 12px;
+  box-shadow: var(--control-shadow);
 }
 .archive-page button:hover:enabled,
 .archive-action button:hover:enabled,
@@ -116,10 +117,10 @@
 .archive-page .archive-search {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 9px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-soft);
   color: var(--muted);
 }
@@ -151,19 +152,24 @@
 }
 .archive-segments {
   display: flex;
-  padding: 3px;
-  background: var(--surface-soft);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  background: var(--segment);
+  border: 1px solid transparent;
+  border-radius: 7px;
 }
 .archive-page .archive-segments button {
   border: 0;
   background: transparent;
   padding: 7px 18px;
+  box-shadow: none;
 }
 .archive-page .archive-segments button[aria-pressed='true'] {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--ink);
+  background: var(--control);
+  box-shadow:
+    var(--control-shadow),
+    0 0 0 0.5px var(--line);
 }
 .archive-page .archive-refresh {
   margin-left: auto;
@@ -292,8 +298,14 @@
   padding-left: 8px;
   padding-right: 0;
 }
-.archive-row:hover {
+.archive-row:nth-child(even) {
   background: var(--surface-soft);
+}
+.archive-row:hover {
+  background: var(--hover);
+}
+.archive-row:has(input:checked) {
+  background: var(--accent-soft);
 }
 .archive-page .archive-file-button {
   justify-content: flex-start;
@@ -303,6 +315,7 @@
   padding: 0;
   color: var(--ink);
   width: 100%;
+  box-shadow: none;
 }
 .archive-file-button > svg {
   color: var(--accent);
@@ -352,6 +365,7 @@
   border: 0;
   padding: 5px;
   background: transparent;
+  box-shadow: none;
 }
 .archive-empty {
   display: grid;
@@ -506,7 +520,7 @@
 .archive-page :focus-visible,
 .archive-action :focus-visible,
 .archive-tag-picker :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 .sr-only {

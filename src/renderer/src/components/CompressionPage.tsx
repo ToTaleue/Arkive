@@ -106,15 +106,19 @@ export function CompressionPage(): React.JSX.Element {
     const candidates: QueueItem[] = []
     const skipped: string[] = []
     for (const candidate of unique) {
+      const name =
+        candidate.path
+          .split(document.documentElement.dataset.platform === 'win32' ? /[\\/]/ : '/')
+          .pop() || candidate.path
       const kind = classify(candidate.path)
       if (!kind) {
-        skipped.push(candidate.path.split('/').pop() || candidate.path)
+        skipped.push(name)
         continue
       }
       const item: QueueItem = {
         id: crypto.randomUUID(),
         path: candidate.path,
-        name: candidate.path.split('/').pop() || candidate.path,
+        name,
         kind,
         sizeBytes: candidate.sizeBytes,
         status: 'ready'
@@ -338,11 +342,12 @@ export function CompressionPage(): React.JSX.Element {
       <section className="compression-options" aria-label="压缩设置">
         <div>
           <span className="compression-label">快捷档位</span>
-          <div className="compression-segments">
+          <div className="compression-segments" role="group" aria-label="快捷档位">
             {(['quality', 'balanced', 'size'] as const).map((value) => (
               <button
                 key={value}
                 className={preset === value ? 'selected' : ''}
+                aria-pressed={preset === value}
                 disabled={busy}
                 onClick={() => {
                   setPreset(value)

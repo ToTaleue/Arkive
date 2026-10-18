@@ -79,7 +79,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border: 1px dashed var(--accent-line);
+  border: 1px dashed var(--control-line);
   border-radius: 10px;
   background: var(--panel-soft);
   color: var(--accent);

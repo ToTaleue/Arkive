@@ -317,9 +317,9 @@ function App(): React.JSX.Element {
   return (
     <div className="app-shell">
       <header className="window-bar">
-        <div className="window-controls-space" />
+        <div className="window-controls-space" aria-hidden="true" />
         <div className="window-breadcrumb">
-          <Archive size={15} />
+          <Archive size={15} aria-hidden="true" />
           <span>Arkive</span>
           <ChevronRight size={13} />
           <span className="muted">
@@ -335,7 +335,7 @@ function App(): React.JSX.Element {
                       ? '视频压缩'
                       : activePage === 'image'
                         ? '图片压缩'
-                        : '工作空间'}
+                        : 'AI 助手'}
           </span>
         </div>
         <span className="preview-badge">
@@ -346,15 +346,17 @@ function App(): React.JSX.Element {
               ? '本地压缩'
               : activePage === 'toolbox'
                 ? '本地文件工具'
-                : activePage === 'video'
-                  ? '本地视频处理'
-                  : activePage === 'image'
-                    ? '本地图片处理'
-                    : agentStatus?.configured
-                      ? 'Pi 对话'
-                      : '待配置模型'}
+                : activePage === 'archive'
+                  ? '本地归档'
+                  : activePage === 'video'
+                    ? '本地视频处理'
+                    : activePage === 'image'
+                      ? '本地图片处理'
+                      : agentStatus?.configured
+                        ? 'Pi 对话'
+                        : '待配置模型'}
         </span>
-        <div className="theme-switcher" aria-label="日间与夜间主题">
+        <div className="theme-switcher" role="group" aria-label="日间与夜间主题">
           <button
             type="button"
             className={theme === 'day' ? 'active' : ''}
@@ -383,8 +385,18 @@ function App(): React.JSX.Element {
       </header>
       <div className="workspace">
         <nav className="icon-rail" aria-label="主导航">
+          <div className="sidebar-brand">
+            <span className="app-icon" aria-hidden="true">
+              <Archive size={22} strokeWidth={1.6} />
+            </span>
+            <div>
+              <strong>Arkive</strong>
+              <span>你的本地文件空间</span>
+            </div>
+          </div>
+          <p className="rail-heading">工作空间</p>
           <button
-            className="brand-mark"
+            className={`brand-mark rail-button ${activePage === 'chat' ? 'active' : ''}`}
             title="Agent"
             aria-label="Agent"
             aria-current={activePage === 'chat' ? 'page' : undefined}
@@ -392,9 +404,9 @@ function App(): React.JSX.Element {
               setActivePage('chat')
             }}
           >
-            <Archive size={23} strokeWidth={1.6} />
+            <MessageSquare size={18} strokeWidth={1.7} aria-hidden="true" />
+            <span>AI 助手</span>
           </button>
-          <div className="rail-divider" />
           <button
             className={`rail-button ${activePage === 'compression' ? 'active' : ''}`}
             title="压缩"
@@ -405,7 +417,8 @@ function App(): React.JSX.Element {
               setActivePage('compression')
             }}
           >
-            <Shrink size={21} strokeWidth={1.6} />
+            <Shrink size={18} strokeWidth={1.7} aria-hidden="true" />
+            <span>压缩</span>
           </button>
           <button
             hidden
@@ -432,7 +445,8 @@ function App(): React.JSX.Element {
               setActivePage('archive')
             }}
           >
-            <Archive size={21} strokeWidth={1.6} />
+            <Archive size={18} strokeWidth={1.7} aria-hidden="true" />
+            <span>我的归档</span>
           </button>
           <button
             className={`rail-button ${activePage === 'toolbox' ? 'active' : ''}`}
@@ -443,22 +457,24 @@ function App(): React.JSX.Element {
               setActivePage('toolbox')
             }}
           >
-            <Wrench size={21} strokeWidth={1.6} />
+            <Wrench size={18} strokeWidth={1.7} aria-hidden="true" />
+            <span>工具箱</span>
           </button>
           <div className="rail-bottom">
-            <span className="profile-mark" title="本地工作空间">
-              H
-            </span>
+            <ShieldCheck size={16} aria-hidden="true" />
+            <span>文件保留在本机</span>
           </div>
         </nav>
         {activePage === 'chat' && leftOpen && (
           <aside id="conversation-sidebar" className="conversation-sidebar" aria-label="会话列表">
             <div className="sidebar-heading">
-              <h1>Arkive</h1>
+              <h1>对话</h1>
               <button
                 className="icon-button"
                 title="收起会话列表"
                 aria-label="收起会话列表"
+                aria-expanded={leftOpen}
+                aria-controls="conversation-sidebar"
                 onClick={() => {
                   setLeftOpen(false)
                 }}
@@ -508,6 +524,8 @@ function App(): React.JSX.Element {
                   className="icon-button"
                   title="展开会话列表"
                   aria-label="展开会话列表"
+                  aria-expanded={leftOpen}
+                  aria-controls="conversation-sidebar"
                   onClick={() => {
                     setLeftOpen(true)
                   }}

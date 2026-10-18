@@ -3,6 +3,11 @@ import { XMLParser } from 'fast-xml-parser'
 import XMLBuilder from 'fast-xml-builder'
 import { SyntaxValidator } from 'fast-xml-validator'
 
+// Cached libvips inputs keep WebP file handles open on Windows, preventing
+// verified originals and temporary candidates from being moved or removed.
+// Keep the memory/operation cache limits; only disable retained file handles.
+if (process.platform === 'win32') sharp.cache({ files: 0 })
+
 export interface SharpEncodingOptions {
   format: 'webp' | 'jpeg'
   quality: number
