@@ -188,6 +188,7 @@ async function check(): Promise<void> {
     await window.loadFile(resolve('out/renderer/index.html'))
     await type('/')
     await wait(`document.querySelectorAll('${scope} [role="option"]').length===3`)
+    await evaluate('new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))')
     await writeFile(
       join(directory, 'skill-menu.png'),
       (await window.webContents.capturePage()).toPNG()
