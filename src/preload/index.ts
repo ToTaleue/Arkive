@@ -71,6 +71,12 @@ const api: ArkiveApi = {
       ipcRenderer.invoke(processingChannels.duplicates, id, path) as Promise<
         ProcessingOutcome<DuplicateScanResult>
       >,
+    clone: (id, request) =>
+      ipcRenderer.invoke(processingChannels.clone, id, request) as Promise<
+        ProcessingOutcome<
+          import('../shared/contracts/clone-deduplication').CloneDeduplicationResult
+        >
+      >,
     cancel: (id) => ipcRenderer.invoke(processingChannels.cancel, id) as Promise<void>,
     reveal: () => ipcRenderer.invoke(processingChannels.reveal) as Promise<void>,
     localFilePath: (file) => webUtils.getPathForFile(file)
@@ -85,8 +91,8 @@ const api: ArkiveApi = {
     refresh: () => ipcRenderer.invoke(catalogChannels.refresh) as Promise<void>,
     retryBackup: (id) =>
       ipcRenderer.invoke(catalogChannels.retryBackup, id) as Promise<ArchiveItem>,
-    open: (id) => ipcRenderer.invoke(catalogChannels.open, id) as Promise<void>,
-    reveal: (id) => ipcRenderer.invoke(catalogChannels.reveal, id) as Promise<void>,
+    open: (id, target) => ipcRenderer.invoke(catalogChannels.open, id, target) as Promise<void>,
+    reveal: (id, target) => ipcRenderer.invoke(catalogChannels.reveal, id, target) as Promise<void>,
     onChanged: (listener) => {
       const handler = (): void => {
         listener()
@@ -113,6 +119,8 @@ const api: ArkiveApi = {
   },
   video: {
     select: () => ipcRenderer.invoke(videoChannels.select) as Promise<SelectedVideo | null>,
+    selectPath: (inputPath) =>
+      ipcRenderer.invoke(videoChannels.selectPath, inputPath) as Promise<SelectedVideo>,
     compress: (request) =>
       ipcRenderer.invoke(videoChannels.compress, request) as Promise<VideoCompressionOutcome>,
     cancel: (runId) => ipcRenderer.invoke(videoChannels.cancel, runId) as Promise<void>,

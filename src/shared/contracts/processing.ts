@@ -2,6 +2,7 @@ import type { CompressionLifecycleResult } from './catalog'
 import type { PdfCompressionResult, PdfInspection } from './pdf'
 import type { OfficeInspection, OfficeReplacementResult } from './office'
 import type { DuplicateScanResult } from './duplicates'
+import type { CloneDeduplicationRequest, CloneDeduplicationResult } from './clone-deduplication'
 
 export type DocumentKind = 'pdf' | 'office'
 export type SelectedDocument = { id: string; name: string; path: string } & (
@@ -24,6 +25,7 @@ export const processingChannels = {
   compress: 'processing:compress',
   selectFolder: 'processing:select-folder',
   duplicates: 'processing:duplicates',
+  clone: 'processing:clone',
   cancel: 'processing:cancel',
   reveal: 'processing:reveal'
 } as const
@@ -33,6 +35,10 @@ export interface ProcessingApi {
   compress: (request: DocumentStart) => Promise<ProcessingOutcome<DocumentResult>>
   selectFolder: () => Promise<string | null>
   duplicates: (runId: string, path: string) => Promise<ProcessingOutcome<DuplicateScanResult>>
+  clone: (
+    runId: string,
+    request: CloneDeduplicationRequest
+  ) => Promise<ProcessingOutcome<CloneDeduplicationResult>>
   cancel: (runId: string) => Promise<void>
   reveal: () => Promise<void>
   localFilePath: (file: File) => string

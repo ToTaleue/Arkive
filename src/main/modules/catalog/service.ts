@@ -358,6 +358,14 @@ export class Catalog {
     })
   }
 
+  async filePath(id: string, target: 'archive' | 'backup' = 'archive'): Promise<string> {
+    if (target === 'archive') return this.archivePath(id)
+    const row = this.repo.get(id)
+    if (row.backup_status !== 'ready' || !row.backup_path) throw new Error('原件备份尚未就绪。')
+    await assertManagedFile(this.backupRoot, row.backup_path)
+    return row.backup_path
+  }
+
   async archivePath(id: string): Promise<string> {
     const row = this.repo.get(id)
     if (row.archive_status !== 'ready' || !row.archive_path) throw new Error('文件尚未归档。')

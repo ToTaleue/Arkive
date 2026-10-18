@@ -6,9 +6,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Archive,
   ChevronRight,
-  Film,
-  FileText,
-  Image as ImageIcon,
   Folder,
   FolderOpen,
   MessageSquare,
@@ -17,13 +14,17 @@ import {
   Plus,
   ShieldCheck,
   SquarePen,
+  Shrink,
   Moon,
   Sun,
-  X
+  X,
+  Wrench
 } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
 import { VideoCompressionPage } from './components/VideoCompressionPage'
 import { ImageCompressionPage } from './components/ImageCompressionPage'
+import { ToolboxPage } from './components/ToolboxPage'
+import { CompressionPage } from './components/CompressionPage'
 import { initialConversations, type Conversation, type PreviewMessage } from './chat-preview'
 import type { AgentStatus } from '../../shared/contracts/agent'
 import type {
@@ -35,10 +36,10 @@ import type {
 
 function App(): React.JSX.Element {
   const [activePage, setActivePage] = useState<
-    'chat' | 'video' | 'image' | 'documents' | 'archive'
+    'chat' | 'compression' | 'video' | 'image' | 'documents' | 'archive' | 'toolbox'
   >('chat')
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 680)
-  const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 960)
+  const [rightOpen, setRightOpen] = useState(false)
   const [theme, setTheme] = useState<'day' | 'night'>(() => {
     const saved = window.localStorage.getItem('arkive-theme')
     return saved === 'night' ? 'night' : 'day'
@@ -324,26 +325,34 @@ function App(): React.JSX.Element {
           <span className="muted">
             {activePage === 'documents'
               ? '文档压缩与重复检测'
-              : activePage === 'archive'
-                ? '我的归档'
-                : activePage === 'video'
-                  ? '视频压缩'
-                  : activePage === 'image'
-                    ? '图片压缩'
-                    : '工作空间'}
+              : activePage === 'compression'
+                ? '压缩'
+                : activePage === 'toolbox'
+                  ? '工具箱'
+                  : activePage === 'archive'
+                    ? '我的归档'
+                    : activePage === 'video'
+                      ? '视频压缩'
+                      : activePage === 'image'
+                        ? '图片压缩'
+                        : '工作空间'}
           </span>
         </div>
         <span className="preview-badge">
           <span />
           {activePage === 'documents'
             ? '本地文档处理'
-            : activePage === 'video'
-              ? '本地视频处理'
-              : activePage === 'image'
-                ? '本地图片处理'
-                : agentStatus?.configured
-                  ? 'Pi 对话'
-                  : '待配置模型'}
+            : activePage === 'compression'
+              ? '本地压缩'
+              : activePage === 'toolbox'
+                ? '本地文件工具'
+                : activePage === 'video'
+                  ? '本地视频处理'
+                  : activePage === 'image'
+                    ? '本地图片处理'
+                    : agentStatus?.configured
+                      ? 'Pi 对话'
+                      : '待配置模型'}
         </span>
         <div className="theme-switcher" aria-label="日间与夜间主题">
           <button
@@ -376,63 +385,44 @@ function App(): React.JSX.Element {
         <nav className="icon-rail" aria-label="主导航">
           <button
             className="brand-mark"
-            title="新对话"
-            aria-label="新对话"
-            onClick={newConversation}
+            title="Agent"
+            aria-label="Agent"
+            aria-current={activePage === 'chat' ? 'page' : undefined}
+            onClick={() => {
+              setActivePage('chat')
+            }}
           >
             <Archive size={23} strokeWidth={1.6} />
           </button>
           <div className="rail-divider" />
           <button
-            className={`rail-button ${activePage === 'chat' && leftOpen ? 'active' : ''}`}
-            title="切换会话列表"
-            aria-label="切换会话列表"
-            aria-controls="conversation-sidebar"
-            aria-expanded={activePage === 'chat' && leftOpen}
+            className={`rail-button ${activePage === 'compression' ? 'active' : ''}`}
+            title="压缩"
+            aria-label="压缩"
+            aria-controls="compression-page"
+            aria-current={activePage === 'compression' ? 'page' : undefined}
             onClick={() => {
-              if (activePage !== 'chat') setActivePage('chat')
-              else setLeftOpen(!leftOpen)
+              setActivePage('compression')
             }}
           >
-            <MessageSquare size={21} strokeWidth={1.6} />
+            <Shrink size={21} strokeWidth={1.6} />
           </button>
           <button
-            className={`rail-button ${activePage === 'video' ? 'active' : ''}`}
-            title="视频压缩"
+            hidden
+            type="button"
             aria-label="视频压缩"
-            aria-controls="video-compression-page"
-            aria-current={activePage === 'video' ? 'page' : undefined}
             onClick={() => {
               setActivePage('video')
             }}
-          >
-            <Film size={21} strokeWidth={1.6} />
-          </button>
+          />
           <button
-            className={`rail-button ${activePage === 'image' ? 'active' : ''}`}
-            title="图片压缩"
+            hidden
+            type="button"
             aria-label="图片压缩"
-            aria-controls="image-compression-page"
-            aria-current={activePage === 'image' ? 'page' : undefined}
             onClick={() => {
               setActivePage('image')
             }}
-          >
-            <ImageIcon size={21} strokeWidth={1.6} />
-          </button>
-          <button
-            className={`rail-button ${activePage === 'chat' && rightOpen ? 'active' : ''}`}
-            title="切换工作区"
-            aria-label="切换工作区"
-            aria-controls="details-sidebar"
-            aria-expanded={activePage === 'chat' && rightOpen}
-            onClick={() => {
-              setActivePage('chat')
-              setRightOpen(!rightOpen)
-            }}
-          >
-            <FolderOpen size={21} strokeWidth={1.6} />
-          </button>
+          />
           <button
             className={`rail-button ${activePage === 'archive' ? 'active' : ''}`}
             title="我的归档"
@@ -445,15 +435,15 @@ function App(): React.JSX.Element {
             <Archive size={21} strokeWidth={1.6} />
           </button>
           <button
-            className={`rail-button ${activePage === 'documents' ? 'active' : ''}`}
-            title="文档压缩与重复检测"
-            aria-label="文档压缩与重复检测"
-            aria-current={activePage === 'documents' ? 'page' : undefined}
+            className={`rail-button ${activePage === 'toolbox' ? 'active' : ''}`}
+            title="工具箱"
+            aria-label="工具箱"
+            aria-current={activePage === 'toolbox' ? 'page' : undefined}
             onClick={() => {
-              setActivePage('documents')
+              setActivePage('toolbox')
             }}
           >
-            <FileText size={21} strokeWidth={1.6} />
+            <Wrench size={21} strokeWidth={1.6} />
           </button>
           <div className="rail-bottom">
             <span className="profile-mark" title="本地工作空间">
@@ -566,6 +556,16 @@ function App(): React.JSX.Element {
         </main>
         <main className="documents-main" id="documents-page" hidden={activePage !== 'documents'}>
           <DocumentCompressionPage />
+        </main>
+        <main
+          className="compression-main"
+          id="compression-page"
+          hidden={activePage !== 'compression'}
+        >
+          <CompressionPage />
+        </main>
+        <main className="toolbox-main" id="toolbox-page" hidden={activePage !== 'toolbox'}>
+          <ToolboxPage />
         </main>
         {activePage === 'chat' && rightOpen && (
           <aside id="details-sidebar" className="details-sidebar" aria-label="工作区">

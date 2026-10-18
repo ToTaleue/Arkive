@@ -116,6 +116,8 @@ export class CatalogRepository {
       sourceModifiedAt: row.source_modified_at,
       archivedAt: row.archived_at,
       outputBytes: row.output_bytes,
+      sourceBytes: row.source_size,
+      backedUpAt: row.backed_up_at,
       backupPath: row.backup_path,
       backupStatus: row.backup_status,
       backupError: row.backup_error,
@@ -155,13 +157,25 @@ export class CatalogRepository {
             "archive_status != 'ready'",
             "NOT EXISTS (SELECT 1 FROM office_replacements o WHERE o.item_id = catalog_items.id AND o.state != 'replaced')"
           ]
-        : ["archive_status = 'ready'"]
+        : query.state === 'backup'
+          ? ["backup_status = 'ready'", 'backup_path IS NOT NULL']
+          : ["archive_status = 'ready'"]
     const values: SQLInputValue[] = []
+    if (query.kind) {
+      const extensions = {
+        video: ['mp4', 'mov', 'm4v', 'mkv', 'avi', 'webm'],
+        image: ['jpg', 'jpeg', 'png', 'webp', 'tif', 'tiff', 'gif', 'heic', 'heif', 'avif'],
+        document: ['pdf', 'docx', 'pptx', 'xlsx', 'doc', 'ppt', 'xls', 'txt', 'md']
+      }[query.kind]
+      conditions.push(`(${extensions.map(() => 'lower(original_name) LIKE ?').join(' OR ')})`)
+      values.push(...extensions.map((extension) => `%.${extension}`))
+    }
     if (query.name) {
       conditions.push(
-        '(instr(lower(output_name), lower(?)) > 0 OR instr(lower(original_name), lower(?)) > 0)'
+        `(instr(lower(output_name), lower(?)) > 0 OR instr(lower(original_name), lower(?)) > 0
+        OR EXISTS (SELECT 1 FROM catalog_item_tags t WHERE t.item_id = catalog_items.id AND instr(lower(t.tag), lower(?)) > 0))`
       )
-      values.push(query.name, query.name)
+      values.push(query.name, query.name, query.name)
     }
     for (const [key, column, sign] of [
       ['modifiedFrom', 'source_modified_at', '>='],
@@ -169,9 +183,11 @@ export class CatalogRepository {
       ['archivedFrom', 'archived_at', '>='],
       ['archivedTo', 'archived_at', '<']
     ] as const) {
+      const dateColumn =
+        query.state === 'backup' && column === 'archived_at' ? 'backed_up_at' : column
       const value = query[key]
       if (value !== undefined) {
-        conditions.push(`${column} ${sign} ?`)
+        conditions.push(`${dateColumn} ${sign} ?`)
         values.push(value)
       }
     }
@@ -187,7 +203,7 @@ export class CatalogRepository {
     )
     const ids = this.db
       .prepare(
-        `SELECT id FROM catalog_items WHERE ${where} ORDER BY archived_at DESC, id LIMIT 50 OFFSET ?`
+        `SELECT id FROM catalog_items WHERE ${where} ORDER BY ${query.state === 'backup' ? 'backed_up_at' : 'archived_at'} DESC, id LIMIT 50 OFFSET ?`
       )
       .all(...values, query.offset ?? 0)
     return { items: ids.map((row) => this.item(String(row.id))), total, tags: this.allTags() }

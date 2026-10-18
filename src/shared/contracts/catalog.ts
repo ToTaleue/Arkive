@@ -32,6 +32,8 @@ export interface ArchiveItem extends CompressionRecord {
   sourceModifiedAt: number
   archivedAt: number | null
   outputBytes: number
+  sourceBytes?: number
+  backedUpAt?: number | null
   tags: string[]
   tagStatus: 'synced' | 'pending' | 'error'
   tagError: string | null
@@ -43,8 +45,9 @@ export interface ArchiveItem extends CompressionRecord {
 }
 
 export interface CatalogQuery {
-  state?: 'archived' | 'pending'
+  state?: 'archived' | 'pending' | 'backup'
   name?: string
+  kind?: 'video' | 'image' | 'document'
   tags?: string[]
   modifiedFrom?: number
   modifiedTo?: number
@@ -99,7 +102,7 @@ export interface CatalogApi {
   tags: (ids: string[], add: string[], remove: string[]) => Promise<void>
   refresh: () => Promise<void>
   retryBackup: (id: string) => Promise<ArchiveItem>
-  open: (id: string) => Promise<void>
-  reveal: (id: string) => Promise<void>
+  open: (id: string, target?: 'archive' | 'backup') => Promise<void>
+  reveal: (id: string, target?: 'archive' | 'backup') => Promise<void>
   onChanged: (listener: () => void) => () => void
 }

@@ -56,12 +56,35 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
     return { state, window }
   }
 
+  async function selectPath(state: WindowState, inputPath: string): Promise<SelectedVideo> {
+    if (!inputPath) throw new Error('请选择视频文件。')
+    const controller = new AbortController()
+    state.inspection = controller
+    try {
+      const path = await realpath(inputPath)
+      const info = await stat(path)
+      if (!info.isFile()) throw new Error('请选择普通视频文件。')
+      const inspection = await inspectVideo(path, controller.signal)
+      controller.signal.throwIfAborted()
+      const selected: SelectedVideo = {
+        id: randomUUID(),
+        name: basename(path),
+        path,
+        sizeBytes: info.size,
+        ...inspection
+      }
+      state.selection = selected
+      state.outputPath = undefined
+      return selected
+    } finally {
+      state.inspection = undefined
+    }
+  }
+
   ipcMain.handle(videoChannels.select, async (event): Promise<SelectedVideo | null> => {
     const { state, window } = getWindow(event)
     if (state.running || state.selecting) throw new Error('请等待当前操作完成。')
     state.selecting = true
-    const controller = new AbortController()
-    state.inspection = controller
     try {
       const selected = await dialog.showOpenDialog(window, {
         title: '选择要压缩的视频',
@@ -74,23 +97,20 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
       })
       if (selected.canceled || !selected.filePaths[0] || windows.get(event.sender.id) !== state)
         return null
-      const path = await realpath(selected.filePaths[0])
-      const info = await stat(path)
-      if (!info.isFile()) throw new Error('请选择普通视频文件。')
-      const inspection = await inspectVideo(path, controller.signal)
-      controller.signal.throwIfAborted()
-      if (windows.get(event.sender.id) !== state) return null
-      state.selection = {
-        id: randomUUID(),
-        name: basename(path),
-        path,
-        sizeBytes: info.size,
-        ...inspection
-      }
-      state.outputPath = undefined
-      return state.selection
+      return await selectPath(state, selected.filePaths[0])
     } finally {
-      state.inspection = undefined
+      state.selecting = false
+    }
+  })
+
+  ipcMain.handle(videoChannels.selectPath, async (event, inputPath: unknown) => {
+    const { state } = getWindow(event)
+    if (state.running || state.selecting) throw new Error('请等待当前操作完成。')
+    if (typeof inputPath !== 'string') throw new Error('拖入的视频路径无效。')
+    state.selecting = true
+    try {
+      return await selectPath(state, inputPath)
+    } finally {
       state.selecting = false
     }
   })

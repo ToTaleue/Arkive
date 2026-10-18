@@ -65,6 +65,7 @@ export type VideoCompressionOutcome =
 
 export const videoChannels = {
   select: 'video:select',
+  selectPath: 'video:select-path',
   compress: 'video:compress',
   cancel: 'video:cancel',
   update: 'video:update',
@@ -74,6 +75,7 @@ export const videoChannels = {
 export type VideoCompressionUpdate = VideoCompressionProgress & { runId: string }
 export interface VideoApi {
   select: () => Promise<SelectedVideo | null>
+  selectPath: (inputPath: string) => Promise<SelectedVideo>
   compress: (request: VideoStartRequest) => Promise<VideoCompressionOutcome>
   cancel: (runId: string) => Promise<void>
   onUpdate: (listener: (update: VideoCompressionUpdate) => void) => () => void

@@ -1,0 +1,395 @@
+.compression-main {
+  min-width: 0;
+  overflow: auto;
+}
+
+.compression-page {
+  min-height: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 34px clamp(22px, 4vw, 64px) 48px;
+  color: var(--ink);
+}
+
+.compression-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.compression-eyebrow {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.compression-heading h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -0.04em;
+}
+
+.compression-heading p:not(.compression-eyebrow) {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.compression-primary,
+.compression-secondary,
+.compression-drop-actions button,
+.compression-running button {
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.compression-primary {
+  min-width: 126px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.compression-primary:disabled,
+.compression-secondary:disabled,
+.compression-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.compression-drop {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 34px 24px;
+  border: 1px dashed var(--accent-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+  text-align: center;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.compression-drop.is-dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.compression-drop > svg {
+  color: var(--accent);
+}
+.compression-drop strong {
+  font-size: 18px;
+}
+.compression-drop > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.compression-drop-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.compression-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.compression-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 18px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--line);
+}
+
+.compression-summary > div {
+  display: grid;
+  gap: 7px;
+  padding: 14px 16px;
+  background: var(--surface-soft);
+}
+.compression-summary span,
+.compression-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.compression-summary strong {
+  font-size: 16px;
+}
+
+.compression-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 160px minmax(180px, 0.8fr);
+  align-items: end;
+  gap: 18px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.compression-options > div,
+.compression-options label {
+  display: grid;
+  gap: 8px;
+}
+.compression-options select {
+  width: 100%;
+}
+.compression-segments {
+  display: flex;
+  gap: 6px;
+}
+.compression-segments button {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.compression-segments button.selected {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.quality-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.quality-control input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.quality-control output {
+  min-width: 24px;
+  color: var(--ink);
+  font-size: 12px;
+}
+.compression-confirm {
+  display: flex !important;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 8px !important;
+  color: var(--muted);
+  font-size: 12px;
+}
+.compression-confirm input {
+  accent-color: var(--accent);
+}
+
+.compression-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.compression-running button {
+  margin-left: auto;
+  padding: 5px 9px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+}
+.compression-running .spin {
+  animation: compression-spin 1s linear infinite;
+  color: var(--accent);
+}
+@keyframes compression-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.compression-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-height: 240px;
+  padding: 62px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.compression-empty svg {
+  color: var(--accent);
+}
+.compression-empty h2 {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-size: 19px;
+}
+.compression-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.compression-list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.compression-list-heading,
+.compression-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 80px 100px minmax(150px, 0.6fr) 32px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+}
+.compression-list-heading {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.compression-row {
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.compression-file {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.compression-file-icon {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.compression-file > div {
+  min-width: 0;
+}
+.compression-file strong,
+.compression-file small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compression-file small {
+  max-width: 460px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.compression-kind {
+  color: var(--muted);
+}
+.compression-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.compression-status.done {
+  color: var(--accent);
+}
+.compression-status.error {
+  color: var(--danger);
+}
+.compression-status.running {
+  color: var(--accent);
+}
+.compression-remove {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.compression-remove:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.compression-error,
+.compression-notice {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.compression-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.compression-notice {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.compression-footnote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .compression-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .compression-primary {
+    width: 100%;
+  }
+  .compression-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .compression-options {
+    grid-template-columns: 1fr;
+  }
+  .compression-list {
+    overflow-x: auto;
+  }
+  .compression-list-heading,
+  .compression-row {
+    min-width: 680px;
+  }
+  .compression-file small {
+    max-width: 300px;
+  }
+}

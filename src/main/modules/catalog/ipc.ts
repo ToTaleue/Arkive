@@ -19,9 +19,14 @@ function query(value: unknown): CatalogQuery {
   const request = value as Record<string, unknown>
   const result: CatalogQuery = {}
   if (request.state !== undefined) {
-    if (request.state !== 'archived' && request.state !== 'pending')
+    if (request.state !== 'archived' && request.state !== 'pending' && request.state !== 'backup')
       throw new Error('无效的归档状态。')
     result.state = request.state
+  }
+  if (request.kind !== undefined) {
+    if (request.kind !== 'video' && request.kind !== 'image' && request.kind !== 'document')
+      throw new Error('无效的文件类型。')
+    result.kind = request.kind
   }
   if (request.name !== undefined) {
     if (typeof request.name !== 'string' || request.name.length > 500)
@@ -84,12 +89,17 @@ export function registerCatalogIpc(catalog: Catalog): (contents: WebContents) =>
     )
   })
   handle(catalogChannels.refresh, () => catalog.refresh())
-  handle(catalogChannels.open, async (value) => {
-    const error = await shell.openPath(await catalog.archivePath(id(value)))
+  function target(value: unknown): 'archive' | 'backup' {
+    if (value === undefined || value === 'archive') return 'archive'
+    if (value === 'backup') return 'backup'
+    throw new Error('无效的文件位置。')
+  }
+  handle(catalogChannels.open, async (value, location) => {
+    const error = await shell.openPath(await catalog.filePath(id(value), target(location)))
     if (error) throw new Error(error)
   })
-  handle(catalogChannels.reveal, async (value) => {
-    shell.showItemInFolder(await catalog.archivePath(id(value)))
+  handle(catalogChannels.reveal, async (value, location) => {
+    shell.showItemInFolder(await catalog.filePath(id(value), target(location)))
   })
   catalog.subscribe(() => {
     for (const contents of windows)

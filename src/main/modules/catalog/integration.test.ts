@@ -69,6 +69,17 @@ async function check(): Promise<void> {
     assert.deepEqual((await catalog.archive(first.id, [])).archivePath, archived.archivePath)
     assert.equal(catalog.query({ tags: ['旅行', '素材'] }).total, 1)
     assert.equal(catalog.query({ name: '演唱会 一' }).total, 1)
+    assert.equal(catalog.query({ name: '旅行' }).total, 1, 'Search also matches tags')
+    assert.equal(catalog.query({ kind: 'document' }).total, 1)
+    assert.equal(catalog.query({ kind: 'image' }).total, 0)
+    const backupView = catalog.query({ state: 'backup' })
+    assert.equal(backupView.total, 1, 'Archived records retain their original backups')
+    assert.equal(backupView.items[0].sourceBytes, original.length)
+    assert.ok(backupView.items[0].backedUpAt)
+    assert.equal(await catalog.filePath(first.id, 'backup'), record.backupPath)
+    assert.equal(await hashFile(await catalog.filePath(first.id, 'backup')), sourceHash)
+    assert.equal(catalog.query({ state: 'backup', archivedFrom: Date.now() + 60_000 }).total, 0)
+
     assert.equal(
       catalog.query({ name: 'catalog-check-' }).total,
       0,
@@ -211,8 +222,8 @@ async function check(): Promise<void> {
     const attach = registerCatalogIpc(catalog)
     window = new BrowserWindow({
       show: false,
-      width: 1280,
-      height: 900,
+      width: 1120,
+      height: 760,
       webPreferences: { preload: resolve('out/preload/index.js'), sandbox: false }
     })
     attach(window.webContents)
@@ -234,7 +245,107 @@ async function check(): Promise<void> {
       await contents.executeJavaScript('document.querySelector("#archive-page").hidden'),
       false
     )
+    await contents.executeJavaScript(`document.querySelector('[title="日间模式"]').click()`)
+    assert.equal(
+      await contents.executeJavaScript(
+        'getComputedStyle(document.documentElement).getPropertyValue("--surface").trim()'
+      ),
+      '#ffffff'
+    )
+    assert.equal(
+      await contents.executeJavaScript('document.querySelector("#archive-tag-filters").hidden'),
+      true
+    )
+    await contents.executeJavaScript(
+      'document.querySelector("[aria-controls=archive-tag-filters]").click()'
+    )
+    assert.equal(
+      await contents.executeJavaScript('document.querySelector("#archive-tag-filters").hidden'),
+      false
+    )
+    const expandedHeight = Number(
+      await contents.executeJavaScript(
+        'document.querySelector(".archive-discovery").getBoundingClientRect().height'
+      )
+    )
+    await contents.executeJavaScript('document.querySelector(".archive-density-toggle").click()')
+    assert.ok(
+      (await contents.executeJavaScript(
+        'document.querySelector(".archive-discovery").getBoundingClientRect().height'
+      )) < expandedHeight
+    )
+    assert.ok(
+      await contents.executeJavaScript(
+        'document.querySelector(".archive-search input").getClientRects().length > 0'
+      )
+    )
+    await contents.executeJavaScript(
+      'document.querySelector("[aria-controls=archive-tag-filters]").click()'
+    )
+    await delay(100)
     await writeFile(join(directory, 'archive-preview.png'), (await contents.capturePage()).toPNG())
+    await contents.executeJavaScript(`document.querySelector('.archive-file-button').click()`)
+    assert.equal(
+      await contents.executeJavaScript('document.querySelector(".archive-detail-dialog").open'),
+      true
+    )
+    await contents.executeJavaScript(
+      `document.querySelector('[aria-label="关闭文件详情"]').click()`
+    )
+    await contents.executeJavaScript(`document.querySelector('[title="夜间模式"]').click()`)
+    assert.equal(
+      await contents.executeJavaScript(
+        'getComputedStyle(document.documentElement).getPropertyValue("--surface").trim()'
+      ),
+      '#1b2023'
+    )
+    await delay(100)
+    await writeFile(join(directory, 'archive-night.png'), (await contents.capturePage()).toPNG())
+    await contents.executeJavaScript(
+      `[...document.querySelectorAll('.archive-segments button')].find(b => b.textContent === '备份').click()`
+    )
+    const backupDeadline = Date.now() + 10_000
+    while (
+      !(await contents.executeJavaScript(
+        'document.querySelector(".archive-list-head").textContent.includes("原件备份") && document.querySelectorAll(".archive-row").length > 0'
+      ))
+    ) {
+      assert.ok(Date.now() < backupDeadline, 'Backup view did not load')
+      await delay(50)
+    }
+    await assert.rejects(
+      contents.executeJavaScript(`window.api.catalog.open(${JSON.stringify(first.id)}, 'invalid')`),
+      /无效的文件位置/
+    )
+    await contents.executeJavaScript(`document.querySelector('[title="日间模式"]').click()`)
+    window.setSize(800, 700)
+    await delay(100)
+    assert.ok(
+      await contents.executeJavaScript(
+        'document.querySelector(".archive-table-scroll").scrollWidth > 0'
+      )
+    )
+    await writeFile(join(directory, 'archive-narrow.png'), (await contents.capturePage()).toPNG())
+    await contents.executeJavaScript(
+      `[...document.querySelectorAll('.archive-segments button')].find(b => b.textContent === '已归档').click()`
+    )
+    await contents.executeJavaScript(
+      `const typeFilter = document.querySelector('[aria-label="文件类型"]'); typeFilter.value = 'image'; typeFilter.dispatchEvent(new Event('change', { bubbles: true }))`
+    )
+    const typeDeadline = Date.now() + 10_000
+    while (
+      !(await contents.executeJavaScript(
+        'document.querySelectorAll(".archive-row").length === 1 && document.querySelector(".archive-file-button").textContent.includes("真实图片")'
+      ))
+    ) {
+      assert.ok(Date.now() < typeDeadline, 'File type filter did not return the real image')
+      await delay(50)
+    }
+    console.log('PASS: file type query and narrow archive window')
+    console.log(
+      'PASS: day/night themes, collapsible overview and tags, real file detail and original backup view'
+    )
+
     console.log(
       'PASS: actual Electron main → preload → renderer archive list, navigation and invalid IPC rejection'
     )

@@ -20,11 +20,11 @@ import {
 function createWindow(attachWindow: (contents: Electron.WebContents) => void): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: 1120,
+    height: 760,
     minWidth: 800,
     minHeight: 620,
-    backgroundColor: '#191919',
+    backgroundColor: '#f3f5f3',
     title: 'Arkive',
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
     show: false,

@@ -23,6 +23,11 @@ import { compressOfficeInPlace } from '../office-compression/in-place'
 import { compressPdfAndBackup } from '../catalog/compression'
 import { TaskCancelled, TaskFailure } from '../../tasks/service'
 import { scanDuplicates } from '../duplicate-detection/operations'
+import { cloneDuplicates } from '../clone-deduplication/operations'
+import type {
+  CloneDeduplicationRequest,
+  CloneDeduplicationResult
+} from '../../../shared/contracts/clone-deduplication'
 
 type State = {
   selecting: boolean
@@ -233,6 +238,42 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
         return {
           status: 'completed',
           result: await scanDuplicates({ directoryPath: path }, controller.signal, id)
+        }
+      } catch (error) {
+        if (
+          error instanceof TaskCancelled ||
+          (controller.signal.aborted && !(error instanceof TaskFailure))
+        )
+          return { status: 'cancelled' }
+        return { status: 'error', error: error instanceof Error ? error.message : String(error) }
+      } finally {
+        state.running = undefined
+      }
+    }
+  )
+  ipcMain.handle(
+    processingChannels.clone,
+    async (
+      event,
+      id: unknown,
+      value: unknown
+    ): Promise<ProcessingOutcome<CloneDeduplicationResult>> => {
+      const { state } = current(event)
+      available(state)
+      if (!runId(id) || !value || typeof value !== 'object') throw new Error('无效的去重请求。')
+      const request = value as CloneDeduplicationRequest
+      if (
+        typeof request.sourcePath !== 'string' ||
+        !Array.isArray(request.duplicatePaths) ||
+        request.duplicatePaths.some((path) => typeof path !== 'string')
+      )
+        throw new Error('无效的去重路径。')
+      const controller = new AbortController()
+      state.running = { id, controller }
+      try {
+        return {
+          status: 'completed',
+          result: await cloneDuplicates(request, controller.signal)
         }
       } catch (error) {
         if (

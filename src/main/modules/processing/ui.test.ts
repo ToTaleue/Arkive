@@ -388,9 +388,13 @@ async function check(): Promise<void> {
     const extraId = await catalog.beginCompression(extra, extraOutput)
     await catalog.finishCompression(extraId, false)
     await evaluate(
-      "document.querySelector('[aria-label=\"我的归档\"]').click(); const s = document.querySelector('[aria-label=\"归档记录状态\"]'); s.value='pending'; s.dispatchEvent(new Event('change',{bubbles:true}));"
+      "document.querySelector('[aria-label=\"我的归档\"]').click(); [...document.querySelectorAll('.archive-segments button')].find(b => b.textContent === '备份').click();"
     )
+    await click('查看待归档结果', '#archive-page')
     await wait("document.querySelector('#archive-page').innerText.includes('later-result.txt')")
+    await evaluate(
+      "[...document.querySelectorAll('.archive-file-button')].find(b => b.textContent.includes('later-result.txt')).click()"
+    )
     await click('确定归档', '#archive-page')
     await wait("!document.querySelector('#archive-page').innerText.includes('later-result.txt')")
     assert.ok(catalog.get(extraId).archivePath)

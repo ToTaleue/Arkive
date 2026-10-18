@@ -187,6 +187,10 @@ async function check(): Promise<void> {
     await rename(uiConflict.source, `${uiConflict.source}.preserved`)
     // Recovery remains accessible from the archive list after leaving the result view.
     await window.loadFile(join(build, 'renderer/index.html'), { query: { view: 'archive' } })
+    await waitFor('document.querySelectorAll(".archive-file-button").length > 0')
+    await contents.executeJavaScript(
+      '[...document.querySelectorAll(".archive-file-button")].find(button => button.textContent.includes("界面冲突")).click()'
+    )
     await waitFor('document.body.textContent.includes("重试原位置入口")')
     await contents.executeJavaScript(
       '[...document.querySelectorAll("button")].find(button => button.textContent === "重试原位置入口").click()'
