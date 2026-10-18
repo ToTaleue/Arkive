@@ -1,8 +1,8 @@
 # Task 内存队列
 
-图片、视频、PDF、Office 压缩、独立归档、备份重试、批量标签及 Agent 文件写操作已接入共用队列，按钮和 Agent 共用业务入口提交任务。提供结果判定、防重复提交、查询／取消 IPC 和退出收尾能力。队列和结果只保留在当前进程内，不写 SQLite，退出后不保留历史或自动恢复。`repository.ts` 继续占位。
+图片、视频、PDF、Office 压缩与用户主动检测、独立归档、备份重试、批量标签、文件写操作、Mole 分析／预览／应用清单／清理、重复扫描及 APFS 克隆去重已接入共用队列，按钮和 Agent 共用业务入口提交任务。提供结果判定、防重复提交、查询／取消 IPC 和退出收尾能力。队列和结果只保留在当前进程内，不写 SQLite，退出后不保留历史或自动恢复。`repository.ts` 继续占位。
 
-Mole 和去重（包括重复扫描、APFS 克隆）暂不接入。查询、文件探测、打开／定位、后台 Finder 标签同步和 Pi 上游工具仍直接调用；不把每次 IPC 都包装为 Task。Office 内部的图片、视频编码继续直接调用底层 Service，避免嵌套排队。
+归档列表／详情查询、打开／定位、后台 Finder 标签同步、启动恢复和 Pi 上游只读工具仍直接调用。Agent 对话循环和管理员授权弹窗不占用业务队列。压缩内部的媒体探测、编码、原件备份和归档直接调用底层 Service，避免嵌套排队。Task 调度的是用户业务操作，不是每一个内部函数或 IPC。
 
 ## 已接入的压缩流程
 
@@ -21,7 +21,15 @@ Mole 和去重（包括重复扫描、APFS 克隆）暂不接入。查询、文�
 - `catalog/operations.ts` 的 `archiveFile`／`retryBackup`／`tagArchives` 是按钮和 Agent 的显式调度入口。归档与重试对同一个记录共用 `catalog:<id>` 防重；标签请求固定 ID 和增删差量。备份或标签失败标记 Task 失败并保留逐项结果，原有调用方仍收到诊断数据。底层 Catalog 的互斥队列继续负责数据库与恢复一致性，压缩任务中的自动归档和启动恢复直接调用 Catalog，不再次提交 Task。
 - Catalog 操作在排队期间可以取消；一旦开始提交，等待整项完成，保留实际成功／失败结果。批量标签是一个业务 Task，不承诺中途回滚或立即停止 JXA 写入。
 - `file-operations/operations.ts` 提供 `copyPath`／`movePath`／`createDirectory`／`trashFiles`，Agent 工具只做参数接线。路径、参数在入队前固定，系统路径保护和拒绝覆盖在实际执行时重新检查；复制／移动／建目录对同一目标使用 `file-write:<path>` 防重。这些 key 不是通用文件锁，不阻止外部程序或未接入功能修改文件。
-- 复制在逐项检查时响应取消，保留可能已生成的部分副本；移动、建目录及已经开始的单个删除等待真实系统调用结束。批量清理在项目间停止，失败仍继续其他独立项目；Task 的部分结果保留完成、失败与未处理路径。Mole 仍使用原有 `trashPaths`，其入口和调度暂未改动。
+- 复制在逐项检查时响应取消，保留可能已生成的部分副本；移动、建目录及已经开始的单个删除等待真实系统调用结束。批量清理在项目间停止，失败仍继续其他独立项目；Task 的部分结果保留完成、失败与未处理路径。Mole 的清理也复用这一入口，与 Agent 共用队列、防重和部分结果语义。
+
+## 扫描、检测与 Mole
+
+- `processing/operations.ts` 是图片、视频、PDF、Office 检测入口；窗口选择文件后和 Agent 探测均走队列，编码器内的自检仍用原始 Service。对同类 `realpath` 输入防重，窗口重载／关闭取消旧的检测任务。
+- `duplicate-detection/operations.ts` 将一次完整 Czkawka 扫描作为一个 Task，按规范化目录防重，支持 `requestId`。部分扫描保留原报告供 UI／Agent 展示，Task 记为失败；取消等待子进程退出和报告目录清理。
+- `clone-deduplication/operations.ts` 将一批明确授权的源／副本作为一个 Task；请求复制后固定路径，集合排序防重，不是跨操作文件锁。原生事务、回滚和恢复文件保留在底层。部分失败／恢复遗留记失败；取消记取消并保留逐项结果；已经全部提交的成功保持成功。调用方仍收到原有 `partial`／`cancelled` 结果，排队取消则抛出 `TaskCancelled`。
+- `mole/operations.ts` 调度占用分析、三种预览及应用清单，清理复用 `trashFiles`。预览使用同一防重 key，防止 UI／Agent 同时操作 Mole 的共享清单。输出只在实际运行时流出，预览支持 `requestId`，超时从实际启动计算。部分分析／截断预览在 Task 中记失败，保留原报告；不能把部分结果解释为全量扫描完成。
+- 授权弹窗仍直接调用 `authorizeMoleSystem`，完成授权后再调用预览。所有封装内都只调用底层能力，不能在 `run` 中再等待这些提交型入口，否则单并发队列会自锁。
 
 ## 主进程调用
 
@@ -152,3 +160,5 @@ await tasks.close()
 先执行 `rtk proxy pnpm run build`，再运行 `rtk proxy node scripts/check-tasks.mjs --ipc`，可额外使用真实 Electron 窗口与构建后的 preload 验证查询、订阅、取消、页面重载及窗口校验。这个基础测试只提交内存夹具。
 
 `rtk proxy node scripts/check-compression-tasks.mjs` 使用测试目录中的生成文件及真实 Sharp／FFmpeg／qpdf／Ghostscript／Catalog，验证三类压缩、Office、独立归档、标签和文件操作共用队列，覆盖防重、参数固定、排队无副作用、排队／运行取消、执行时覆盖检查、备份／发布／标签失败后的部分结果与重试，以及提交阶段取消。`check-processing-ui.mjs` 和 `check-video-compression.mjs --ui` 验证真实页面排队提示、取消和原有结果展示。
+
+`rtk proxy node scripts/check-scheduled-services.mjs` 验证新增检测、扫描、克隆和 Mole 的共用 FIFO、防重、固定请求、排队无副作用、逐项结果及取消收尾。文件检测／重复扫描／APFS 使用真实工具与生成文件，Mole 使用隔离 HOME 的真实子进程夹具，不扫描用户目录。

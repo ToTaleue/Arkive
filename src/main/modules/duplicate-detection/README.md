@@ -1,6 +1,6 @@
 # 单文件夹重复检测 Service
 
-`scanDuplicates` 是压缩归档流程可复用的主进程接口，契约位于 `src/shared/contracts/duplicates.ts`。
+`operations.ts` 的 `scanDuplicates` 是经过 Task 调度的产品入口，UI 与 Agent 共用；`service.ts` 保留原始扫描实现。该能力是压缩归档流程可复用的主进程接口，契约位于 `src/shared/contracts/duplicates.ts`。
 
 ```ts
 const result = await scanDuplicates({ directoryPath: '/absolute/folder' }, signal)
@@ -14,7 +14,7 @@ const result = await scanDuplicates({ directoryPath: '/absolute/folder' }, signa
 - 返回按逻辑冗余体积降序排列的重复组、各文件路径、重复副本数和 `redundantBytes`。它不代表实际释放量，已有 APFS 克隆或快照会影响磁盘收益。
 - 上游报告读取失败等警告时返回 `partial` 和诊断，不能将部分结果展示成完整扫描。启动、异常退出或报告无效时抛错；取消通过 `AbortSignal` 抛出。
 
-文档压缩工作区已通过 `processing` IPC 接入文件夹选择、分组、部分扫描警告和取消；Agent 通过 `scan_duplicates` 调用同一个 Service。APFS 克隆执行已单独接入[无损去重 Service 与 Tool](../clone-deduplication/README.md)，需要对明确路径另有执行授权；本扫描接口仍只读。没有独立去重页面、批量压缩调用或任务队列；重复内容只压缩一次与压缩归档编排仍待接入。扫描结果是候选分组，不是文件修改授权或稳定快照；执行前仍需重新核对内容、文件状态和各路径的元数据，不能直接以第一项为“保留原件”。
+文档压缩工作区已通过 `processing` IPC 接入文件夹选择、分组、部分扫描警告和取消；Agent 通过 `scan_duplicates` 调用同一个 Service。APFS 克隆执行已单独接入[无损去重 Service 与 Tool](../clone-deduplication/README.md)，需要对明确路径另有执行授权；本扫描接口仍只读。已接入共用 Task 队列；没有独立去重页面或批量压缩调用；重复内容只压缩一次与压缩归档编排仍待接入。扫描结果是候选分组，不是文件修改授权或稳定快照；执行前仍需重新核对内容、文件状态和各路径的元数据，不能直接以第一项为“保留原件”。
 
 ## 验证
 
@@ -26,3 +26,5 @@ rtk proxy pnpm run lint
 ```
 
 验证脚本在 `/Users/hu1hui/Desktop/arkive-test` 下创建独立夹具，调用真实 Service、通用执行器和内置 CLI；只清理自己创建的目录。
+
+扫描按规范化目录防重，排队不启动 Czkawka。`partial` 报告保持原返回值，同时 Task 记录失败及报告；取消等待进程退出、临时目录清理。内部业务已持有 Task 时只能调用底层扫描，不能嵌套调用提交入口。

@@ -16,13 +16,14 @@ import {
   type SelectedImage
 } from '../../../shared/contracts/image'
 import { assertSystemWriteAllowed } from '../../system-paths'
-import { inspectImage } from './service'
+import { inspectImage } from '../processing/operations'
 import { compressImageAndBackup as compressImage } from '../catalog/compression'
 import { TaskCancelled, TaskFailure } from '../../tasks/service'
 
 interface WindowState {
   selection?: SelectedImage
   selecting: boolean
+  inspection?: AbortController
   running?: { id: string; controller: AbortController }
   outputPath?: string
 }
@@ -86,20 +87,27 @@ export function registerImageCompressionIpc(): (contents: WebContents) => void {
 
   async function selectPath(state: WindowState, inputPath: string): Promise<SelectedImage> {
     if (!inputPath) throw new Error('请选择图片文件。')
-    const path = await realpath(inputPath)
-    const info = await stat(path)
-    if (!info.isFile()) throw new Error('请选择普通图片文件。')
-    const inspection = await inspectImage({ inputPath: path })
-    const selected: SelectedImage = {
-      id: randomUUID(),
-      name: basename(path),
-      path: inspection.inputPath,
-      sizeBytes: info.size,
-      ...inspection
+    const controller = new AbortController()
+    state.inspection = controller
+    try {
+      const path = await realpath(inputPath)
+      const info = await stat(path)
+      if (!info.isFile()) throw new Error('请选择普通图片文件。')
+      const inspection = await inspectImage({ inputPath: path }, controller.signal)
+      controller.signal.throwIfAborted()
+      const selected: SelectedImage = {
+        id: randomUUID(),
+        name: basename(path),
+        path: inspection.inputPath,
+        sizeBytes: info.size,
+        ...inspection
+      }
+      state.selection = selected
+      state.outputPath = undefined
+      return selected
+    } finally {
+      state.inspection = undefined
     }
-    state.selection = selected
-    state.outputPath = undefined
-    return selected
   }
 
   ipcMain.handle(imageChannels.select, async (event): Promise<SelectedImage | null> => {
@@ -133,7 +141,12 @@ export function registerImageCompressionIpc(): (contents: WebContents) => void {
       const { state } = getWindow(event)
       if (state.running || state.selecting) throw new Error('请等待当前操作完成。')
       if (typeof inputPath !== 'string') throw new Error('拖入的文件路径无效。')
-      return selectPath(state, inputPath)
+      state.selecting = true
+      try {
+        return await selectPath(state, inputPath)
+      } finally {
+        state.selecting = false
+      }
     }
   )
 
@@ -223,6 +236,7 @@ export function registerImageCompressionIpc(): (contents: WebContents) => void {
 
   return (contents) => {
     const reset = (): void => {
+      windows.get(contents.id)?.inspection?.abort()
       windows.get(contents.id)?.running?.controller.abort()
       windows.set(contents.id, { selecting: false })
     }
@@ -232,6 +246,7 @@ export function registerImageCompressionIpc(): (contents: WebContents) => void {
     })
     contents.on('render-process-gone', reset)
     contents.once('destroyed', () => {
+      windows.get(contents.id)?.inspection?.abort()
       windows.get(contents.id)?.running?.controller.abort()
       windows.delete(contents.id)
     })

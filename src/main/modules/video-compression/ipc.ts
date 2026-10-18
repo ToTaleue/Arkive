@@ -17,13 +17,14 @@ import {
   type VideoStartRequest
 } from '../../../shared/contracts/video'
 import { assertSystemWriteAllowed } from '../../system-paths'
-import { inspectVideo } from './service'
+import { inspectVideo } from '../processing/operations'
 import { compressVideoAndBackup as compressVideo } from '../catalog/compression'
 import { TaskCancelled, TaskFailure } from '../../tasks/service'
 
 interface WindowState {
   selection?: SelectedVideo
   selecting: boolean
+  inspection?: AbortController
   running?: { id: string; controller: AbortController }
   outputPath?: string
 }
@@ -59,6 +60,8 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
     const { state, window } = getWindow(event)
     if (state.running || state.selecting) throw new Error('请等待当前操作完成。')
     state.selecting = true
+    const controller = new AbortController()
+    state.inspection = controller
     try {
       const selected = await dialog.showOpenDialog(window, {
         title: '选择要压缩的视频',
@@ -74,7 +77,8 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
       const path = await realpath(selected.filePaths[0])
       const info = await stat(path)
       if (!info.isFile()) throw new Error('请选择普通视频文件。')
-      const inspection = await inspectVideo(path)
+      const inspection = await inspectVideo(path, controller.signal)
+      controller.signal.throwIfAborted()
       if (windows.get(event.sender.id) !== state) return null
       state.selection = {
         id: randomUUID(),
@@ -86,6 +90,7 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
       state.outputPath = undefined
       return state.selection
     } finally {
+      state.inspection = undefined
       state.selecting = false
     }
   })
@@ -166,6 +171,7 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
 
   return (contents) => {
     const reset = (): void => {
+      windows.get(contents.id)?.inspection?.abort()
       windows.get(contents.id)?.running?.controller.abort()
       windows.set(contents.id, { selecting: false })
     }
@@ -175,6 +181,7 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
     })
     contents.on('render-process-gone', reset)
     contents.once('destroyed', () => {
+      windows.get(contents.id)?.inspection?.abort()
       windows.get(contents.id)?.running?.controller.abort()
       windows.delete(contents.id)
     })

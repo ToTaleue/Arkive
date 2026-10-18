@@ -1,15 +1,18 @@
 # APFS 无损去重 Service 与 Agent Tool
 
-`cloneDuplicates(request, signal?)` 是主进程业务入口；`clone_duplicates` 是 Agent 对同一入口的封装。现有 `scan_duplicates` 继续只读扫描。本轮没有增加去重按钮、整盘自动执行或批量压缩联动。
+`operations.ts` 的 `cloneDuplicates(request, signal?)` 是经过 Task 调度的主进程业务入口；`clone_duplicates` 是 Agent 对同一入口的封装。现有 `scan_duplicates` 继续只读扫描。本轮没有增加去重按钮、整盘自动执行或批量压缩联动。
 
 ```ts
-import { cloneDuplicates } from './service'
+import { cloneDuplicates } from './operations'
 
 // 调用方先展示明确路径和处理方式，并取得用户对这一批的授权。
-const result = await cloneDuplicates({
-  sourcePath: '/absolute/folder/original.pdf',
-  duplicatePaths: ['/absolute/folder/copy.pdf']
-}, signal)
+const result = await cloneDuplicates(
+  {
+    sourcePath: '/absolute/folder/original.pdf',
+    duplicatePaths: ['/absolute/folder/copy.pdf']
+  },
+  signal
+)
 ```
 
 每次明确指定一个源和 1–100 个副本，不自动选择扫描结果第一项为源。所有路径先通过系统路径保护，再逐项处理；不设置用户目录黑名单。源文件不替换，成功项保留原来的副本路径，使用独立 inode 共享 APFS 存储，后续修改互不影响。
@@ -48,3 +51,5 @@ rtk proxy pnpm run lint
 ```
 
 构建脚本使用系统 Clang 并更新工具 manifest 中的二进制哈希；原生代码以 `-Wall -Wextra -Werror` 编译。测试只在 `/Users/hu1hui/Desktop/arkive-test` 中生成文件，验证真实克隆 ID、独立修改、元数据、路径保护、取消、重复执行和恢复。交换后中断测试使用同一源码生成带测试屏障的临时程序，实际 SIGKILL 后由新 Service 实例恢复；正式工具没有该屏障。Agent 检查用本地固定响应 HTTP 模型驱动真实 Pi SDK 和业务，不代表真实模型授权理解已通过。
+
+Task 将整批源／副本固定为一次任务，等待所有原生事务及恢复收尾；部分失败和恢复遗留记失败，取消保留已完成和未处理项，最终全部提交成功不因晚到的取消信号改为取消。产品返回值保留原有部分结果契约；排队取消抛出 `TaskCancelled`。启动恢复与关闭仍直接调用底层 Service，不进入业务队列。

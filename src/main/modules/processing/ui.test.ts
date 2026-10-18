@@ -144,6 +144,39 @@ async function check(): Promise<void> {
     await select()
     assert.equal(await evaluate("document.querySelector('.document-selected') === null"), true)
     cancelOpen = false
+    let releaseProbe!: () => void
+    const probeHold = new Promise<void>((done) => {
+      releaseProbe = done
+    })
+    const probeBlocker = tasks.submitBatch(
+      [{ title: 'hold selection probe', run: () => probeHold }],
+      { onError: 'stop' }
+    )
+    try {
+      await evaluate("document.querySelector('.document-select').click()")
+      await wait(
+        `window.api.tasks.list().then(items => items.some(item => item.key === ${JSON.stringify(`inspect:PDF:${pdf}`)} && item.status === 'queued'))`
+      )
+      const queued = tasks
+        .list()
+        .find((item) => item.key === `inspect:PDF:${pdf}` && item.status === 'queued')
+      assert.ok(queued)
+      const reloaded = new Promise<void>((done) => {
+        window.webContents.once('did-finish-load', done)
+      })
+      window.reload()
+      await reloaded
+      assert.equal(
+        tasks.get(queued.id)?.status,
+        'cancelled',
+        'Reload cancels a queued selection probe'
+      )
+    } finally {
+      releaseProbe()
+      await tasks.wait(probeBlocker.taskIds[0])
+    }
+    await evaluate('document.querySelector(\'[aria-label="文档压缩与重复检测"]\').click()')
+    await wait("!document.querySelector('#documents-page').hidden")
     await select()
     assert.ok(
       String(await evaluate("document.querySelector('.document-selected').innerText")).includes(
@@ -311,6 +344,29 @@ async function check(): Promise<void> {
     const originalHash = await hashFile(join(choice, 'a.txt'))
     await click('选择检测文件夹')
     await wait("!document.querySelector('.document-select').disabled")
+    let releaseScan!: () => void
+    const scanHold = new Promise<void>((done) => {
+      releaseScan = done
+    })
+    const scanBlocker = tasks.submitBatch([{ title: 'hold scan UI queue', run: () => scanHold }], {
+      onError: 'stop'
+    })
+    try {
+      await click('检测重复文件')
+      await wait("document.querySelector('.document-running')?.innerText.includes('已加入队列')")
+      await click('取消当前处理')
+      await wait(
+        "document.querySelector('#documents-page').innerText.includes('扫描已取消') && !document.querySelector('.document-select').disabled"
+      )
+      assert.ok(
+        tasks
+          .list()
+          .some((item) => item.key === `duplicates:${choice}` && item.status === 'cancelled')
+      )
+    } finally {
+      releaseScan()
+      await tasks.wait(scanBlocker.taskIds[0])
+    }
     await click('检测重复文件')
     await wait(
       "document.querySelector('[aria-label=\"文件夹重复检测\"]').innerText.includes('1 组')"

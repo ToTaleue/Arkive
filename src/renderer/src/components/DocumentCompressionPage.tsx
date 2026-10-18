@@ -102,6 +102,7 @@ export function DocumentCompressionPage(): React.JSX.Element {
       run.current = id
       setCancellable(true)
       setDuplicates(null)
+      setTaskRequestId(id)
       setStage('正在只读检测重复文件…')
       const outcome = await client.duplicates(id, folder)
       if (outcome.status === 'completed') setDuplicates(outcome.result)

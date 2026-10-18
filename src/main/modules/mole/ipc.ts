@@ -3,15 +3,14 @@ import { moleChannels, type MoleDryRunUpdate } from '../../../shared/contracts/m
 import {
   listMoleApps,
   analyzeMole,
-  authorizeMoleSystem,
   runMoleDryRun,
   runMoleInstallerPreview,
   runMolePurgePreview,
   trashMolePaths
-} from './service'
+} from './operations'
+import { authorizeMoleSystem } from './service'
 
 export function registerMoleIpc(): void {
-  let running = false
   let authorizing = false
   ipcMain.handle(moleChannels.authorize, async (event) => {
     if (event.senderFrame !== event.sender.mainFrame) throw new Error('无效的 Mole 授权请求。')
@@ -39,20 +38,18 @@ export function registerMoleIpc(): void {
     ) {
       throw new Error('无效的 Mole 运行请求。')
     }
-    if (running) throw new Error('Mole 正在运行，请等待本次预览结束。')
-    running = true
     const frame = event.senderFrame
-    try {
-      return await runMoleDryRun((output) => {
+    return runMoleDryRun(
+      (output) => {
         // Do not forward a previous page's output to a reloaded renderer.
         if (!event.sender.isDestroyed() && event.sender.mainFrame === frame) {
           const update: MoleDryRunUpdate = { runId, event: output }
           event.sender.send(moleChannels.update, update)
         }
-      })
-    } finally {
-      running = false
-    }
+      },
+      undefined,
+      runId
+    )
   })
   ipcMain.handle(moleChannels.installerPreview, async (event, runId: unknown) => {
     if (
@@ -62,19 +59,17 @@ export function registerMoleIpc(): void {
     ) {
       throw new Error('无效的 Mole 安装包预览请求。')
     }
-    if (running) throw new Error('Mole 正在运行，请等待本次预览结束。')
-    running = true
     const frame = event.senderFrame
-    try {
-      return await runMoleInstallerPreview((output) => {
+    return runMoleInstallerPreview(
+      (output) => {
         if (!event.sender.isDestroyed() && event.sender.mainFrame === frame) {
           const update: MoleDryRunUpdate = { runId, event: output }
           event.sender.send(moleChannels.update, update)
         }
-      })
-    } finally {
-      running = false
-    }
+      },
+      undefined,
+      runId
+    )
   })
   ipcMain.handle(moleChannels.purgePreview, async (event, runId: unknown) => {
     if (
@@ -84,19 +79,17 @@ export function registerMoleIpc(): void {
     ) {
       throw new Error('无效的 Mole 开发产物预览请求。')
     }
-    if (running) throw new Error('Mole 正在运行，请等待本次预览结束。')
-    running = true
     const frame = event.senderFrame
-    try {
-      return await runMolePurgePreview((output) => {
+    return runMolePurgePreview(
+      (output) => {
         if (!event.sender.isDestroyed() && event.sender.mainFrame === frame) {
           const update: MoleDryRunUpdate = { runId, event: output }
           event.sender.send(moleChannels.update, update)
         }
-      })
-    } finally {
-      running = false
-    }
+      },
+      undefined,
+      runId
+    )
   })
   ipcMain.handle(moleChannels.uninstallList, async (event) => {
     if (event.senderFrame !== event.sender.mainFrame) throw new Error('无效的 Mole 应用清单请求。')

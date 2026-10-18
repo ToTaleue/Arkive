@@ -1,7 +1,6 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { shell } from 'electron'
 import { resolve } from 'node:path'
-import { runBundledTool } from '../../../execution/process'
 import { assertSystemWriteAllowed, resolveFilePath } from '../../system-paths'
 import {
   compressImageAndBackup as compressImage,
@@ -9,22 +8,20 @@ import {
   compressVideoAndBackup as compressVideo
 } from '../catalog/compression'
 import {
-  authorizeMoleSystem,
+  analyzeMole,
   listMoleApps,
   runMoleDryRun,
   runMoleInstallerPreview,
   runMolePurgePreview
-} from '../mole/service'
+} from '../mole/operations'
+import { authorizeMoleSystem } from '../mole/service'
 import { getCatalog } from '../catalog/service'
 import { archiveFile, tagArchives } from '../catalog/operations'
 import { normalizeTags } from '../catalog/finder-tags'
-import { inspectOffice } from '../office-compression/service'
 import { compressOfficeInPlace } from '../office-compression/in-place'
-import { inspectImage } from '../image-compression/service'
-import { inspectVideo } from '../video-compression/service'
-import { inspectPdf } from '../pdf-compression/service'
-import { scanDuplicates } from '../duplicate-detection/service'
-import { cloneDuplicates } from '../clone-deduplication/service'
+import { inspectImage, inspectVideo, inspectPdf, inspectOffice } from '../processing/operations'
+import { scanDuplicates } from '../duplicate-detection/operations'
+import { cloneDuplicates } from '../clone-deduplication/operations'
 import { copyPath, movePath, createDirectory, trashFiles } from '../file-operations/operations'
 
 export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> {
@@ -212,22 +209,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         path: Type.Optional(Type.String({ description: '要分析的目录，省略时使用会话工作目录。' }))
       }),
       execute: async (_toolCallId, { path }, signal) => {
-        const result = await runBundledTool(
-          'mole',
-          ['analyze', '--json', resolve(cwd, path ?? '.')],
-          {
-            signal
-          }
-        )
-        signal?.throwIfAborted()
-        if (result.exitCode !== 0 || result.signal) {
-          throw new Error(`Mole 占用分析失败：${JSON.stringify(result)}`)
-        }
-        if (result.stdoutTruncated) {
-          throw new Error('Mole 分析报告超出输出容量，结果不完整；请改为分析更具体的子目录。')
-        }
-        const report: unknown = JSON.parse(result.stdout)
-        const details = { report, stderr: result.stderr, stderrTruncated: result.stderrTruncated }
+        const details = await analyzeMole(resolve(cwd, path ?? '.'), signal)
         return { content: [{ type: 'text', text: JSON.stringify(details) }], details }
       }
     }),

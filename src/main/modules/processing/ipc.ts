@@ -18,15 +18,15 @@ import {
   type SelectedDocument
 } from '../../../shared/contracts/processing'
 import type { DuplicateScanResult } from '../../../shared/contracts/duplicates'
-import { inspectPdf } from '../pdf-compression/service'
-import { inspectOffice } from '../office-compression/service'
+import { inspectPdf, inspectOffice } from './operations'
 import { compressOfficeInPlace } from '../office-compression/in-place'
 import { compressPdfAndBackup } from '../catalog/compression'
 import { TaskCancelled, TaskFailure } from '../../tasks/service'
-import { scanDuplicates } from '../duplicate-detection/service'
+import { scanDuplicates } from '../duplicate-detection/operations'
 
 type State = {
   selecting: boolean
+  inspection?: AbortController
   selected?: SelectedDocument
   running?: { id: string; controller: AbortController }
   output?: string
@@ -77,14 +77,25 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
     path: unknown
   ): Promise<SelectedDocument> {
     if (typeof path !== 'string' || !path) throw new Error('请选择本地文档。')
-    const input = await realpath(path)
-    const base = { id: randomUUID(), path: input, name: basename(input) }
-    const selected: SelectedDocument =
-      type === 'pdf'
-        ? { ...base, kind: type, inspection: await inspectPdf({ inputPath: input }) }
-        : { ...base, kind: type, inspection: await inspectOffice(input) }
-    state.selected = selected
-    return selected
+    const controller = new AbortController()
+    state.inspection = controller
+    try {
+      const input = await realpath(path)
+      const base = { id: randomUUID(), path: input, name: basename(input) }
+      const selected: SelectedDocument =
+        type === 'pdf'
+          ? {
+              ...base,
+              kind: type,
+              inspection: await inspectPdf({ inputPath: input }, controller.signal)
+            }
+          : { ...base, kind: type, inspection: await inspectOffice(input, controller.signal) }
+      controller.signal.throwIfAborted()
+      state.selected = selected
+      return selected
+    } finally {
+      state.inspection = undefined
+    }
   }
   ipcMain.handle(processingChannels.select, async (event, value: unknown) => {
     const { state, window } = current(event)
@@ -221,10 +232,14 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
       try {
         return {
           status: 'completed',
-          result: await scanDuplicates({ directoryPath: path }, controller.signal)
+          result: await scanDuplicates({ directoryPath: path }, controller.signal, id)
         }
       } catch (error) {
-        if (controller.signal.aborted) return { status: 'cancelled' }
+        if (
+          error instanceof TaskCancelled ||
+          (controller.signal.aborted && !(error instanceof TaskFailure))
+        )
+          return { status: 'cancelled' }
         return { status: 'error', error: error instanceof Error ? error.message : String(error) }
       } finally {
         state.running = undefined
@@ -243,6 +258,7 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
   })
   return (contents) => {
     const reset = (): void => {
+      windows.get(contents.id)?.inspection?.abort()
       windows.get(contents.id)?.running?.controller.abort()
       windows.set(contents.id, { selecting: false })
     }
@@ -252,6 +268,7 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
     })
     contents.on('render-process-gone', reset)
     contents.once('destroyed', () => {
+      windows.get(contents.id)?.inspection?.abort()
       windows.get(contents.id)?.running?.controller.abort()
       windows.delete(contents.id)
     })

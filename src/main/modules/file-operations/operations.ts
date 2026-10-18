@@ -121,7 +121,7 @@ export async function createDirectory(
   )
 }
 
-/** Agent scheduling entry; Mole keeps its existing direct trashPaths integration. */
+/** Shared scheduling entry for Agent and Mole deletion. */
 export async function trashFiles(
   paths: readonly string[],
   signal?: AbortSignal,

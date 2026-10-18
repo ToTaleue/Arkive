@@ -114,6 +114,7 @@ async function runMolePreview(
   onUpdate: (event: MoleOutputEvent) => void,
   signal?: AbortSignal
 ): Promise<MolePreviewResult> {
+  signal?.throwIfAborted()
   const timeout = AbortSignal.timeout(120_000)
   const child = spawn({ signal: signal ? AbortSignal.any([signal, timeout]) : timeout })
   const blocks: MoleOutputBlock[] = []
@@ -177,6 +178,7 @@ export async function runMoleDryRun(
   onUpdate: (event: MoleOutputEvent) => void,
   signal?: AbortSignal
 ): Promise<MolePreviewResult> {
+  signal?.throwIfAborted()
   const listPath = join(homedir(), '.config', 'mole', 'clean-list.txt')
   try {
     await unlink(listPath)

@@ -1,3 +1,4 @@
+import { useCompressionTask, compressionTaskMessage } from './hooks/useCompressionTask'
 import { ArchivePage } from './components/ArchivePage'
 import { DocumentCompressionPage } from './components/DocumentCompressionPage'
 import './assets/archive.css'
@@ -54,6 +55,8 @@ function App(): React.JSX.Element {
   const [moleBlocks, setMoleBlocks] = useState<MoleOutputBlock[]>([])
   const [moleStage, setMoleStage] = useState<string | null>(null)
   const moleRunId = useRef<string | null>(null)
+  const [moleTaskRequestId, setMoleTaskRequestId] = useState<string | null>(null)
+  const moleTask = useCompressionTask(moleTaskRequestId)
   const moleAvailable = Boolean(window.api?.mole && Object.hasOwn(window.api.mole, 'onUpdate'))
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(() =>
     window.api?.agent
@@ -122,6 +125,7 @@ function App(): React.JSX.Element {
     if (!mole || !moleAvailable || moleRunId.current) return
     const runId = crypto.randomUUID()
     moleRunId.current = runId
+    setMoleTaskRequestId(runId)
     setMoleRunning(true)
     setMoleResult(null)
     setMoleError(null)
@@ -138,6 +142,7 @@ function App(): React.JSX.Element {
       setMoleError(error instanceof Error ? error.message : 'Mole dry run 调用失败。')
     } finally {
       moleRunId.current = null
+      setMoleTaskRequestId(null)
       setMoleStage(null)
       setMoleRunning(false)
     }
@@ -165,6 +170,7 @@ function App(): React.JSX.Element {
     if (!mole || !moleAvailable || moleRunId.current) return
     const runId = crypto.randomUUID()
     moleRunId.current = runId
+    setMoleTaskRequestId(runId)
     setMoleRunning(true)
     setMoleResult(null)
     setMoleError(null)
@@ -180,6 +186,7 @@ function App(): React.JSX.Element {
       setMoleError(error instanceof Error ? error.message : 'Mole 安装包预览调用失败。')
     } finally {
       moleRunId.current = null
+      setMoleTaskRequestId(null)
       setMoleStage(null)
       setMoleRunning(false)
     }
@@ -204,6 +211,7 @@ function App(): React.JSX.Element {
     if (!mole || !moleAvailable || moleRunId.current) return
     const runId = crypto.randomUUID()
     moleRunId.current = runId
+    setMoleTaskRequestId(runId)
     setMoleRunning(true)
     setMoleResult(null)
     setMoleError(null)
@@ -219,6 +227,7 @@ function App(): React.JSX.Element {
       setMoleError(error instanceof Error ? error.message : 'Mole 开发产物预览调用失败。')
     } finally {
       moleRunId.current = null
+      setMoleTaskRequestId(null)
       setMoleStage(null)
       setMoleRunning(false)
     }
@@ -637,7 +646,8 @@ function App(): React.JSX.Element {
                 {window.api?.mole && !moleAvailable && <p>请重启 Electron，以加载分段预览功能。</p>}
                 {moleRunning && (
                   <p role="status">
-                    {moleStage ? `当前阶段：${moleStage}` : '正在启动 Mole…'}
+                    {compressionTaskMessage(moleTask) ??
+                      (moleStage ? `当前阶段：${moleStage}` : '任务已提交，等待执行…')}
                     {` · 已收到 ${String(moleBlocks.length)} 段`}
                   </p>
                 )}

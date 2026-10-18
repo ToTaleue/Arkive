@@ -288,7 +288,7 @@ if (mode === 'slow') {
   process.stderr.write('fixture failure\\n')
   process.exitCode = 7
 } else if (analyzing) {
-  if (mode === 'truncated') process.stdout.write('x'.repeat(1100000))
+  if (mode === 'truncated') process.stdout.write('x'.repeat(4_194_305))
   else if (mode === 'invalid') process.stdout.write('not json')
   else process.stdout.write(JSON.stringify({path: args[2], scan_status: mode === 'partial' ? 'partial' : 'complete', total_size: 1234, entries: []}))
 } else if (installing) {
