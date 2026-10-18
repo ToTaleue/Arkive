@@ -93,7 +93,6 @@ export function CompressionPage(): React.JSX.Element {
   const [items, setItems] = useState<QueueItem[]>([])
   const [preset, setPreset] = useState<'quality' | 'balanced' | 'size'>('balanced')
   const [imageOutput, setImageOutput] = useState<'webp' | 'original'>('webp')
-  const [imageQuality, setImageQuality] = useState(80)
   const [archiveAfterCompression, setArchiveAfterCompression] = useState(false)
   const [officeReplaceConfirmed, setOfficeReplaceConfirmed] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -219,7 +218,6 @@ export function CompressionPage(): React.JSX.Element {
           runId,
           fileId: selected.id,
           preset,
-          quality: imageQuality,
           ...(archiveAfterCompression ? { archive: true } : {}),
           ...(imageOutput === 'original'
             ? { preserveFormat: true }
@@ -435,22 +433,6 @@ export function CompressionPage(): React.JSX.Element {
             <span>Office 原路径替换，并保留完整原件备份</span>
           </label>
         )}
-        <label>
-          <span className="compression-label">图片质量</span>
-          <span className="quality-control">
-            <input
-              disabled={busy}
-              type="range"
-              min="40"
-              max="95"
-              value={imageQuality}
-              onChange={(event) => {
-                setImageQuality(Number(event.target.value))
-              }}
-            />
-            <output>{imageQuality}</output>
-          </span>
-        </label>
         <label className="compression-confirm">
           <input
             type="checkbox"

@@ -151,7 +151,7 @@
 
 .compression-options {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) 160px minmax(180px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) 160px;
   align-items: end;
   gap: 18px;
   margin: 18px 0;
@@ -192,21 +192,6 @@
   background: var(--control);
   color: var(--ink);
   box-shadow: var(--control-shadow);
-}
-.quality-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.quality-control input {
-  width: 100%;
-  accent-color: var(--accent);
-}
-.quality-control output {
-  min-width: 24px;
-  color: var(--ink);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
 }
 .compression-confirm {
   display: flex !important;
