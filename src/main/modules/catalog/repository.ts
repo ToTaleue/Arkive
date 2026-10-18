@@ -18,6 +18,7 @@ export interface CatalogRow {
   backup_status: ArchiveItem['backupStatus']
   backup_error: string | null
   backed_up_at: number | null
+  backup_cleaned_at: number | null
   archive_path: string | null
   archive_status: string
   archived_at: number | null
@@ -159,7 +160,10 @@ export class CatalogRepository {
             "NOT EXISTS (SELECT 1 FROM office_replacements o WHERE o.item_id = catalog_items.id AND o.state != 'replaced')"
           ]
         : query.state === 'backup'
-          ? ["backup_status = 'ready'", 'backup_path IS NOT NULL']
+          ? [
+              "backup_status IN ('ready', 'cleanup-pending', 'cleanup-unknown')",
+              'backup_path IS NOT NULL'
+            ]
           : ["archive_status = 'ready'"]
     const values: SQLInputValue[] = []
     if (query.kind) {
@@ -220,6 +224,17 @@ export class CatalogRepository {
       )
       .all()
       .map((row) => String(row.id))
+  }
+
+  backupCleanupCandidates(days: 7 | 3 | 0, now = Date.now()): CatalogRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM catalog_items
+      WHERE backup_status = 'ready' AND backup_path IS NOT NULL
+      AND (? = 0 OR backed_up_at <= ?)
+      ORDER BY backed_up_at, id`
+      )
+      .all(days, now - days * 86_400_000) as unknown as CatalogRow[]
   }
 
   archivedIds(): string[] {

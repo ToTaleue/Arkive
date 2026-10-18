@@ -98,7 +98,10 @@ async function collectInput(
   signal?: AbortSignal
 ): Promise<TagRecommendationInput> {
   const row = catalog.repo.get(id)
-  const sourcePath = row.backup_path ?? fallbackPath
+  const sourcePath =
+    row.backup_status === 'trashed' || row.backup_status === 'cleanup-unknown'
+      ? row.output_path
+      : (row.backup_path ?? fallbackPath)
   return {
     files: [
       {

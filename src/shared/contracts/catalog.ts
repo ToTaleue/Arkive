@@ -1,8 +1,18 @@
 export interface CompressionRecord {
   id: string
-  backupStatus: 'pending' | 'ready' | 'skipped' | 'error'
+  backupStatus:
+    'pending' | 'ready' | 'skipped' | 'error' | 'cleanup-pending' | 'cleanup-unknown' | 'trashed'
   backupPath: string | null
   backupError: string | null
+}
+
+export type BackupCleanupDays = 7 | 3 | 0
+
+export interface BackupCleanupResult {
+  cancelled: boolean
+  trashed: number
+  trashedBytes: number
+  issues: { id: string; name: string; error: string }[]
 }
 
 export interface ArchiveOptions {
@@ -100,6 +110,7 @@ export const catalogChannels = {
   tags: 'catalog:tags',
   refresh: 'catalog:refresh',
   retryBackup: 'catalog:retry-backup',
+  cleanupBackups: 'catalog:cleanup-backups',
   open: 'catalog:open',
   reveal: 'catalog:reveal',
   changed: 'catalog:changed'
@@ -112,6 +123,7 @@ export interface CatalogApi {
   tags: (ids: string[], add: string[], remove: string[]) => Promise<void>
   refresh: () => Promise<void>
   retryBackup: (id: string) => Promise<ArchiveItem>
+  cleanupBackups: (days: BackupCleanupDays) => Promise<BackupCleanupResult>
   open: (id: string, target?: 'archive' | 'backup') => Promise<void>
   reveal: (id: string, target?: 'archive' | 'backup') => Promise<void>
   onChanged: (listener: () => void) => () => void

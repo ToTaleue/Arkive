@@ -1,12 +1,13 @@
-import { BrowserWindow, ipcMain, shell, type WebContents } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import {
   catalogChannels,
   type ArchiveOptions,
+  type BackupCleanupResult,
   type CatalogQuery
 } from '../../../shared/contracts/catalog'
 import { normalizeTags } from './finder-tags'
 import type { Catalog } from './service'
-import { archiveFile, retryBackup, tagArchives } from './operations'
+import { archiveFile, cleanupBackups, retryBackup, tagArchives } from './operations'
 
 function id(value: unknown): string {
   if (typeof value !== 'string' || !/^[\da-f-]{36}$/i.test(value))
@@ -74,6 +75,7 @@ function archiveOptions(value: unknown): ArchiveOptions {
 
 export function registerCatalogIpc(catalog: Catalog): (contents: WebContents) => void {
   const windows = new Set<WebContents>()
+  let cleanupBusy = false
   function handle(channel: string, operation: (...args: unknown[]) => unknown): void {
     ipcMain.handle(channel, (event, ...args: unknown[]): unknown => {
       if (
@@ -91,6 +93,35 @@ export function registerCatalogIpc(catalog: Catalog): (contents: WebContents) =>
     archiveFile(catalog, id(value), normalizeTags(tags), undefined, archiveOptions(options))
   )
   handle(catalogChannels.retryBackup, (value) => retryBackup(catalog, id(value)))
+  handle(catalogChannels.cleanupBackups, async (days): Promise<BackupCleanupResult> => {
+    if (days !== 0 && days !== 3 && days !== 7) throw new Error('无效的备份清理范围。')
+    if (cleanupBusy) throw new Error('已有备份清理正在确认或执行。')
+    cleanupBusy = true
+    try {
+      const plan = catalog.prepareBackupCleanup(days)
+      const empty: BackupCleanupResult = {
+        cancelled: false,
+        trashed: 0,
+        trashedBytes: 0,
+        issues: []
+      }
+      if (!plan.ids.length) return empty
+      const confirmation = await dialog.showMessageBox({
+        type: 'warning',
+        title: '清理原件备份',
+        message: days === 0 ? '清理所有 Backup？' : `清理 ${String(days)} 天前的 Backup？`,
+        detail: `按备份成功时间匹配 ${String(plan.ids.length)} 个文件，约 ${(plan.bytes / 1024 ** 2).toFixed(1)} MB。\n范围包含全部备份，不受当前搜索、筛选或分页限制。\n将逐项核对后移入回收站，异常项保留。压缩结果和归档文件不会删除。移入回收站仍占磁盘空间；完整原件将不再从 Arkive 提供。`,
+        buttons: ['取消', '移入回收站'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      })
+      if (confirmation.response !== 1) return { ...empty, cancelled: true }
+      return await cleanupBackups(catalog, plan.ids)
+    } finally {
+      cleanupBusy = false
+    }
+  })
   handle(catalogChannels.tags, (values, add, remove) => {
     if (!Array.isArray(values) || values.length === 0 || values.length > 100)
       throw new Error('请选择最多 100 个文件。')

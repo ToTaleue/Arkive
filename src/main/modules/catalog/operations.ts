@@ -1,4 +1,8 @@
-import type { ArchiveItem, ArchiveOptions } from '../../../shared/contracts/catalog'
+import type {
+  ArchiveItem,
+  ArchiveOptions,
+  BackupCleanupResult
+} from '../../../shared/contracts/catalog'
 import { runTask, TaskFailure } from '../../tasks/service'
 import { normalizeTags } from './finder-tags'
 import { recommendArchiveTags } from './automatic-tags'
@@ -103,6 +107,18 @@ export function retryBackup(
     () => catalog.retryBackup(id),
     (item) => (item.backupStatus === 'error' ? (item.backupError ?? '原件备份失败。') : undefined),
     signal
+  )
+}
+
+export function cleanupBackups(catalog: Catalog, ids: string[]): Promise<BackupCleanupResult> {
+  return schedule(
+    '正在清理原件备份',
+    'catalog-backup-cleanup',
+    () => catalog.cleanupBackups(ids),
+    (result) =>
+      result.issues.length
+        ? `${String(result.issues.length)} 项备份未清理，请查看逐项原因。`
+        : undefined
   )
 }
 

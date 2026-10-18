@@ -51,6 +51,10 @@ export function ArchiveAction({ record }: { record: CompressionRecord }): React.
           '本次无体积收益，原件保留在原位置。'
         ) : item?.backupStatus === 'error' ? (
           `原件备份未完成：${item.backupError ?? ''}`
+        ) : item?.backupStatus === 'trashed' ? (
+          '原件备份已移入回收站，压缩结果仍可归档。'
+        ) : item?.backupStatus === 'cleanup-unknown' ? (
+          (item.backupError ?? '原件备份清理结果待核对。')
         ) : (
           '正在读取备份状态…'
         )}
@@ -136,6 +140,7 @@ export function ArchiveAction({ record }: { record: CompressionRecord }): React.
               !item ||
               busy ||
               item.backupStatus === 'error' ||
+              item.backupStatus === 'cleanup-pending' ||
               item.backupStatus === 'pending'
             }
             onClick={() => {

@@ -33,7 +33,7 @@ export async function backupOriginal(
   root: string
 ): Promise<void> {
   let row = repo.get(id)
-  if (row.backup_status === 'ready' || row.backup_status === 'skipped') return
+  if (row.backup_status !== 'pending' && row.backup_status !== 'error') return
   try {
     await assertSystemWriteAllowed(row.original_path, true)
     const directory = await managedDirectory(

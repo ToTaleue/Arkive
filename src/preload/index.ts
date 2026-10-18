@@ -1,4 +1,9 @@
-import { catalogChannels, type ArchiveItem, type CatalogPage } from '../shared/contracts/catalog'
+import {
+  catalogChannels,
+  type ArchiveItem,
+  type CatalogPage,
+  type BackupCleanupResult
+} from '../shared/contracts/catalog'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   processingChannels,
@@ -93,6 +98,8 @@ const api: ArkiveApi = {
     refresh: () => ipcRenderer.invoke(catalogChannels.refresh) as Promise<void>,
     retryBackup: (id) =>
       ipcRenderer.invoke(catalogChannels.retryBackup, id) as Promise<ArchiveItem>,
+    cleanupBackups: (days) =>
+      ipcRenderer.invoke(catalogChannels.cleanupBackups, days) as Promise<BackupCleanupResult>,
     open: (id, target) => ipcRenderer.invoke(catalogChannels.open, id, target) as Promise<void>,
     reveal: (id, target) => ipcRenderer.invoke(catalogChannels.reveal, id, target) as Promise<void>,
     onChanged: (listener) => {

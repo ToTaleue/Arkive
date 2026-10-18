@@ -36,6 +36,18 @@ Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation
 
 压缩前入口选择的定向检查：`rtk proxy node scripts/check-batch-compression-ui.mjs` 验证默认关闭、依赖归档、取消归档清除选择、四类请求传递和入口结果显示；使用受控 IPC 结果。先 build 后执行 `rtk proxy env ARKIVE_PRECOMPRESSION_LINK_CHECK=1 node scripts/check-processing-ui.mjs`，用生成图片验证真实统一压缩页 → preload → IPC → 压缩／Backup／Archive／软链接，并保留界面截图及内容哈希断言；不处理真实用户资料。
 
+### 手动清理原件备份（2026-10-18）
+
+“我的归档 → 备份”提供“清理 7 天前的 Backup”“清理 3 天前的 Backup”“清理所有 Backup”。以前两项满 7／3 × 24 小时的备份成功时间为准；范围覆盖所有记录，不受筛选或每页 50 条限制。主进程保存本次 ID 快照，原生确认框说明数量、体积和回收站方式，取消不处理文件；确认后进入共用 Task 和 Catalog 串行流程。
+
+逐项核对备份目录、系统路径、普通文件与原件哈希，以及至少一份关联输出／正式归档的哈希；Office 须发布完成。未知文件、变更备份、链接和没有可用结果的项保留并返回原因。只调用 Electron `shell.trashItem`，失败不改用永久删除，也不清空回收站；报告的是移入回收站的体积，不是释放空间。
+
+数据库 v6 增加 `backup_cleaned_at`，备份状态扩展 `cleanup-pending`／`trashed`／`cleanup-unknown`。执行意图先落盘，启动只核对未完成状态：原件仍在则允许重新清理，已消失但未记录成功则标记待核对，不虚报已移入回收站。清理成功保留归档、输出、标签及历史位置，禁止重试备份重新生成原件；未归档结果仍能稍后归档。清理前保存尚未继承的 Finder 标签，清理后自动打标使用输出文件元数据。
+
+这三个按钮是手动操作，未启用自动清理、保留策略设置或后台任务。
+
+新增集成检查：`rtk proxy node scripts/check-backup-cleanup.mjs`（先运行 build）。只使用 `~/Desktop/arkive-test/backup-cleanup-*` 生成样本和独立 userData，覆盖日期边界、跨页、真实回收站、三个按钮、原生确认／取消、部分失败、归档与标签兼容和重启恢复。批量超过一页的执行使用夹具目录内移动；真实回收站验证只留下小型生成原件。确认框的按钮响应由测试替身提供，不视为人工点击原生窗口验收。
+
 ```sh
 rtk proxy node scripts/check-tag-recommendation.mjs
 rtk proxy node scripts/check-automatic-tags.mjs

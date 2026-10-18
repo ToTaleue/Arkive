@@ -9,9 +9,15 @@ import {
   RefreshCw,
   Search,
   Tags,
+  Trash2,
   X
 } from 'lucide-react'
-import type { ArchiveItem, CatalogQuery, CatalogPage } from '../../../shared/contracts/catalog'
+import type {
+  ArchiveItem,
+  CatalogQuery,
+  CatalogPage,
+  BackupCleanupResult
+} from '../../../shared/contracts/catalog'
 import { TagPicker } from './TagPicker'
 import { ArchiveAction } from './ArchiveAction'
 
@@ -47,6 +53,7 @@ export function ArchivePage(): React.JSX.Element {
   const [editedTags, setEditedTags] = useState<string[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [cleanupResult, setCleanupResult] = useState<BackupCleanupResult | null>(null)
   const [compact, setCompact] = useState(false)
   const [tagsOpen, setTagsOpen] = useState(false)
   const [datesOpen, setDatesOpen] = useState(false)
@@ -360,6 +367,70 @@ export function ArchivePage(): React.JSX.Element {
         </p>
       )}
       <section className="archive-results" aria-label="文件列表" aria-busy={loading}>
+        {isBackup && (
+          <section className="archive-backup-cleanup" aria-label="清理原件备份">
+            <div className="archive-cleanup-toolbar">
+              <div className="archive-cleanup-copy">
+                <span className="archive-cleanup-title">
+                  <Trash2 size={14} aria-hidden="true" />
+                  清理原件备份
+                </span>
+                <p>按备份时间，覆盖全部备份；移入回收站仍占空间。</p>
+              </div>
+              <div className="archive-cleanup-actions" role="group" aria-label="选择备份清理范围">
+                {([7, 3, 0] as const).map((days) => (
+                  <button
+                    key={days}
+                    className={days === 0 ? 'archive-cleanup-all' : 'archive-cleanup-period'}
+                    aria-label={
+                      days === 0 ? '清理所有 Backup' : `清理 ${String(days)} 天前的 Backup`
+                    }
+                    disabled={busy || !api}
+                    onClick={() => {
+                      if (api)
+                        void perform(async () => {
+                          setCleanupResult(null)
+                          const result = await api.cleanupBackups(days)
+                          if (!result.cancelled) {
+                            setCleanupResult(result)
+                            setSelected([])
+                            setOffset(0)
+                            closeDetail()
+                          }
+                        })
+                    }}
+                  >
+                    {days === 0 ? '清理全部' : `${String(days)} 天前`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {busy && <p role="status">正在确认或清理备份，请稍候…</p>}
+            {cleanupResult && (
+              <div role="status" aria-live="polite">
+                <p>
+                  已移入回收站 {cleanupResult.trashed} 项（{formatBytes(cleanupResult.trashedBytes)}
+                  ），未清理 {cleanupResult.issues.length} 项。
+                  {!cleanupResult.trashed &&
+                    !cleanupResult.issues.length &&
+                    '没有符合时间范围的备份。'}
+                </p>
+                {cleanupResult.issues.length > 0 && (
+                  <details>
+                    <summary>查看未清理原因（可重新点击按钮重试）</summary>
+                    <ul>
+                      {cleanupResult.issues.map((issue) => (
+                        <li key={issue.id}>
+                          {issue.name}：{issue.error}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+          </section>
+        )}
         <div className="archive-list-head">
           <span role="status" aria-live="polite">
             {state === 'pending' ? '待归档结果' : isBackup ? '原件备份' : '已归档'} · 共{' '}
@@ -489,11 +560,17 @@ export function ArchivePage(): React.JSX.Element {
                     >
                       {item.backupStatus === 'ready'
                         ? '已备份'
-                        : item.backupStatus === 'skipped'
-                          ? '原位保留'
-                          : item.backupStatus === 'error'
-                            ? '备份待处理'
-                            : '备份中'}
+                        : item.backupStatus === 'trashed'
+                          ? '已移入回收站'
+                          : item.backupStatus === 'cleanup-unknown'
+                            ? '清理待核对'
+                            : item.backupStatus === 'cleanup-pending'
+                              ? '清理中'
+                              : item.backupStatus === 'skipped'
+                                ? '原位保留'
+                                : item.backupStatus === 'error'
+                                  ? '备份待处理'
+                                  : '备份中'}
                     </span>
                   </td>
                   <td>
@@ -595,6 +672,7 @@ export function ArchivePage(): React.JSX.Element {
             {detailItem.tagStatus === 'error' && (
               <p role="alert">标签待同步：{detailItem.tagError}</p>
             )}
+            {detailItem.backupError && <p role="alert">{detailItem.backupError}</p>}
             {detailItem.originalLink && (
               <p className="archive-path">
                 {detailItem.originalLink.status === 'ready'
@@ -607,7 +685,7 @@ export function ArchivePage(): React.JSX.Element {
             {state !== 'pending' && (
               <div className="archive-row-actions">
                 <button
-                  disabled={busy || !api}
+                  disabled={busy || !api || (isBackup && detailItem.backupStatus !== 'ready')}
                   onClick={() => {
                     if (api)
                       void perform(() => api.open(detailItem.id, isBackup ? 'backup' : 'archive'))
@@ -616,7 +694,7 @@ export function ArchivePage(): React.JSX.Element {
                   打开{isBackup ? '原件' : '文件'}
                 </button>
                 <button
-                  disabled={busy || !api}
+                  disabled={busy || !api || (isBackup && detailItem.backupStatus !== 'ready')}
                   onClick={() => {
                     if (api)
                       void perform(() => api.reveal(detailItem.id, isBackup ? 'backup' : 'archive'))

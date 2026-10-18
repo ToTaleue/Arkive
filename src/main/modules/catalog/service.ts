@@ -6,6 +6,7 @@ import { homedir } from 'node:os'
 import { openDatabase } from '../../storage/database'
 import { assertSystemWriteAllowed } from '../../system-paths'
 import { backupOriginal } from '../original-backup/service'
+import { cleanupBackup, recoverPendingCleanup } from '../original-backup/cleanup'
 import {
   commitOfficeReplacement,
   recoverOfficeReplacements
@@ -25,6 +26,7 @@ import {
 import type {
   ArchiveItem,
   ArchiveOptions,
+  BackupCleanupResult,
   CatalogQuery,
   CompressionRecord
 } from '../../../shared/contracts/catalog'
@@ -76,6 +78,11 @@ export class Catalog {
     await managedDirectory(this.archiveRoot)
     await managedDirectory(this.backupRoot)
     await this.exclusive(async () => {
+      for (const row of this.repo.db
+        .prepare("SELECT id FROM catalog_items WHERE backup_status = 'cleanup-pending'")
+        .all()) {
+        await recoverPendingCleanup(this.repo, String(row.id))
+      }
       await recoverOfficeReplacements(this.repo, this.backupRoot)
       for (const id of this.repo.recoveryIds()) {
         await backupOriginal(this.repo, id, this.backupRoot)
@@ -258,12 +265,52 @@ export class Catalog {
     return this.repo.query(query)
   }
 
+  prepareBackupCleanup(days: number): { ids: string[]; bytes: number } {
+    if (days !== 0 && days !== 3 && days !== 7) throw new Error('无效的备份清理范围。')
+    const rows = this.repo.backupCleanupCandidates(days)
+    return {
+      ids: rows.map((row) => row.id),
+      bytes: rows.reduce((sum, row) => sum + row.source_size, 0)
+    }
+  }
+
+  cleanupBackups(ids: string[]): Promise<BackupCleanupResult> {
+    return this.exclusive(async () => {
+      const result: BackupCleanupResult = {
+        cancelled: false,
+        trashed: 0,
+        trashedBytes: 0,
+        issues: []
+      }
+      for (const id of new Set(ids)) {
+        try {
+          result.trashedBytes += await cleanupBackup(
+            this.repo,
+            this.backupRoot,
+            this.archiveRoot,
+            id
+          )
+          result.trashed++
+        } catch (error) {
+          const row = this.repo.get(id)
+          result.issues.push({
+            id,
+            name: basename(row.original_path),
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
+      this.changed()
+      return result
+    })
+  }
+
   private async archiveFile(id: string): Promise<void> {
     const row = this.repo.get(id)
     if (row.archive_status === 'ready') return
     if (row.compression_status !== 'ready' || !row.output_hash)
       throw new Error('压缩结果尚未校验完成。')
-    if (row.backup_status !== 'ready' && row.backup_status !== 'skipped')
+    if (!['ready', 'skipped', 'trashed', 'cleanup-unknown'].includes(row.backup_status))
       throw new Error('请先重试完成原件备份。')
     const directory = await managedDirectory(
       this.archiveRoot,
