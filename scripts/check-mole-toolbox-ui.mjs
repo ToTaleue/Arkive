@@ -32,7 +32,7 @@ if (args[0] === 'analyze') {
 if (args[0] === 'uninstall' && args[1] === '--list') { console.log(JSON.stringify(config.apps)); return }
 if (!args.includes('--dry-run') || !args.includes('--debug')) process.exit(90)
 if (args[0] === 'installer') for(const file of config.installer) console.log('Found installer: '+file)
-else if (args[0] === 'purge') for(const file of config.purge) console.log('[DRY RUN] '+file+', 4KB')
+else if (args[0] === 'purge') for(const file of config.purge) console.log('[DRY RUN] '+file+', '+config.purgeSizes[file])
 else process.exit(91)
 if (fs.existsSync(path.join(root,'truncated'))) console.log('x'.repeat(1100000))
 console.log('➤ Fixture discovery\nPreview complete - no changes made')

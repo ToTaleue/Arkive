@@ -243,6 +243,18 @@ export function MoleSelectionTool({
     const project = item.path.slice(0, item.path.lastIndexOf('/')) || '/'
     groups.set(project, [...(groups.get(project) ?? []), item])
   })
+  const sortedProjects = [...groups]
+    .map(([project, items]) => {
+      const sizes = items.map(candidateBytes)
+      return {
+        project,
+        items: items.sort((a, b) => (candidateBytes(b) ?? -1) - (candidateBytes(a) ?? -1)),
+        size: sizes.every((size) => size === null)
+          ? -1
+          : sizes.reduce<number>((total, size) => total + (size ?? 0), 0)
+      }
+    })
+    .sort((a, b) => b.size - a.size)
   const completedSize = result
     ? (preview?.candidates
         .filter((item) => result.completed.includes(item.path))
@@ -252,7 +264,7 @@ export function MoleSelectionTool({
   const candidateList = preview && (
     <>
       {kind === 'purge' ? (
-        [...groups].map(([project, items]) => (
+        sortedProjects.map(({ project, items }) => (
           <section className="mole-project" key={project}>
             <header>
               <FolderCode size={17} />

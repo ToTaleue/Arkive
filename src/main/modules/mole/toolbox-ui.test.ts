@@ -37,12 +37,15 @@ async function check(): Promise<void> {
   const b = await generated('Downloads/Editor.pkg', 'b'.repeat(6000))
   const p1 = join(await generated('Projects/client/site/node_modules/data'), '..')
   const p2 = join(await generated('Projects/server/site/dist/data'), '..')
+  const p3 = join(await generated('Projects/client/site/dist/data'), '..')
+  const p4 = join(await generated('Projects/unknown/node_modules/data'), '..')
   const appPath = join(await generated('Applications/Fixture App.app/Contents/Info.plist'), '../..')
   const cache = join(await generated('Library/Caches/com.fixture/data'), '..')
   const data = join(await generated('Library/Application Support/Fixture/settings'), '..')
   const config = {
     installer: [a, b],
-    purge: [p1, p2],
+    purge: [p4, p2, p1, p3],
+    purgeSizes: { [p1]: '600KB', [p2]: '1MB', [p3]: '800KB', [p4]: 'unknown' },
     apps: [
       {
         name: 'Fixture App',
@@ -171,7 +174,14 @@ async function check(): Promise<void> {
     )
     assert.equal(
       await evaluate(`${section('项目瘦身')}.querySelectorAll('.mole-project').length`),
-      2
+      3
+    )
+    assert.deepEqual(
+      await evaluate(
+        `[...${section('项目瘦身')}.querySelectorAll('.mole-project')].map(group => [...group.querySelectorAll('.mole-candidate-row label small:first-of-type')].map(path => path.textContent))`
+      ),
+      [[p3, p1], [p2], [p4]],
+      'Projects must sort by total known size descending, artifacts by size descending, unknown sizes last'
     )
     await choose('项目瘦身', p1)
     await click('移入回收站…', section('项目瘦身'))
@@ -181,6 +191,8 @@ async function check(): Promise<void> {
     await until(`${section('项目瘦身')}.innerText.includes('处理已完成')`)
     assert.equal(await exists(p1), false)
     assert.ok(await exists(p2))
+    assert.ok(await exists(p3))
+    assert.ok(await exists(p4))
     assert.equal(
       await evaluate(
         `${section('项目瘦身')}.querySelector('.mole-tool-measure strong').textContent`
@@ -188,7 +200,7 @@ async function check(): Promise<void> {
       '1 项'
     )
     console.log(
-      'PASS Purge: separate full project paths, no auto-selection, explicit review and only selected artifact moved'
+      'PASS Purge: projects and artifacts sorted by size, unknown sizes last, separate full paths, no auto-selection, explicit review and only selected artifact moved'
     )
 
     await navigate('安装包清理')
