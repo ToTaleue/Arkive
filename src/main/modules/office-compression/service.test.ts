@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict'
 import { app } from 'electron'
-import { copyFile, link, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  copyFile,
+  link,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import sharp, { type Sharp } from 'sharp'
 import { Catalog, setCatalog } from '../catalog/service'
@@ -95,6 +105,8 @@ async function check(): Promise<void> {
     for (const format of ['docx', 'pptx'] as const) {
       const input = path(`below-reference.${format}`)
       await fixture(input, format, [noisyPng])
+      // WeChat exports can be read-only. Tag writes must preserve this mode.
+      await chmod(input, 0o444)
       const originalHash = await hashFile(input)
       const result = await compressOfficeInPlace({ inputPath: input, preset: 'quality' })
       assert.equal(result.replacementStatus, 'replaced', result.replacementError)
@@ -110,6 +122,13 @@ async function check(): Promise<void> {
       assert.notDeepEqual(await readFile(imagePart.path), noisyPng)
       assert.ok(result.catalog?.backupPath)
       assert.equal(await hashFile(result.catalog.backupPath), originalHash)
+      assert.equal((await stat(input)).mode & 0o777, 0o444)
+      assert.equal((await stat(result.catalog.backupPath)).mode & 0o777, 0o444)
+      const archived = await catalog.archive(result.catalog.id, ['只读文档'])
+      assert.equal(archived.tagStatus, 'synced', archived.tagError ?? undefined)
+      assert.ok(archived.archivePath)
+      assert.deepEqual(await fileTags(archived.archivePath), ['只读文档'])
+      assert.equal((await stat(archived.archivePath)).mode & 0o777, 0o444)
     }
     console.log(
       'PASS: DOCX/PPTX replace below-reference images when smaller, with whole-document backups'
