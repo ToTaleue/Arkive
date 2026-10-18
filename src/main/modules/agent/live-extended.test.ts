@@ -277,11 +277,28 @@ async function check(): Promise<void> {
       const target = join(directory, 'analyze-only')
       await mkdir(target)
       await writeFile(join(target, 'generated.txt'), 'Disposable analysis fixture')
-      await call('analyze', `用 mole_analyze 分析目录 ${target} 的占用，只读，不清理。`)
-      const trace = JSON.stringify(transcript.at(-1))
-      assert.ok(trace.includes('"toolName":"mole_analyze"'))
-      assert.ok(trace.includes('"isError":false'))
-      await access(join(target, 'generated.txt'))
+      // The upstream shell router initializes ~/Library/Logs even for read-only analysis.
+      // Keep the real bundled analyzer, but bypass that router in this isolated harness.
+      const fixtureRoot = join(directory, 'analyze-fixture')
+      const launcher = join(fixtureRoot, 'resources/tools/darwin-arm64/mole/mo')
+      const analyzer = resolve('resources/tools/darwin-arm64/mole/bin/analyze-go')
+      await mkdir(join(launcher, '..'), { recursive: true })
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n[ "$1" = analyze ] || exit 9\nshift\nexec '${analyzer}' "$@"\n`,
+        { mode: 0o755 }
+      )
+      const old = app.getAppPath.bind(app)
+      app.getAppPath = () => fixtureRoot
+      try {
+        await call('analyze', `用 mole_analyze 分析目录 ${target} 的占用，只读，不清理。`)
+        const trace = JSON.stringify(transcript.at(-1))
+        assert.ok(trace.includes('"toolName":"mole_analyze"'))
+        assert.ok(trace.includes('"isError":false'))
+        await access(join(target, 'generated.txt'))
+      } finally {
+        app.getAppPath = old
+      }
     })
     await scenario('retry-after-tool-error', async () => {
       const missing = join(directory, 'retry.txt')
