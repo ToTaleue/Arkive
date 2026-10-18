@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { app } from 'electron'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import sharp from 'sharp'
 import { fileTags } from './finder-tags'
-import { compressImageAndBackup } from './compression'
+import { compressImageAndBackup, compressPdfAndBackup } from './compression'
+import { runBundledTool } from '../../../execution/process'
+import { tasks } from '../../tasks/service'
 import { archiveFile } from './operations'
 import { Catalog, setCatalog } from './service'
 
@@ -41,6 +43,7 @@ async function check(): Promise<void> {
     assert.ok(metadata)
     assert.ok(metadata.extension)
     assert.ok(metadata.sizeBytes)
+    if (metadata.extension === 'pdf') assert.equal(metadata.pageCount, 1)
     response.writeHead(200, { 'Content-Type': 'text/event-stream' })
     send(
       response,
@@ -57,7 +60,9 @@ async function check(): Promise<void> {
   const server = createServer((request, response) => {
     void handle(request, response).catch((error: unknown) => response.destroy(error as Error))
   })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve)
+  })
   const address = server.address()
   assert.ok(address && typeof address !== 'string')
   const previous = {
@@ -94,6 +99,49 @@ async function check(): Promise<void> {
     assert.ok(catalog.get(result.catalog.id).tags.includes('旅行'))
     assert.ok(result.archive.item.archivePath)
     assert.ok((await fileTags(result.archive.item.archivePath)).includes('旅行'))
+    // Metadata probes run inside the active compression task. They must not enqueue
+    // another job behind that same task in the single-worker queue.
+    const postscript = join(directory, 'queued-metadata.ps')
+    const pdf = join(directory, 'queued-metadata.pdf')
+    await writeFile(
+      postscript,
+      '%!PS\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Queued metadata) show\nshowpage\n'
+    )
+    const generated = await runBundledTool('ghostscript', [
+      '-dBATCH',
+      '-dNOPAUSE',
+      '-sDEVICE=pdfwrite',
+      `-sOutputFile=${pdf}`,
+      postscript
+    ])
+    assert.equal(generated.exitCode, 0)
+    const deadline = AbortSignal.timeout(5_000)
+    let waitingTasks: string[] = []
+    deadline.addEventListener(
+      'abort',
+      () => {
+        waitingTasks = tasks
+          .list()
+          .filter((task) => ['running', 'queued'].includes(task.status))
+          .map((task) => `${task.status}: ${task.title}`)
+      },
+      { once: true }
+    )
+    const pdfResult = await compressPdfAndBackup(
+      {
+        inputPath: pdf,
+        outputPath: join(directory, 'queued-metadata-result.pdf'),
+        preset: 'lossless',
+        archive: true
+      },
+      deadline
+    )
+    assert.equal(
+      pdfResult.automaticTags?.status,
+      'ready',
+      `PDF metadata must not deadlock the task queue: ${waitingTasks.join('; ')}`
+    )
+    assert.equal(pdfResult.archive?.status, 'ready')
     const laterInput = join(directory, '后续归档.png')
     const laterOutput = join(directory, '后续归档.webp')
     await sharp({ create: { width: 256, height: 256, channels: 3, background: '#c0d0e0' } })
@@ -129,7 +177,12 @@ async function check(): Promise<void> {
   }
 }
 
-void check().catch((error: unknown) => {
-  console.error(error)
-  process.exitCode = 1
-})
+void check().then(
+  () => {
+    app.exit(0)
+  },
+  (error: unknown) => {
+    console.error(error)
+    app.exit(1)
+  }
+)

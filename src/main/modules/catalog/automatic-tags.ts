@@ -1,7 +1,9 @@
 import { stat } from 'node:fs/promises'
 import { basename, dirname, extname } from 'node:path'
 import { readImageMetadata } from '../../../execution/sharp'
-import { inspectOffice, inspectPdf, inspectVideo } from '../processing/operations'
+import { inspectOffice } from '../office-compression/service'
+import { inspectPdf } from '../pdf-compression/service'
+import { inspectVideo } from '../video-compression/service'
 import type { AutomaticTagAttempt } from '../../../shared/contracts/catalog'
 import type {
   TagMetadataValue,
@@ -22,6 +24,8 @@ async function collectMetadata(
   inputPath: string,
   signal?: AbortSignal
 ): Promise<Record<string, TagMetadataValue>> {
+  // Already inside a compression/archive task: use raw inspections so the
+  // single-worker queue does not wait for a child job queued behind itself.
   signal?.throwIfAborted()
   const info = await stat(inputPath)
   const metadata: Record<string, TagMetadataValue> = {
