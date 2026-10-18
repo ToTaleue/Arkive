@@ -1,8 +1,13 @@
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, isAbsolute } from 'node:path'
-import type { MoleOutputEvent, MolePreviewResult } from '../../../shared/contracts/mole'
-import { runTask, TaskFailure } from '../../tasks/service'
+import type {
+  MoleCleanMode,
+  MoleCleanResult,
+  MoleOutputEvent,
+  MolePreviewResult
+} from '../../../shared/contracts/mole'
+import { runTask, TaskCancelled, TaskFailure } from '../../tasks/service'
 import { trashFiles } from '../file-operations/operations'
 import {
   analyzeMole as analyze,
@@ -11,6 +16,84 @@ import {
   runMoleInstallerPreview as installer,
   runMolePurgePreview as purge
 } from './service'
+import { getMoleAuthorization, runMoleClean as cleanOutput } from './service'
+
+/** Real Clean is page-only. Recheck sudo after queueing, immediately before the process starts. */
+export async function runMoleClean(
+  mode: MoleCleanMode,
+  onUpdate: (event: MoleOutputEvent) => void,
+  signal?: AbortSignal,
+  requestId?: string
+): Promise<MoleCleanResult> {
+  let outcome: MoleCleanResult | undefined
+  try {
+    return await runTask(
+      {
+        title: mode === 'preview' ? 'Mole 清理预览' : 'Mole Clean 清理',
+        key: 'mole-preview',
+        requestId,
+        run: async (taskSignal, report) => {
+          taskSignal.throwIfAborted()
+          if (mode === 'clean' && !(await getMoleAuthorization()).authorized) {
+            outcome = {
+              mode,
+              status: 'authorization-required',
+              message: '管理员授权已失效，请重新授权后开始清理。'
+            }
+            throw new TaskFailure(outcome.message ?? '需要管理员授权。', outcome)
+          }
+          taskSignal.throwIfAborted()
+          report({ message: mode === 'preview' ? '正在预览清理…' : '正在清理…' })
+          const output = await cleanOutput(
+            mode,
+            (event) => {
+              if (event.type === 'stage') report({ message: event.title })
+              onUpdate(event)
+            },
+            taskSignal
+          )
+          const incomplete = output.stdoutTruncated || output.stderrTruncated
+          const failed =
+            output.exitCode !== 0 ||
+            output.signal !== null ||
+            output.interrupted === true ||
+            incomplete
+          outcome = {
+            mode,
+            status: failed ? 'failed' : 'completed',
+            output,
+            message: failed
+              ? incomplete
+                ? '输出超出保留上限，日志不完整，请检查实际处理结果。'
+                : mode === 'preview'
+                  ? 'Mole 预览未正常完成，没有执行删除，请查看日志。'
+                  : 'Mole 运行未正常完成；已执行的清理不会回滚，请查看日志。'
+              : undefined
+          }
+          if (taskSignal.aborted) throw new TaskCancelled('用户取消', outcome)
+          if (failed) throw new TaskFailure(outcome.message ?? 'Mole 运行未完成。', outcome)
+          return outcome
+        }
+      },
+      signal
+    )
+  } catch (error) {
+    if (error instanceof TaskCancelled)
+      return {
+        mode,
+        status: 'cancelled',
+        output: outcome?.output,
+        message:
+          mode === 'clean' ? '清理已停止，已删除的内容不会恢复。' : '预览已停止，没有执行删除。'
+      }
+    if (outcome) return outcome
+    return {
+      mode,
+      status: 'failed',
+      message: error instanceof Error ? error.message : '无法运行 Mole。'
+    }
+  }
+}
 
 /** Preview processes share Mole's mutable lists; all product callers use this queue. */
 async function preview(

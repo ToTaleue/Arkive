@@ -20,6 +20,7 @@ import {
 import {
   moleChannels,
   type MoleAnalyzeResult,
+  type MoleCleanResult,
   type MoleInstalledApp,
   type MoleAuthorizationResult,
   type MolePreviewResult,
@@ -145,6 +146,10 @@ const api: ArkiveApi = {
     reveal: () => ipcRenderer.invoke(imageChannels.reveal) as Promise<void>
   },
   mole: {
+    clean: (runId, mode) =>
+      ipcRenderer.invoke(moleChannels.clean, runId, mode) as Promise<MoleCleanResult>,
+    authorizationStatus: () =>
+      ipcRenderer.invoke(moleChannels.authorizationStatus) as Promise<{ authorized: boolean }>,
     dryRun: (runId) => ipcRenderer.invoke(moleChannels.dryRun, runId) as Promise<MolePreviewResult>,
     analyze: (path) => ipcRenderer.invoke(moleChannels.analyze, path) as Promise<MoleAnalyzeResult>,
     installerPreview: (runId) =>

@@ -16,10 +16,16 @@ export class MoleOutputParser {
   private endingPartial = false
   private readonly source: MoleOutputBlock['source']
   private readonly emit: (event: MoleOutputEvent) => void
+  private readonly streamLines: boolean
 
-  constructor(source: MoleOutputBlock['source'], emit: (event: MoleOutputEvent) => void) {
+  constructor(
+    source: MoleOutputBlock['source'],
+    emit: (event: MoleOutputEvent) => void,
+    streamLines = false
+  ) {
     this.source = source
     this.emit = emit
+    this.streamLines = streamLines
     this.title = source === 'stdout' ? '运行日志' : '错误与提示'
   }
 
@@ -75,6 +81,7 @@ export class MoleOutputParser {
     if (!line.trim() && this.lines.length === 0) return
     this.lines.push(line)
     if (
+      this.streamLines ||
       this.lines.join('\n').length >= maxBlockChars ||
       (this.kind === 'log' && this.lines.length >= fallbackLines)
     ) {

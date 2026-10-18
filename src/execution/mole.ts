@@ -17,17 +17,28 @@ export function spawnMoleStatus(options?: ToolProcessOptions): ToolProcess {
 
 /** Preview Mole's cleanup plan without changing any files. */
 export function spawnMoleCleanDryRun(options?: ToolProcessOptions): ToolProcess {
-  return spawnBundledTool('mole', ['clean', '--dry-run'], options)
+  return spawnBundledTool('mole', ['clean', '--dry-run'], { ...options, killTreeOnAbort: true })
+}
+
+/** Run as the current user; Mole adopts the sudo session only for privileged steps. */
+export function spawnMoleClean(options?: ToolProcessOptions): ToolProcess {
+  return spawnBundledTool('mole', ['clean'], { ...options, killTreeOnAbort: true })
 }
 
 /** Installer preview is deliberately dry-run and debug-enabled so the adapter can recover full paths. */
 export function spawnMoleInstallerDryRun(options?: ToolProcessOptions): ToolProcess {
-  return spawnBundledTool('mole', ['installer', '--dry-run', '--debug'], options)
+  return spawnBundledTool('mole', ['installer', '--dry-run', '--debug'], {
+    ...options,
+    killTreeOnAbort: true
+  })
 }
 
 /** Preview rebuildable project artifacts without invoking Mole's destructive confirmation. */
 export function spawnMolePurgeDryRun(options?: ToolProcessOptions): ToolProcess {
-  return spawnBundledTool('mole', ['purge', '--dry-run', '--debug'], options)
+  return spawnBundledTool('mole', ['purge', '--dry-run', '--debug'], {
+    ...options,
+    killTreeOnAbort: true
+  })
 }
 
 export function spawnMoleUninstallList(signal?: AbortSignal): Promise<ToolRunResult> {

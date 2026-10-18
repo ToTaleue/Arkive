@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { stripVTControlCharacters } from 'node:util'
 import {
   spawnMoleCleanDryRun,
+  spawnMoleClean,
   spawnMoleInstallerDryRun,
   spawnMolePurgeDryRun,
   spawnMoleUninstallList
@@ -22,6 +23,7 @@ import type {
   MoleAnalyzeResult,
   MoleTrashResult
 } from '../../../shared/contracts/mole'
+import type { MoleCleanMode } from '../../../shared/contracts/mole'
 
 const maxOutputChars = 1_048_576
 type MoleRunKind = MolePreviewResult['kind']
@@ -108,22 +110,24 @@ function parsePurgeCandidates(stdout: string, stderr: string): MoleCandidate[] {
   return candidates
 }
 
-async function runMolePreview(
-  kind: MoleRunKind,
+async function runMoleOutput(
   spawn: (options: { signal?: AbortSignal }) => ToolProcess,
   onUpdate: (event: MoleOutputEvent) => void,
-  signal?: AbortSignal
-): Promise<MolePreviewResult> {
+  signal?: AbortSignal,
+  streamLines = false,
+  timeoutMs = 120_000
+): Promise<MoleDryRunResult> {
   signal?.throwIfAborted()
-  const timeout = AbortSignal.timeout(120_000)
-  const child = spawn({ signal: signal ? AbortSignal.any([signal, timeout]) : timeout })
+  const timeout = AbortSignal.timeout(timeoutMs)
+  const executionSignal = signal ? AbortSignal.any([signal, timeout]) : timeout
+  const child = spawn({ signal: executionSignal })
   const blocks: MoleOutputBlock[] = []
   const emit = (event: MoleOutputEvent): void => {
     if (event.type === 'block') blocks.push(event.block)
     onUpdate(event)
   }
-  const stdoutParser = new MoleOutputParser('stdout', emit)
-  const stderrParser = new MoleOutputParser('stderr', emit)
+  const stdoutParser = new MoleOutputParser('stdout', emit, streamLines)
+  const stderrParser = new MoleOutputParser('stderr', emit, streamLines)
 
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -149,10 +153,11 @@ async function runMolePreview(
       processError = error
     })
     child.once('close', (exitCode, childSignal) => {
-      const partial = Boolean(processError) || exitCode !== 0 || childSignal !== null
+      const partial =
+        executionSignal.aborted || Boolean(processError) || exitCode !== 0 || childSignal !== null
       stdoutParser.finish(partial || stdoutTruncated)
       stderrParser.finish(partial || stderrTruncated)
-      if (processError) {
+      if (processError && processError.name !== 'AbortError') {
         reject(processError)
         return
       }
@@ -163,15 +168,39 @@ async function runMolePreview(
         stderr,
         stdoutTruncated,
         stderrTruncated,
-        blocks
+        blocks,
+        interrupted: executionSignal.aborted
       }
-      if (exitCode !== 0 || childSignal) {
-        reject(new Error(`Mole ${kind} 预览失败：${JSON.stringify(base)}`))
-        return
-      }
-      resolve({ ...base, kind, candidates: [] })
+      resolve(base)
     })
   })
+}
+
+async function runMolePreview(
+  kind: MoleRunKind,
+  spawn: (options: { signal?: AbortSignal }) => ToolProcess,
+  onUpdate: (event: MoleOutputEvent) => void,
+  signal?: AbortSignal
+): Promise<MolePreviewResult> {
+  const result = await runMoleOutput(spawn, onUpdate, signal)
+  if (result.exitCode !== 0 || result.signal || result.interrupted)
+    throw new Error(`Mole ${kind} 预览失败：${JSON.stringify(result)}`)
+  return { ...result, kind, candidates: [] }
+}
+
+/** Page output only: no candidate selection or Arkive trash operation is inserted. */
+export function runMoleClean(
+  mode: MoleCleanMode,
+  onUpdate: (event: MoleOutputEvent) => void,
+  signal?: AbortSignal
+): Promise<MoleDryRunResult> {
+  return runMoleOutput(
+    mode === 'preview' ? spawnMoleCleanDryRun : spawnMoleClean,
+    onUpdate,
+    signal,
+    true,
+    mode === 'preview' ? 120_000 : 1_800_000
+  )
 }
 
 export async function runMoleDryRun(
@@ -264,7 +293,7 @@ export async function authorizeMoleSystem(): Promise<{
 
   const dialog = await runSystemTool('osascript', [
     '-e',
-    'display dialog "Arkive 需要管理员权限来检查系统级清理项。密码只交给 macOS，不会发送给 Agent。" default answer "" with hidden answer with title "Arkive" with icon caution',
+    'display dialog "Arkive 需要管理员权限来检查或清理系统级项目。授权后不会自动开始清理。密码仅用于本机 sudo 授权，不会发送给 Agent。" default answer "" with hidden answer with title "Arkive" with icon caution',
     '-e',
     'text returned of result'
   ])
@@ -280,4 +309,9 @@ export async function authorizeMoleSystem(): Promise<{
   } finally {
     password = ''
   }
+}
+
+export async function getMoleAuthorization(): Promise<{ authorized: boolean }> {
+  const result = await runSudoValidation()
+  return { authorized: result.exitCode === 0 && !result.signal }
 }

@@ -62,28 +62,33 @@ export function spawnBundledTool(
   options: ToolProcessOptions = {}
 ): ToolProcess {
   const { killTreeOnAbort = false, ...spawnOptions } = options
+  // Signal the process group before Node's signal handler terminates its leader.
+  // On macOS, killing the group after its leader exits can race with group teardown (EPERM).
+  const treeController = killTreeOnAbort && options.signal ? new AbortController() : undefined
   const child = spawn(getBundledToolPath(tool), args, {
     ...spawnOptions,
+    signal: treeController?.signal ?? options.signal,
     detached: killTreeOnAbort,
     shell: false,
     stdio: ['ignore', 'pipe', 'pipe']
   })
-  if (killTreeOnAbort && options.signal) {
+  if (treeController && options.signal) {
     const abort = (): void => {
-      if (!child.pid) return
       try {
         // The task owns all temporary files. Kill descendants too before their pipes close
         // and the caller removes that directory, even if the parent already received SIGTERM.
-        process.kill(-child.pid, 'SIGKILL')
+        if (child.pid) process.kill(-child.pid, 'SIGKILL')
       } catch (error) {
         if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) {
           child.emit('error', error)
         }
+      } finally {
+        treeController.abort(options.signal?.reason)
       }
     }
     options.signal.addEventListener('abort', abort, { once: true })
     child.once('close', () => options.signal?.removeEventListener('abort', abort))
-    if (options.signal.aborted) abort()
+    if (options.signal.aborted) queueMicrotask(abort)
   }
   return child
 }
@@ -155,7 +160,8 @@ export function runSystemTool(
 export function runSudoValidation(password?: string): Promise<ToolRunResult> {
   if (process.platform !== 'darwin') throw new Error('系统管理员授权仅支持 macOS。')
   const withPassword = password !== undefined
-  const child = spawn('/usr/bin/sudo', withPassword ? ['-S', '-p', '', '-v'] : ['-n', '-v'], {
+  // A status check must not keep an otherwise idle authorization alive.
+  const child = spawn('/usr/bin/sudo', withPassword ? ['-S', '-p', '', '-v'] : ['-n', 'true'], {
     shell: false,
     stdio: [withPassword ? 'pipe' : 'ignore', 'ignore', 'pipe']
   })

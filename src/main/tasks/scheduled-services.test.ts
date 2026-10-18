@@ -62,6 +62,14 @@ function latest(key: string): TaskSnapshot {
   return task
 }
 
+function killFixtureProcess(pid: number): void {
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) throw error
+  }
+}
+
 export async function checkScheduledServices(root: string): Promise<void> {
   const files = join(root, 'files')
   await mkdir(files)
@@ -292,6 +300,54 @@ export async function checkScheduledServices(root: string): Promise<void> {
 
   assert.equal((await runMoleInstallerPreview(() => {})).candidates.length, 1)
   assert.equal((await runMolePurgePreview(() => {})).candidates.length, 1)
+  for (const work of [runMoleDryRun, runMoleInstallerPreview, runMolePurgePreview]) {
+    for (const timedOut of [false, true]) {
+      await writeFile(join(root, 'hold-mole-descendant'), '')
+      await rm(join(root, 'mole-descendant-pid'), { force: true })
+      const originalTimeout = AbortSignal.timeout.bind(AbortSignal)
+      // Exercise the real production timeout path without waiting two minutes per preview.
+      if (timedOut) AbortSignal.timeout = () => originalTimeout(500)
+      const previewController = new AbortController()
+      let previewSettled = false
+      const preview = work(() => {}, previewController.signal)
+      const previewRejected = assert
+        .rejects(preview, timedOut ? /Mole .*预览失败/ : TaskCancelled)
+        .finally(() => {
+          previewSettled = true
+        })
+      let descendantPid: number | undefined
+      try {
+        await until(async () => {
+          try {
+            descendantPid = Number(await readFile(join(root, 'mole-descendant-pid'), 'utf8'))
+            return true
+          } catch (error) {
+            if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+            throw error
+          }
+        })
+        if (!timedOut) previewController.abort()
+        await Promise.race([previewRejected, delay(1500)])
+        assert.ok(previewSettled, 'Mole cancellation/timeout must settle despite descendant pipes')
+        assert.equal(latest('mole-preview').status, timedOut ? 'failed' : 'cancelled')
+        // The same preview key and shared queue must be available again after cleanup.
+        await rm(join(root, 'hold-mole-descendant'))
+        assert.equal((await listMoleApps()).length, 1)
+        assert.equal((await runMoleDryRun(() => {})).exitCode, 0)
+      } finally {
+        AbortSignal.timeout = originalTimeout
+        if (descendantPid) killFixtureProcess(descendantPid)
+        await previewRejected
+        await rm(join(root, 'hold-mole-descendant'), { force: true })
+      }
+    }
+  }
+  console.log(
+    'PASS: all three Mole previews release descendant pipes and queue on cancellation/timeout'
+  )
+  const callsBeforeAnalysis = (await readFile(join(root, 'mole-calls'), 'utf8'))
+    .split('\n')
+    .filter(Boolean).length
   await writeFile(join(root, 'hold-mole'), '')
   const controller = new AbortController()
   const active = analyzeMole(files, controller.signal)
@@ -300,17 +356,32 @@ export async function checkScheduledServices(root: string): Promise<void> {
   await until(
     async () =>
       (await readFile(join(root, 'mole-calls'), 'utf8')).split('\n').filter(Boolean).length ===
-      callsBefore.split('\n').filter(Boolean).length + 4
+      callsBeforeAnalysis + 1
   )
   controller.abort()
   await rejected
   assert.equal(latest(`mole-analyze:${files}`).status, 'cancelled')
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const startedBefore = (await readFile(join(root, 'mole-calls'), 'utf8'))
+      .split('\n')
+      .filter(Boolean).length
+    const stop = new AbortController()
+    const pendingPreview = runMoleDryRun(() => {}, stop.signal)
+    const cancelledPreview = assert.rejects(pendingPreview, TaskCancelled)
+    await until(
+      async () =>
+        (await readFile(join(root, 'mole-calls'), 'utf8')).split('\n').filter(Boolean).length >
+        startedBefore
+    )
+    stop.abort()
+    await cancelledPreview
+  }
   await rm(join(root, 'hold-mole'))
   assert.equal((await listMoleApps()).length, 1, 'Next task executes after real child cleanup')
   await assert.rejects(scanDuplicates({ directoryPath: '.' }), /绝对路径/)
   await closeCloneDeduplication()
   await tasks.close()
   console.log(
-    'PASS: active Mole child cancellation waits for close; next queued operation succeeds'
+    'PASS: active Mole cancellation and 20 process-group exit races settle; next queued operation succeeds'
   )
 }

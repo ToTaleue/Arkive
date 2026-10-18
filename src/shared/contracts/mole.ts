@@ -1,5 +1,7 @@
 export const moleChannels = {
   dryRun: 'mole:dry-run',
+  clean: 'mole:clean',
+  authorizationStatus: 'mole:authorization-status',
   analyze: 'mole:analyze',
   installerPreview: 'mole:installer-preview',
   purgePreview: 'mole:purge-preview',
@@ -33,6 +35,17 @@ export type MoleDryRunResult = {
   stdoutTruncated: boolean
   stderrTruncated: boolean
   blocks: MoleOutputBlock[]
+  /** Cancellation/timeout can interrupt descendants after the parent has already exited. */
+  interrupted?: boolean
+}
+
+export type MoleCleanMode = 'preview' | 'clean'
+
+export type MoleCleanResult = {
+  mode: MoleCleanMode
+  status: 'completed' | 'failed' | 'cancelled' | 'authorization-required'
+  output?: MoleDryRunResult
+  message?: string
 }
 
 export type MoleCandidate = {
@@ -76,6 +89,8 @@ export type MoleAuthorizationResult = {
 }
 
 export interface MoleApi {
+  clean: (runId: string, mode: MoleCleanMode) => Promise<MoleCleanResult>
+  authorizationStatus: () => Promise<{ authorized: boolean }>
   dryRun: (runId: string) => Promise<MolePreviewResult>
   analyze: (path?: string) => Promise<MoleAnalyzeResult>
   installerPreview: (runId: string) => Promise<MolePreviewResult>

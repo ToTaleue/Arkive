@@ -14,10 +14,14 @@ try {
   const mole = String.raw`#!${process.execPath}
 import { appendFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { spawn } from 'node:child_process'
 const root = ${JSON.stringify(directory)}
 const args = process.argv.slice(2)
 appendFileSync(join(root, 'mole-calls'), JSON.stringify(args) + '\n')
-if (existsSync(join(root, 'hold-mole'))) {
+if (existsSync(join(root, 'hold-mole-descendant'))) {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: ['ignore', 'inherit', 'inherit'] })
+  writeFileSync(join(root, 'mole-descendant-pid'), String(child.pid))
+} else if (existsSync(join(root, 'hold-mole'))) {
   process.on('SIGTERM', () => process.exit(0))
   setInterval(() => {}, 1000)
 } else if (args[0] === 'analyze') {

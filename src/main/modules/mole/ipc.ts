@@ -4,14 +4,40 @@ import {
   listMoleApps,
   analyzeMole,
   runMoleDryRun,
+  runMoleClean,
   runMoleInstallerPreview,
   runMolePurgePreview,
   trashMolePaths
 } from './operations'
-import { authorizeMoleSystem } from './service'
+import { authorizeMoleSystem, getMoleAuthorization } from './service'
 
 export function registerMoleIpc(): void {
   let authorizing = false
+  ipcMain.handle(moleChannels.authorizationStatus, async (event) => {
+    if (event.senderFrame !== event.sender.mainFrame) throw new Error('无效的 Mole 授权状态请求。')
+    return getMoleAuthorization()
+  })
+  ipcMain.handle(moleChannels.clean, async (event, runId: unknown, mode: unknown) => {
+    if (
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof runId !== 'string' ||
+      !/^[a-zA-Z0-9_-]{1,100}$/.test(runId) ||
+      (mode !== 'preview' && mode !== 'clean')
+    )
+      throw new Error('无效的 Mole Clean 请求。')
+    const frame = event.senderFrame
+    return runMoleClean(
+      mode,
+      (output) => {
+        if (!event.sender.isDestroyed() && event.sender.mainFrame === frame) {
+          const update: MoleDryRunUpdate = { runId, event: output }
+          event.sender.send(moleChannels.update, update)
+        }
+      },
+      undefined,
+      runId
+    )
+  })
   ipcMain.handle(moleChannels.authorize, async (event) => {
     if (event.senderFrame !== event.sender.mainFrame) throw new Error('无效的 Mole 授权请求。')
     if (authorizing) throw new Error('正在等待管理员授权，请完成当前授权。')

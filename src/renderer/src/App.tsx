@@ -5,6 +5,7 @@ import './assets/archive.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Archive,
+  BrushCleaning,
   ChevronRight,
   Folder,
   FolderOpen,
@@ -25,6 +26,7 @@ import { VideoCompressionPage } from './components/VideoCompressionPage'
 import { ImageCompressionPage } from './components/ImageCompressionPage'
 import { ToolboxPage } from './components/ToolboxPage'
 import { CompressionPage } from './components/CompressionPage'
+import { CleanPage } from './components/CleanPage'
 import { initialConversations, type Conversation, type PreviewMessage } from './chat-preview'
 import type { AgentStatus } from '../../shared/contracts/agent'
 import type {
@@ -36,7 +38,7 @@ import type {
 
 function App(): React.JSX.Element {
   const [activePage, setActivePage] = useState<
-    'chat' | 'compression' | 'video' | 'image' | 'documents' | 'archive' | 'toolbox'
+    'chat' | 'compression' | 'clean' | 'video' | 'image' | 'documents' | 'archive' | 'toolbox'
   >('chat')
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 680)
   const [rightOpen, setRightOpen] = useState(false)
@@ -48,16 +50,13 @@ function App(): React.JSX.Element {
   const [activeId, setActiveId] = useState('welcome')
   const [moleRunning, setMoleRunning] = useState(false)
   const [moleResult, setMoleResult] = useState<MolePreviewResult | null>(null)
-  const [moleMode, setMoleMode] = useState<
-    'clean' | 'installer' | 'purge' | 'uninstall' | 'analyze'
-  >('clean')
+  const [moleMode, setMoleMode] = useState<'installer' | 'purge' | 'uninstall' | 'analyze'>(
+    'installer'
+  )
   const [moleApps, setMoleApps] = useState<MoleInstalledApp[]>([])
   const [moleSelectedPaths, setMoleSelectedPaths] = useState<string[]>([])
   const [moleAnalyzeResult, setMoleAnalyzeResult] = useState<unknown>(null)
   const [moleActionMessage, setMoleActionMessage] = useState<string | null>(null)
-  const [moleAuthorization, setMoleAuthorization] = useState<
-    'unknown' | 'authorizing' | 'authorized'
-  >('unknown')
   const [moleError, setMoleError] = useState<string | null>(null)
   const [moleBlocks, setMoleBlocks] = useState<MoleOutputBlock[]>([])
   const [moleStage, setMoleStage] = useState<string | null>(null)
@@ -130,51 +129,6 @@ function App(): React.JSX.Element {
     }
     setConversations((current) => [conversation, ...current])
     setActiveId(conversation.id)
-  }
-
-  async function runMoleDryRun(): Promise<void> {
-    const mole = window.api?.mole
-    if (!mole || !moleAvailable || moleRunId.current) return
-    const runId = crypto.randomUUID()
-    moleRunId.current = runId
-    setMoleTaskRequestId(runId)
-    setMoleRunning(true)
-    setMoleResult(null)
-    setMoleError(null)
-    setMoleBlocks([])
-    setMoleStage(null)
-    setMoleMode('clean')
-    setMoleSelectedPaths([])
-    try {
-      const result = await mole.dryRun(runId)
-      // The final snapshot also reconciles updates that arrived near process close.
-      setMoleBlocks(result.blocks)
-      setMoleResult(result)
-    } catch (error) {
-      setMoleError(error instanceof Error ? error.message : 'Mole dry run 调用失败。')
-    } finally {
-      moleRunId.current = null
-      setMoleTaskRequestId(null)
-      setMoleStage(null)
-      setMoleRunning(false)
-    }
-  }
-
-  async function authorizeMoleSystem(): Promise<void> {
-    const mole = window.api?.mole
-    if (!mole || moleAuthorization === 'authorizing') return
-    setMoleAuthorization('authorizing')
-    setMoleError(null)
-    setMoleActionMessage(null)
-    try {
-      const result = await mole.authorize()
-      setMoleAuthorization(result.authorized ? 'authorized' : 'unknown')
-      setMoleActionMessage('系统级权限已授权，正在重新生成 Clean 预览。')
-      await runMoleDryRun()
-    } catch (error) {
-      setMoleAuthorization('unknown')
-      setMoleError(error instanceof Error ? error.message : '系统级权限授权失败。')
-    }
   }
 
   async function runMoleInstallerPreview(): Promise<void> {
@@ -273,7 +227,6 @@ function App(): React.JSX.Element {
       const result = await mole.trash(moleSelectedPaths)
       setMoleSelectedPaths([])
       setMoleActionMessage(`已移入回收站 ${String(result.completed.length)} 项。`)
-      if (moleMode === 'clean') await runMoleDryRun()
       if (moleMode === 'installer') await runMoleInstallerPreview()
       if (moleMode === 'purge') await runMolePurgePreview()
       if (moleMode === 'uninstall') await loadMoleApps()
@@ -323,38 +276,42 @@ function App(): React.JSX.Element {
           <span>Arkive</span>
           <ChevronRight size={13} />
           <span className="muted">
-            {activePage === 'documents'
-              ? '文档压缩与重复检测'
-              : activePage === 'compression'
-                ? '压缩'
-                : activePage === 'toolbox'
-                  ? '工具箱'
-                  : activePage === 'archive'
-                    ? '我的归档'
-                    : activePage === 'video'
-                      ? '视频压缩'
-                      : activePage === 'image'
-                        ? '图片压缩'
-                        : 'AI 助手'}
+            {activePage === 'clean'
+              ? '清理'
+              : activePage === 'documents'
+                ? '文档压缩与重复检测'
+                : activePage === 'compression'
+                  ? '压缩'
+                  : activePage === 'toolbox'
+                    ? '工具箱'
+                    : activePage === 'archive'
+                      ? '我的归档'
+                      : activePage === 'video'
+                        ? '视频压缩'
+                        : activePage === 'image'
+                          ? '图片压缩'
+                          : 'AI 助手'}
           </span>
         </div>
         <span className="preview-badge">
           <span />
-          {activePage === 'documents'
-            ? '本地文档处理'
-            : activePage === 'compression'
-              ? '本地压缩'
-              : activePage === 'toolbox'
-                ? '本地文件工具'
-                : activePage === 'archive'
-                  ? '本地归档'
-                  : activePage === 'video'
-                    ? '本地视频处理'
-                    : activePage === 'image'
-                      ? '本地图片处理'
-                      : agentStatus?.configured
-                        ? 'Pi 对话'
-                        : '待配置模型'}
+          {activePage === 'clean'
+            ? '本地清理'
+            : activePage === 'documents'
+              ? '本地文档处理'
+              : activePage === 'compression'
+                ? '本地压缩'
+                : activePage === 'toolbox'
+                  ? '本地文件工具'
+                  : activePage === 'archive'
+                    ? '本地归档'
+                    : activePage === 'video'
+                      ? '本地视频处理'
+                      : activePage === 'image'
+                        ? '本地图片处理'
+                        : agentStatus?.configured
+                          ? 'Pi 对话'
+                          : '待配置模型'}
         </span>
         <div className="theme-switcher" role="group" aria-label="日间与夜间主题">
           <button
@@ -419,6 +376,19 @@ function App(): React.JSX.Element {
           >
             <Shrink size={18} strokeWidth={1.7} aria-hidden="true" />
             <span>压缩</span>
+          </button>
+          <button
+            className={`rail-button ${activePage === 'clean' ? 'active' : ''}`}
+            title="清理"
+            aria-label="清理"
+            aria-controls="clean-page"
+            aria-current={activePage === 'clean' ? 'page' : undefined}
+            onClick={() => {
+              setActivePage('clean')
+            }}
+          >
+            <BrushCleaning size={18} strokeWidth={1.7} aria-hidden="true" />
+            <span>清理</span>
           </button>
           <button
             hidden
@@ -582,6 +552,9 @@ function App(): React.JSX.Element {
         >
           <CompressionPage />
         </main>
+        <main className="clean-main" id="clean-page" hidden={activePage !== 'clean'}>
+          <CleanPage />
+        </main>
         <main className="toolbox-main" id="toolbox-page" hidden={activePage !== 'toolbox'}>
           <ToolboxPage />
         </main>
@@ -645,30 +618,17 @@ function App(): React.JSX.Element {
               </div>
               <section className="mole-demo">
                 <div className="section-eyebrow">Mole 受控操作</div>
-                <h3>先预览，再选择处理</h3>
-                <p>Agent 和按钮都先拿到候选清单；移入回收站只处理你勾选并确认的项目。</p>
-                <div className="mole-authorization">
-                  <button
-                    className="mole-action-button"
-                    onClick={() => void authorizeMoleSystem()}
-                    disabled={!moleAvailable || moleAuthorization === 'authorizing'}
-                  >
-                    {moleAuthorization === 'authorizing'
-                      ? '等待系统授权…'
-                      : moleAuthorization === 'authorized'
-                        ? '已授权系统级清理'
-                        : '授权系统级清理'}
-                  </button>
-                  <small>只在需要检查系统缓存时授权；密码由 macOS 原生对话框处理。</small>
-                </div>
+                <h3>更多 Mole 工具</h3>
+                <p>Clean 预览与清理已移至独立页面；其他工具仍可在这里使用。</p>
+                <button
+                  className="mole-action-button"
+                  onClick={() => {
+                    setActivePage('clean')
+                  }}
+                >
+                  打开清理页面
+                </button>
                 <div className="mole-tabs" role="tablist" aria-label="Mole 功能">
-                  <button
-                    className={moleMode === 'clean' ? 'active' : ''}
-                    onClick={() => void runMoleDryRun()}
-                    disabled={moleRunning || !moleAvailable}
-                  >
-                    Clean
-                  </button>
                   <button
                     className={moleMode === 'analyze' ? 'active' : ''}
                     onClick={() => void runMoleAnalyze()}
