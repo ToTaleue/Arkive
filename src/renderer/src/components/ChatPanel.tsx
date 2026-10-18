@@ -1,8 +1,10 @@
 import {
+  ActionBarPrimitive,
   AssistantRuntimeProvider,
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAuiState,
   useExternalStoreRuntime,
   type ThreadMessageLike
 } from '@assistant-ui/react'
@@ -11,9 +13,12 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
+  Check,
+  Copy,
   Film,
   FolderArchive,
   Image,
+  LoaderCircle,
   MessageSquare,
   ShieldCheck,
   Slash,
@@ -58,12 +63,30 @@ function convertMessage(message: PreviewMessage): ThreadMessageLike {
   return { id: message.id, role: message.role, content: [{ type: 'text', text: message.content }] }
 }
 
+function MessageCopyButton(): React.JSX.Element {
+  const copied = useAuiState((state) => state.message.isCopied)
+  return (
+    <div className="message-actions">
+      <ActionBarPrimitive.Copy
+        className="message-copy-button"
+        aria-label={copied ? '已复制' : '复制消息'}
+        title={copied ? '已复制' : '复制消息'}
+        copiedDuration={2000}
+      >
+        {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+        <span>{copied ? '已复制' : '复制'}</span>
+      </ActionBarPrimitive.Copy>
+    </div>
+  )
+}
+
 function UserMessage(): React.JSX.Element {
   return (
     <MessagePrimitive.Root className="message user-message">
       <div className="user-message-content">
         <MessagePrimitive.Parts />
       </div>
+      <MessageCopyButton />
     </MessagePrimitive.Root>
   )
 }
@@ -94,6 +117,7 @@ function AssistantMessage({
           onRetry={onRetry}
         />
       )}
+      <MessageCopyButton />
     </MessagePrimitive.Root>
   )
 }
@@ -210,6 +234,12 @@ export function ChatPanel({
                 return null
               }}
             </ThreadPrimitive.Messages>
+            {isRunning && (
+              <div className="chat-running-indicator" role="status">
+                <LoaderCircle size={16} aria-hidden="true" />
+                <span>正在运行…</span>
+              </div>
+            )}
           </div>
         </ThreadPrimitive.Viewport>
         <div className="composer-area">

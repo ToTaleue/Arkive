@@ -77,7 +77,7 @@ exit 0
         assert.equal(saved.results[0].name, 'mole_clean_preview')
         assert.equal(saved.results[0].status, 'completed')
         assert.ok(saved.results[0].result.details.includes(candidate))
-      } else assert.equal(body.tools?.length, 33)
+      } else assert.equal(body.tools?.length, 34)
       const lastUser = body.messages.filter((message) => message.role === 'user').at(-1)
       assert.ok(lastUser)
       const scenario = textOf(lastUser)
@@ -217,6 +217,30 @@ exit 0
   }
   async function complete(): Promise<void> {
     await wait(`document.querySelector('${scope} [aria-label="停止生成"]')===null`)
+    assert.equal(
+      await evaluate<number>(
+        `document.querySelectorAll('${scope} .chat-running-indicator').length`
+      ),
+      0,
+      'Running indicator must disappear after completion, failure or cancellation'
+    )
+  }
+  async function runningIndicator(): Promise<void> {
+    await wait(`document.querySelector('${scope} .chat-running-indicator')!==null`)
+    assert.equal(
+      await evaluate<boolean>(
+        `document.querySelector('${scope} .message-list').lastElementChild.matches('.chat-running-indicator')`
+      ),
+      true,
+      'Running indicator stays at the end of the current output'
+    )
+    assert.equal(
+      await evaluate<boolean>(
+        `[...document.querySelector('${scope} .chat-running-indicator svg').getAnimations()].some(animation => animation.playState === 'running' && animation.effect.getTiming().iterations === Infinity)`
+      ),
+      true,
+      'Running indicator must continuously animate'
+    )
   }
   async function eventList(): Promise<AgentUpdate[]> {
     return evaluate('window.integrationEvents')
@@ -227,6 +251,7 @@ exit 0
       'window.integrationEvents=[];window.api.agent.onUpdate(event=>window.integrationEvents.push(event));true'
     )
     await send('UI_PREVIEW')
+    await runningIndicator()
     await wait(
       `document.querySelector('${scope} .chat-tool-stage')?.innerText.includes('Fixture stage one')`
     )
@@ -237,10 +262,13 @@ exit 0
       await evaluate<boolean>(`document.querySelector('${scope} .chat-tool-activity').open`),
       true
     )
+    await runningIndicator()
     await wait(
       `document.querySelector('${scope} .chat-execution[data-phase="summarizing"] .chat-tool-result')?.innerText.includes('预览已完成')`
     )
     await wait('window.integrationEvents.some(e=>e.tool?.result)')
+    await evaluate(`document.querySelector('${scope} .chat-tool-activity').open=false`)
+    await runningIndicator()
     assert.ok(releaseSummary)
     assert.equal(await readFile(calls, 'utf8'), 'run\n')
     assert.equal(
@@ -354,6 +382,7 @@ exit 0
     holdRetry = true
     await evaluate(`document.querySelector('${scope} .chat-summary-retry button').click()`)
     await wait(`document.querySelector('${scope} [aria-label="停止生成"]')!==null`)
+    await runningIndicator()
     await evaluate(`document.querySelector('${scope} [aria-label="停止生成"]').click()`)
     await complete()
     await wait(`document.querySelector('${scope} .chat-execution[data-phase="cancelled"]')!==null`)

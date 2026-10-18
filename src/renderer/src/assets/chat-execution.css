@@ -1,3 +1,52 @@
+.message-actions {
+  display: flex;
+  margin-top: 8px;
+  white-space: normal;
+}
+.message-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.message-copy-button:hover:enabled {
+  background: var(--hover);
+  color: var(--ink);
+}
+.message-copy-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.message-copy-button[data-copied='true'] {
+  color: var(--accent);
+}
+.message-copy-button:disabled {
+  opacity: 0.5;
+}
+
+.chat-running-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-running-indicator > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+  animation: chat-running-spin 1s linear infinite;
+}
+@keyframes chat-running-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .chat-execution {
   margin-bottom: 14px;
   white-space: normal;
