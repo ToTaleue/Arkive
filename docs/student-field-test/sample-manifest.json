@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "files": [
+    {
+      "path": "00-originals/地上设计888.zip",
+      "bytes": 3333809195,
+      "storage": "lfs-parts",
+      "parts": [
+        {
+          "path": "00-originals/地上设计888.zip.part-001",
+          "bytes": 536870912,
+          "sha256": "a58e13db652e82180c2c473d6a5466098bf4035be2028498a8d0b14e2163dd10"
+        },
+        {
+          "path": "00-originals/地上设计888.zip.part-002",
+          "bytes": 536870912,
+          "sha256": "ca1d08e02d61f30802be20f67e875ad6ac8a78b9af3aa383cf9772523ddcb3ad"
+        },
+        {
+          "path": "00-originals/地上设计888.zip.part-003",
+          "bytes": 536870912,
+          "sha256": "c7ebc1ad19809e0c7de0a90ebaef645470ee650468cd6abdb87c48bb765ba5d4"
+        },
+        {
+          "path": "00-originals/地上设计888.zip.part-004",
+          "bytes": 536870912,
+          "sha256": "4c3d31d1bf95522b37e00e5ab98d41571afb2d088f081fdf33fa51d87548e640"
+        },
+        {
+          "path": "00-originals/地上设计888.zip.part-005",
+          "bytes": 536870912,
+          "sha256": "4e281d2b8db4b4166829b4ef758e711a77de7bbc07fc9cb27ac88b3ed7e0a622"
+        },
+        {
+          "path": "00-originals/地上设计888.zip.part-006",
+          "bytes": 536870912,
+          "sha256": "ba44d8ad05916d5ca63fc0f54758cbaeadc8091142a850ed3a2a37938ff3eb10"
+        },
+        {
+          "path": "00-originals/地上设计888.zip.part-007",
+          "bytes": 112583723,
+          "sha256": "fce77ed8c53dca0ffe2bc9dc341f5b256da30409a1c3628c4fc968435e8fd8d3"
+        }
+      ],
+      "sha256": "4eb90ce190e909dce848369dd6008d728c0a4a955d2fce8b46496e9c42f5a102"
+    },
+    {
+      "path": "01-course-pdf/(二十世纪西方哲学译丛) [美]约翰.塞尔 - 心、脑与科学-上海译文出版社 (1991).pdf",
+      "bytes": 3029596,
+      "storage": "git",
+      "sha256": "08ded72fb4a37037044efb534de716a5c37ed097014d853076ef99ad561caf09"
+    },
+    {
+      "path": "01-course-pdf/Terry Eagleton - Why Marx Was Right (2011, Yale University Press) - libgen.lc.pdf",
+      "bytes": 521210,
+      "storage": "git",
+      "sha256": "f8bea50f215692fe599cfb52f2c6c6a7b95b27a487319c82bc64f425c773212f"
+    },
+    {
+      "path": "02-group-ppt/888_Final pre .pptx",
+      "bytes": 1670198513,
+      "storage": "lfs",
+      "sha256": "279a722eff5b5502ef85e246f33eaeae1736fdbabe274be0725d6c7316048e8b"
+    },
+    {
+      "path": "03-club-images/1.jpg",
+      "bytes": 446213,
+      "storage": "git",
+      "sha256": "59b253073e5ee57c81c0501b42d477968cc9129742b6caaf6c759d3c09910d03"
+    },
+    {
+      "path": "03-club-images/2.jpg",
+      "bytes": 617797,
+      "storage": "git",
+      "sha256": "b14d956bcf49639db2b752b1a3a99e4ebf4bb09b84cc71ac99d76e467590857d"
+    },
+    {
+      "path": "03-club-images/3.jpg",
+      "bytes": 3214268,
+      "storage": "git",
+      "sha256": "5f81d765518ed1cf0025b9c0dd28db281c2abc67551e6b20de6c339eadc75163"
+    },
+    {
+      "path": "03-club-images/Adobe-Illustrator-logo.png",
+      "bytes": 44092,
+      "storage": "git",
+      "sha256": "f3fa878c74ba7599ff82b2f9152d1ab23fa2f905da17ba06c95df4647fabb1b7"
+    },
+    {
+      "path": "03-club-images/Blender-Logo-2048x1280.png",
+      "bytes": 139759,
+      "storage": "git",
+      "sha256": "0412c8472241d611bbad1a955874c83f1b01b4a5fbf1976262aeacbab120124a"
+    },
+    {
+      "path": "03-club-images/floor1.ai",
+      "bytes": 306113758,
+      "storage": "lfs",
+      "sha256": "ba66ef5b830b4017814e37658b58a318f6c91b6075538f3ed085d856668602c8"
+    },
+    {
+      "path": "04-concert-video/IMG_0823.MP4",
+      "bytes": 334951301,
+      "storage": "lfs",
+      "sha256": "4e7bcb1759b2e871d6301c63196f2b057e4b5551c6e0ad3f872038b061a6369c"
+    }
+  ]
+}
