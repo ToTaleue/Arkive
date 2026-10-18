@@ -1,0 +1,592 @@
+.toolbox-content {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.toolbox-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 16px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+.toolbox-navigation button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.toolbox-navigation button:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.toolbox-navigation button[aria-current='page'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.toolbox-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.toolbox-card-grid .tool-card {
+  width: 100%;
+}
+.toolbox-card-grid .tool-card-meta {
+  margin-top: auto;
+  padding-top: 14px;
+}
+.mole-tool-page {
+  min-width: 0;
+}
+.mole-tool-heading {
+  margin-bottom: 24px;
+}
+.mole-tool-heading h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.8px;
+}
+.mole-tool-heading > p:last-child {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.mole-tool-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mole-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  min-height: 34px;
+  border: 1px solid var(--control-line);
+  border-radius: 7px;
+  background: var(--control);
+  color: var(--ink);
+  box-shadow: var(--control-shadow);
+  font-size: 12px;
+}
+.mole-tool-button:hover:enabled {
+  background: var(--hover);
+}
+.mole-tool-button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.mole-tool-button.primary:hover:enabled {
+  background: var(--accent-hover);
+}
+.mole-tool-button:disabled {
+  opacity: 0.5;
+}
+.mole-tool-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  margin: 22px 0;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: linear-gradient(115deg, var(--accent-soft), var(--surface) 85%);
+}
+.mole-tool-hero > div:last-child {
+  min-width: 0;
+}
+.mole-tool-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
+  border: 1px solid var(--accent-line);
+  border-radius: 15px;
+  color: var(--accent);
+  background: var(--surface);
+}
+.mole-tool-hero h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.mole-tool-hero.warning .mole-tool-hero-icon {
+  color: var(--warning);
+  border-color: var(--line);
+}
+.mole-tool-hero p {
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.mole-tool-measure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+.mole-tool-measure > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.mole-tool-measure strong {
+  color: var(--accent);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.7px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.mole-tool-running {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 0;
+  color: var(--accent);
+  font-size: 12px;
+}
+.mole-tool-running > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mole-tool-running svg {
+  flex-shrink: 0;
+}
+.mole-tool-spin {
+  animation: toolbox-spin 1s linear infinite;
+}
+.mole-tool-error,
+.mole-tool-warning {
+  padding: 12px 14px;
+  margin: 14px 0;
+  border-radius: 8px;
+  line-height: 1.8;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.mole-tool-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.mole-tool-warning {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+.mole-tool-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 13px 0;
+  overflow-wrap: anywhere;
+}
+.mole-tool-empty {
+  min-height: 250px;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  text-align: center;
+  border: 1px dashed var(--control-line);
+  border-radius: 12px;
+}
+.mole-tool-empty > svg {
+  color: var(--accent);
+}
+.mole-tool-empty h2 {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 500;
+}
+.mole-tool-empty p {
+  font-size: 12px;
+}
+.mole-tool-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 17px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.mole-tool-breadcrumb span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+}
+.mole-tool-breadcrumb button {
+  overflow-wrap: anywhere;
+  padding: 3px;
+}
+.mole-tool-breadcrumb button:hover:enabled {
+  color: var(--accent);
+}
+.mole-tool-view-switch {
+  display: flex;
+  gap: 18px;
+  margin: 16px 0 6px;
+}
+.mole-tool-view-switch button {
+  padding: 9px 0;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+}
+.mole-tool-view-switch button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.mole-analysis-row {
+  display: grid;
+  grid-template-columns: 19px minmax(100px, 1.5fr) minmax(30px, 1fr) auto auto;
+  align-items: center;
+  gap: 13px;
+  padding: 17px 0;
+  border-top: 1px solid var(--line);
+}
+.mole-analysis-row > svg {
+  color: var(--muted);
+}
+.mole-analysis-name {
+  min-width: 0;
+}
+.mole-analysis-name button,
+.mole-analysis-name strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.mole-analysis-name button:hover:enabled {
+  color: var(--accent);
+}
+.mole-analysis-name small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.mole-analysis-bar {
+  height: 6px;
+  border-radius: 4px;
+  background: var(--surface-soft);
+}
+.mole-analysis-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+}
+.mole-tool-size {
+  white-space: nowrap;
+  text-align: right;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.mole-project {
+  margin: 13px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.mole-project > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px;
+  background: var(--surface-soft);
+}
+.mole-project > header strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.mole-project > header small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.mole-candidate-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+}
+.mole-candidate-row:first-child {
+  border-top: 0;
+}
+.mole-candidate-row label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 11px;
+  align-items: flex-start;
+}
+.mole-candidate-row input {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  margin-top: 3px;
+}
+.mole-candidate-row label > span {
+  min-width: 0;
+}
+.mole-candidate-row strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.mole-candidate-row small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.mole-candidate-meta {
+  min-width: 0;
+  text-align: right;
+}
+.mole-candidate-reveal {
+  margin-top: 5px;
+  color: var(--accent);
+  font-size: 10px;
+}
+.mole-selection-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-top: 18px;
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.mole-selection-footer small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.mole-selection-confirm {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.mole-selection-confirm h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.mole-selection-confirm p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.mole-selection-confirm ul {
+  padding-left: 20px;
+  margin: 12px 0 16px;
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.mole-selection-confirm > div {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.mole-tool-logs {
+  margin-top: 26px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.mole-tool-logs summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.mole-tool-logs pre {
+  padding: 10px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    11px/1.8 'SFMono-Regular',
+    Consolas,
+    monospace;
+}
+.mole-tool-logs .stderr {
+  color: var(--warning);
+}
+.mole-uninstall-layout {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.75fr) minmax(0, 1.8fr);
+  gap: 22px;
+  margin-top: 22px;
+}
+.mole-app-list {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  padding-right: 18px;
+}
+.mole-app-list > input {
+  width: 100%;
+  padding: 9px 10px;
+  margin-bottom: 12px;
+  border: 1px solid var(--control-line);
+  border-radius: 7px;
+  background: var(--control);
+  color: var(--ink);
+  font-size: 12px;
+}
+.mole-app {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 9px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 12px;
+}
+.mole-app.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.mole-app > svg {
+  flex-shrink: 0;
+}
+.mole-app > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mole-app small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.mole-app-detail {
+  min-width: 0;
+}
+.mole-app-detail h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.mole-app-path {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.mole-review-only {
+  padding: 15px;
+  margin: 14px 0;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.mole-review-only h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+.mole-review-only p {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .mole-uninstall-layout {
+    grid-template-columns: minmax(130px, 0.7fr) minmax(0, 1.5fr);
+    gap: 15px;
+  }
+  .mole-app-list {
+    padding-right: 12px;
+  }
+}
+@media (max-width: 760px) {
+  .mole-uninstall-layout {
+    grid-template-columns: 1fr;
+  }
+  .mole-app-list {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0 0 12px;
+  }
+  .mole-tool-hero {
+    padding: 18px;
+    gap: 13px;
+  }
+  .mole-tool-hero-icon {
+    width: 43px;
+    height: 43px;
+    border-radius: 11px;
+  }
+  .mole-tool-measure strong {
+    font-size: 28px;
+  }
+  .mole-analysis-bar {
+    display: none;
+  }
+  .mole-analysis-row {
+    grid-template-columns: 17px minmax(0, 1fr) auto auto;
+    gap: 9px;
+  }
+}
+@media (max-width: 520px) {
+  .toolbox-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .mole-tool-hero-icon {
+    display: none;
+  }
+  .mole-candidate-row {
+    gap: 10px;
+    padding: 12px;
+  }
+  .mole-tool-size {
+    white-space: normal;
+  }
+  .mole-analysis-row {
+    grid-template-columns: 17px minmax(0, 1fr) 65px;
+  }
+  .mole-analysis-row .mole-reveal {
+    grid-column: 2 / -1;
+    justify-self: end;
+  }
+}

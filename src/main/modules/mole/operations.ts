@@ -14,7 +14,8 @@ import {
   listMoleApps as listApps,
   runMoleDryRun as clean,
   runMoleInstallerPreview as installer,
-  runMolePurgePreview as purge
+  runMolePurgePreview as purge,
+  previewMoleUninstall as uninstall
 } from './service'
 import { getMoleAuthorization, runMoleClean as cleanOutput } from './service'
 
@@ -164,7 +165,8 @@ export function runMolePurgePreview(
 
 export async function analyzeMole(
   path = homedir(),
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  requestId?: string
 ): ReturnType<typeof analyze> {
   signal?.throwIfAborted()
   if (!isAbsolute(path) || path.includes('\0')) throw new Error('Mole 分析路径必须是绝对路径。')
@@ -175,6 +177,7 @@ export async function analyzeMole(
       {
         title: `Mole 占用分析：${basename(path)}`,
         key: `mole-analyze:${path}`,
+        requestId,
         run: async (taskSignal, report) => {
           taskSignal.throwIfAborted()
           report({ message: '正在分析磁盘占用…' })
@@ -200,11 +203,15 @@ export async function analyzeMole(
   }
 }
 
-export function listMoleApps(signal?: AbortSignal): ReturnType<typeof listApps> {
+export function listMoleApps(
+  signal?: AbortSignal,
+  requestId?: string
+): ReturnType<typeof listApps> {
   return runTask(
     {
       title: 'Mole 应用清单',
       key: 'mole-apps',
+      requestId,
       run: async (taskSignal, report) => {
         taskSignal.throwIfAborted()
         report({ message: '正在读取已安装应用清单…' })
@@ -219,3 +226,24 @@ export function listMoleApps(signal?: AbortSignal): ReturnType<typeof listApps> 
 
 // Share the same deletion task and partial-result semantics as the Agent file tool.
 export const trashMolePaths = trashFiles
+
+export function previewMoleUninstall(
+  appPaths: readonly string[],
+  signal?: AbortSignal,
+  requestId?: string
+): ReturnType<typeof uninstall> {
+  appPaths = [...appPaths]
+  return runTask(
+    {
+      title: 'Mole 卸载范围预览',
+      key: 'mole-preview',
+      requestId,
+      run: (taskSignal, report) => {
+        taskSignal.throwIfAborted()
+        report({ message: '正在检查应用关联残留与共享数据保护…' })
+        return uninstall(appPaths, taskSignal)
+      }
+    },
+    signal
+  )
+}

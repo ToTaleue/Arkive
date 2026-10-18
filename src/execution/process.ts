@@ -9,6 +9,7 @@ const toolFiles = {
   ffmpeg: 'ffmpeg',
   ffprobe: 'ffprobe',
   mole: 'mole/mo',
+  'mole-uninstall-preview': 'mole/arkive-uninstall-preview.sh',
   pngquant: 'pngquant',
   ghostscript: 'gs',
   qpdf: 'qpdf/bin/qpdf',

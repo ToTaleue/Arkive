@@ -12,6 +12,7 @@ import {
 import { runBundledTool, runSudoValidation, runSystemTool } from '../../../execution/process'
 import type { ToolProcess } from '../../../execution/process'
 import { MoleOutputParser } from '../../../execution/mole-output'
+import { inspectMoleUninstall } from '../../../execution/mole-uninstall'
 import { trashPaths } from '../file-operations/service'
 import type {
   MoleCandidate,
@@ -21,7 +22,8 @@ import type {
   MoleOutputEvent,
   MolePreviewResult,
   MoleAnalyzeResult,
-  MoleTrashResult
+  MoleTrashResult,
+  MoleUninstallInspection
 } from '../../../shared/contracts/mole'
 import type { MoleCleanMode } from '../../../shared/contracts/mole'
 
@@ -275,6 +277,24 @@ export async function listMoleApps(signal?: AbortSignal): Promise<MoleInstalledA
       size: row.size as string
     }
   })
+}
+
+/** Selected app paths only; no command names, shell input or interactive process. */
+export async function previewMoleUninstall(
+  appPaths: readonly string[],
+  signal?: AbortSignal
+): Promise<MoleUninstallInspection> {
+  if (
+    !appPaths.length ||
+    appPaths.length > 20 ||
+    new Set(appPaths).size !== appPaths.length ||
+    appPaths.some(
+      (path) => !path.startsWith('/') || !/\.app$/i.test(path) || /[\0\r\n|]/.test(path)
+    )
+  )
+    throw new Error('卸载预览需要 1 至 20 个不同的应用绝对路径。')
+  signal?.throwIfAborted()
+  return inspectMoleUninstall(appPaths, signal)
 }
 
 export function trashMolePaths(

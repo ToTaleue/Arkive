@@ -19,6 +19,7 @@ import {
 } from '../shared/contracts/agent'
 import {
   moleChannels,
+  moleToolboxChannels,
   type MoleAnalyzeResult,
   type MoleCleanResult,
   type MoleInstalledApp,
@@ -148,6 +149,15 @@ const api: ArkiveApi = {
     reveal: () => ipcRenderer.invoke(imageChannels.reveal) as Promise<void>
   },
   mole: {
+    toolboxAnalyze: (runId, path) => ipcRenderer.invoke(moleToolboxChannels.analyze, runId, path),
+    toolboxApps: (runId) => ipcRenderer.invoke(moleToolboxChannels.apps, runId),
+    toolboxPreview: (runId, kind) => ipcRenderer.invoke(moleToolboxChannels.preview, runId, kind),
+    uninstallPreview: (runId, appPaths) =>
+      ipcRenderer.invoke(moleToolboxChannels.uninstallPreview, runId, appPaths),
+    executeSelection: (runId, kind, request) =>
+      ipcRenderer.invoke(moleToolboxChannels.execute, runId, kind, request),
+    cancel: (runId) => ipcRenderer.invoke(moleToolboxChannels.cancel, runId),
+    reveal: (path) => ipcRenderer.invoke(moleToolboxChannels.reveal, path),
     clean: (runId, mode) =>
       ipcRenderer.invoke(moleChannels.clean, runId, mode) as Promise<MoleCleanResult>,
     authorizationStatus: () =>

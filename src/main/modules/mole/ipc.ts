@@ -10,8 +10,10 @@ import {
   trashMolePaths
 } from './operations'
 import { authorizeMoleSystem, getMoleAuthorization } from './service'
+import { registerMoleToolboxIpc } from './toolbox-ipc'
 
 export function registerMoleIpc(): void {
+  registerMoleToolboxIpc()
   let authorizing = false
   ipcMain.handle(moleChannels.authorizationStatus, async (event) => {
     if (event.senderFrame !== event.sender.mainFrame) throw new Error('无效的 Mole 授权状态请求。')

@@ -15,3 +15,15 @@ UI 和 Agent 统一从 `operations.ts` 调用占用分析、清理预览、安�
 运行 `rtk proxy node scripts/check-scheduled-services.mjs` 验证调度和取消（隔离 HOME 的 Mole 子进程夹具），`rtk proxy node scripts/check-agent.mts` 验证真实 Pi SDK 工具接线。
 
 运行 `rtk proxy pnpm run build` 后执行 `rtk proxy node scripts/check-clean-ui.mjs`，通过真实 Renderer／Preload／IPC／Task／进程执行器验证清理页。仅 sudo、密码对话框和 Mole 使用夹具；夹具只删除专用测试目录生成的文件，不调用真实 Mole、不访问真实回收站。原生密码交互及真实系统清理需要人工验收。
+
+## 工具箱
+
+工具箱的 Analyze、Purge、Uninstall、Installer 经 `toolbox-ipc.ts` 使用上述业务入口。Analyze 展示 JSON、目录钻取与大文件；其余三项通过 `MoleWorkflowService` 保存候选、审阅精确选择，再移入回收站。窗口独立拥有方案和 AbortController，刷新／导航／退出会取消运行并丢弃旧方案。页面切换则保留运行、结果和选择。
+
+所有执行使用预览 ID 和候选 ID，不接受 Renderer 传入任意删除路径。使用身份复查、系统路径保护、共享副本保护、单次方案消费及部分结果。未知的项目活动时间不推算，Purge 默认不勾选；应用数据默认保留。安装包普通文件的容量来自 lstat，目录容量未提供时显示未知；移动到回收站不宣称已释放空间。
+
+运行 `rtk proxy node scripts/check-mole-toolbox-ui.mjs` 验证真实 Renderer／Preload／IPC／Workflow／Task／进程链路。Mole 发现和回收站使用隔离夹具，只操作 `arkive-test` 中生成的文件。覆盖扫描／目录钻取／未知容量、确认前无写入、逐项选择、个人数据保留、部分失败、停止恢复、跨窗口方案隔离、刷新取消，以及日夜主题和窄窗口截图。真实应用卸载和主机扫描不在此自动测试中执行。
+
+2026-10-18 另经原生桌面操作，在独立 Electron 验收窗口、隔离 HOME 和生成文件上验证随项目真实 Mole 与 macOS 回收站：Analyze 钻取及大文件正常，Purge／Installer 只移动选中项，Uninstall 只移动测试 App 本体；应用清单停止后刷新恢复，切换工具保留后台操作和结果。Mole 副本检查不完整，缓存与个人设置保留，未绕过保护。后续两次只读复现定位为安装收据扫描超时（124）；上游 `some paths unreadable` 同样用于该情况，不代表已发现拒绝访问路径。证据为 `/Users/hu1hui/Desktop/arkive-test/mole-native-ui-mC23pW/native-verification.json` 和同目录 `uninstall-diagnosis.json`；未运行真实完整 Clean、sudo 授权或卸载用户应用，也不代表完整生产入口／Agent 验收。
+
+只读 Bash 适配将副本检查的原因以 `ARKIVE_MOLE_DIAGNOSTIC:` 写入 stderr，`execution/mole-uninstall.ts` 读取为可选 `diagnostics`，随预览和执行结果传递。只保留相关原生诊断，不启用持久化 debug 日志、不修改上游脚本、扫描范围、时限或保护判定；原生诊断没有具体路径时不编造路径。工具箱合并预览／结果的相同警告，固定说明为普通文字，原因和原生路径放在可展开的检查详情。
