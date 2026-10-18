@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Arkive 字母 Arkive"><defs>
+<linearGradient id="tile" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#414E67"/><stop offset=".55" stop-color="#202A3C"/><stop offset="1" stop-color="#111926"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2=".3" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#D8ECFF"/></linearGradient>
+<linearGradient id="ice" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#E9F6FF"/><stop offset=".5" stop-color="#A3D0FF"/><stop offset="1" stop-color="#5C9DEB"/></linearGradient>
+<filter id="shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="20" stdDeviation="17" flood-color="#061B37" flood-opacity=".19"/></filter>
+</defs>
+<rect x="64" y="64" width="896" height="896" rx="202" fill="url(#tile)"/>
+<rect x="68" y="68" width="888" height="888" rx="198" fill="none" stroke="#FFFFFF" stroke-opacity=".23" stroke-width="5"/>
+
+<g filter="url(#shadow)">
+<path d="M285 727L465 306Q477 277 512 277Q547 277 559 306L739 727" fill="none" stroke="url(#ice)" stroke-width="88" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M393 590L512 652L631 590" fill="none" stroke="#F3F8FF" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+</g></svg>

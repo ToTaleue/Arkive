@@ -2,6 +2,7 @@ import { useCompressionTask, compressionTaskMessage } from './hooks/useCompressi
 import { ArchivePage } from './components/ArchivePage'
 import { DocumentCompressionPage } from './components/DocumentCompressionPage'
 import './assets/archive.css'
+import arkiveIcon from '../../../resources/icon.svg'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Archive,
@@ -357,7 +358,7 @@ function App(): React.JSX.Element {
         <nav className="icon-rail" aria-label="主导航">
           <div className="sidebar-brand">
             <span className="app-icon" aria-hidden="true">
-              <Archive size={22} strokeWidth={1.6} />
+              <img src={arkiveIcon} alt="" />
             </span>
             <div>
               <strong>Arkive</strong>

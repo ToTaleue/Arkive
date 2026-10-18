@@ -29,7 +29,7 @@ function createWindow(attachWindow: (contents: Electron.WebContents) => void): v
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    ...(process.platform !== 'darwin' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -68,6 +68,8 @@ function createWindow(attachWindow: (contents: Electron.WebContents) => void): v
 app
   .whenReady()
   .then(async () => {
+    if (process.platform === 'darwin' && is.dev) app.dock?.setIcon(icon)
+
     const cloneRecovery = await recoverCloneDeduplication()
     if (cloneRecovery.failed.length) console.error('APFS 去重恢复需要核对：', cloneRecovery)
     const catalog = new Catalog({ databasePath: join(app.getPath('userData'), 'arkive.db') })
