@@ -24,6 +24,10 @@ function media(part: OfficePart): boolean {
   return /^(image|video|audio)\//.test(part.contentType)
 }
 
+function embeddedMedia(part: OfficePart): boolean {
+  return /^(?:word|ppt)\/media\//i.test(part.name) && media(part)
+}
+
 function supportedVideo(part: OfficePart): boolean {
   // Keep the package part name/content type and every relationship/timing XML unchanged.
   return part.contentType === 'video/mp4' && extname(part.name).toLowerCase() === '.mp4'
@@ -51,10 +55,12 @@ export async function inspectOffice(
       inputPath: input,
       format: document.format,
       originalBytes: (await stat(input)).size,
-      embeddedImages: document.parts.filter(supportedImage).length,
-      embeddedVideos: document.parts.filter(supportedVideo).length,
+      embeddedImages: document.parts.filter((part) => embeddedMedia(part) && supportedImage(part))
+        .length,
+      embeddedVideos: document.parts.filter((part) => embeddedMedia(part) && supportedVideo(part))
+        .length,
       otherMedia: document.parts.filter(
-        (part) => media(part) && !supportedImage(part) && !supportedVideo(part)
+        (part) => embeddedMedia(part) && !supportedImage(part) && !supportedVideo(part)
       ).length
     }
   } finally {
@@ -91,7 +97,7 @@ export async function compressOffice(
     const results: OfficeMediaResult[] = []
     for (const [index, part] of document.parts.entries()) {
       signal?.throwIfAborted()
-      if (!media(part)) continue
+      if (!embeddedMedia(part)) continue
       const result: OfficeMediaResult = {
         part: part.name,
         status: 'skipped',

@@ -35,7 +35,13 @@ export async function fixture(
   path: string,
   format: OfficeFormat,
   images: Buffer[],
-  options: { missingTarget?: boolean; signed?: boolean; duplicate?: boolean; video?: Buffer } = {}
+  options: {
+    missingTarget?: boolean
+    signed?: boolean
+    duplicate?: boolean
+    thumbnail?: Buffer
+    video?: Buffer
+  } = {}
 ): Promise<void> {
   const word = format === 'docx'
   const main = word ? 'word/document.xml' : 'ppt/presentation.xml'
@@ -49,7 +55,7 @@ export async function fixture(
       <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
       <Default Extension="xml" ContentType="application/xml"/>
       <Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/>
-      <Default Extension="gif" ContentType="image/gif"/><Default Extension="bin" ContentType="application/octet-stream"/>
+      <Default Extension="gif" ContentType="image/gif"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="bin" ContentType="application/octet-stream"/>
       <Default Extension="mp4" ContentType="video/mp4"/>
       <Override PartName="/${main}" ContentType="application/vnd.openxmlformats-officedocument.${type}.main+xml"/>
       ${word ? '' : '<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'}
@@ -67,6 +73,7 @@ export async function fixture(
     ],
     [`${root}/embeddings/object1.bin`, Buffer.from('embedded object must remain unchanged')]
   ]
+  if (options.thumbnail) entries.push(['docProps/thumbnail.jpeg', options.thumbnail])
   if (!word) {
     entries.push([
       'ppt/_rels/presentation.xml.rels',

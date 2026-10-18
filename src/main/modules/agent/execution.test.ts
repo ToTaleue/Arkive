@@ -90,6 +90,26 @@ void test('inspect_video summaries include audio codecs and discarded contents',
   assert.match(result.summary, /DJI 附加数据/)
 })
 
+void test('inspect_office summaries report embedded media counts', () => {
+  const result = toolResult(
+    'inspect_office',
+    {
+      content: [{ type: 'text', text: '{}' }],
+      details: {
+        format: 'docx',
+        originalBytes: 176624,
+        embeddedImages: 1,
+        embeddedVideos: 0,
+        otherMedia: 0
+      }
+    },
+    false
+  )
+  assert.equal(result.title, 'Office 探测完成')
+  assert.match(result.summary, /DOCX/)
+  assert.match(result.summary, /正文图片 1 个/)
+})
+
 void test('a failed model summary still has a local execution summary', () => {
   const summary = executionFallback({
     phase: 'summary-error',

@@ -173,6 +173,18 @@ export function toolResult(
       details: boundedText(raw)
     }
   }
+  if (name === 'inspect_office') {
+    const format = typeof details.format === 'string' ? details.format.toUpperCase() : 'Office'
+    const size = formatBytes(details.originalBytes)
+    const images = typeof details.embeddedImages === 'number' ? details.embeddedImages : 0
+    const videos = typeof details.embeddedVideos === 'number' ? details.embeddedVideos : 0
+    const other = typeof details.otherMedia === 'number' ? details.otherMedia : 0
+    return {
+      title: 'Office 探测完成',
+      summary: `${format}${size ? `，文件 ${size}` : ''}。正文图片 ${String(images)} 个，视频 ${String(videos)} 个，其他媒体 ${String(other)} 个。仅完成结构探测，未修改文件。`,
+      details: boundedText(raw)
+    }
+  }
   const nativeSummary = nativeToolSummary(name, raw)
   if (nativeSummary)
     return {

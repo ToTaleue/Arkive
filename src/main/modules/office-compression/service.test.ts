@@ -43,7 +43,7 @@ async function check(): Promise<void> {
     for (const format of ['docx', 'pptx'] as const) {
       const input = path(`sample.${format}`)
       const output = path(`sample.compressed.${format}`)
-      await fixture(input, format, [png, jpeg])
+      await fixture(input, format, [png, jpeg], { thumbnail: jpeg })
       const originalHash = await hashFile(input)
       const inspection = await inspectOffice(input)
       assert.equal(inspection.format, format)
