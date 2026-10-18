@@ -282,7 +282,7 @@
     "unit": null,
     "seconds": 0,
     "script": "Arkive 自主设计的是产品交互、跨入口业务编排、文件保护与状态管理、APFS 去重事务和恢复。编解码器、重复检测、Agent 框架等来自第三方。分发工具的版本、来源、哈希和许可记录在 manifest 与 licenses 目录；本页只用于说明技术来源，不替代完整的第三方声明。",
-    "extraNotes": "FFmpeg/FFprobe、Mole、Ghostscript、pngquant 等许可不同，应以随包 manifest 与各工具许可证原文为准。不把集成已有编解码器写成自研算法。部署方式见项目 README 与 macOS 安装检查文档，签名、公证和生产安装仍需独立验证。",
+    "extraNotes": "FFmpeg/FFprobe、Mole、pngquant 等许可不同，应以随包 manifest 与各工具许可证原文为准。不把集成已有编解码器写成自研算法。部署方式见项目 README 与 macOS 安装检查文档，签名、公证和生产安装仍需独立验证。",
     "sources": [
       "C:/Users/steph/Desktop/arkive-demo/docs/presentation/source-outline/ppt-outline.md",
       "C:/Users/steph/Desktop/arkive-demo/docs/presentation/source-outline/ppt-slide-copy.md",

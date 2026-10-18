@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
+import { writePdfFixture } from '../pdf-compression/test-fixture'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { app } from 'electron'
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import sharp from 'sharp'
 import { fileTags } from './finder-tags'
 import { compressImageAndBackup, compressPdfAndBackup } from './compression'
-import { runBundledTool } from '../../../execution/process'
 import { tasks } from '../../tasks/service'
 import { archiveFile, archivePath } from './operations'
 import { Catalog, setCatalog } from './service'
@@ -103,20 +103,8 @@ async function check(): Promise<void> {
     assert.ok((await fileTags(result.archive.item.archivePath)).includes('旅行'))
     // Metadata probes run inside the active compression task. They must not enqueue
     // another job behind that same task in the single-worker queue.
-    const postscript = join(directory, 'queued-metadata.ps')
     const pdf = join(directory, 'queued-metadata.pdf')
-    await writeFile(
-      postscript,
-      '%!PS\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Queued metadata) show\nshowpage\n'
-    )
-    const generated = await runBundledTool('ghostscript', [
-      '-dBATCH',
-      '-dNOPAUSE',
-      '-sDEVICE=pdfwrite',
-      `-sOutputFile=${pdf}`,
-      postscript
-    ])
-    assert.equal(generated.exitCode, 0)
+    await writePdfFixture(pdf, 'Queued metadata')
     const deadline = AbortSignal.timeout(5_000)
     let waitingTasks: string[] = []
     deadline.addEventListener(

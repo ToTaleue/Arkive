@@ -159,6 +159,6 @@ await tasks.close()
 
 先执行 `rtk proxy pnpm run build`，再运行 `rtk proxy node scripts/check-tasks.mjs --ipc`，可额外使用真实 Electron 窗口与构建后的 preload 验证查询、订阅、取消、页面重载及窗口校验。这个基础测试只提交内存夹具。
 
-`rtk proxy node scripts/check-compression-tasks.mjs` 使用测试目录中的生成文件及真实 Sharp／FFmpeg／qpdf／Ghostscript／Catalog，验证三类压缩、Office、独立归档、标签和文件操作共用队列，覆盖防重、参数固定、排队无副作用、排队／运行取消、执行时覆盖检查、备份／发布／标签失败后的部分结果与重试，以及提交阶段取消。`check-processing-ui.mjs` 和 `check-video-compression.mjs --ui` 验证真实页面排队提示、取消和原有结果展示。
+`rtk proxy node scripts/check-compression-tasks.mjs` 使用测试目录中的生成文件及真实 Sharp／FFmpeg／qpdf／Catalog，验证三类压缩、Office、独立归档、标签和文件操作共用队列，覆盖防重、参数固定、排队无副作用、排队／运行取消、执行时覆盖检查、备份／发布／标签失败后的部分结果与重试，以及提交阶段取消。`check-processing-ui.mjs` 和 `check-video-compression.mjs --ui` 验证真实页面排队提示、取消和原有结果展示。
 
 `rtk proxy node scripts/check-scheduled-services.mjs` 验证新增检测、扫描、克隆和 Mole 的共用 FIFO、防重、固定请求、排队无副作用、逐项结果及取消收尾。文件检测／重复扫描／APFS 使用真实工具与生成文件，Mole 使用隔离 HOME 的真实子进程夹具，不扫描用户目录。

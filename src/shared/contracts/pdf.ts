@@ -37,8 +37,11 @@ export interface PdfCompressionResult {
   outputPath: string
   inputBytes: number
   outputBytes: number
+  /** Product flows retain the original on no savings; keep the unadopted candidate separate. */
+  candidateOutputPath?: string
+  candidateOutputBytes?: number
   savedBytes: number
   preset: PdfCompressionPreset
-  tool: 'qpdf' | 'ghostscript'
+  tool: 'qpdf'
   validation: PdfCompressionValidation
 }

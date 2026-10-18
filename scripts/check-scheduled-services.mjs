@@ -8,7 +8,7 @@ const directory = await mkdtemp('/Users/hu1hui/Desktop/arkive-test/scheduled-ser
 const fixtureTools = join(directory, 'resources/tools/darwin-arm64')
 try {
   await mkdir(join(fixtureTools, 'mole'), { recursive: true })
-  for (const tool of ['ffprobe', 'ffmpeg', 'gs', 'qpdf', 'czkawka_cli', 'arkive-apfs-dedupe']) {
+  for (const tool of ['ffprobe', 'ffmpeg', 'qpdf', 'czkawka_cli', 'arkive-apfs-dedupe']) {
     await symlink(resolve('resources/tools/darwin-arm64', tool), join(fixtureTools, tool))
   }
   const mole = String.raw`#!${process.execPath}

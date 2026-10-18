@@ -213,7 +213,6 @@ async function main() {
       'ffprobe',
       'mole',
       'pngquant',
-      'ghostscript',
       'qpdf',
       'czkawka_cli',
       'apfs_dedupe'

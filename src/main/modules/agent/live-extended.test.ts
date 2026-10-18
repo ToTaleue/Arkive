@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { writePdfFixture } from '../pdf-compression/test-fixture'
 import {
   access,
   copyFile,
@@ -99,23 +100,7 @@ async function check(): Promise<void> {
     .toFile(image)
   const imageHash = await hashFile(image)
   const pdf = join(directory, 'source.pdf')
-  const ps = join(directory, 'source.ps')
-  await writeFile(
-    ps,
-    '%!PS\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Extended real model fixture) show\nshowpage\n'
-  )
-  assert.equal(
-    (
-      await runBundledTool('ghostscript', [
-        '-dBATCH',
-        '-dNOPAUSE',
-        '-sDEVICE=pdfwrite',
-        `-sOutputFile=${pdf}`,
-        ps
-      ])
-    ).exitCode,
-    0
-  )
+  await writePdfFixture(pdf, 'Extended real model fixture')
   try {
     if (process.env.ARKIVE_AGENT_AUTHORIZATION_FIXTURE === '1') {
       await scenario('authorization-only', async () => {

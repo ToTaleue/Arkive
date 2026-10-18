@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { writePdfFixture } from '../pdf-compression/test-fixture'
 import { mkdir, mkdtemp, readFile, writeFile, access } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -43,23 +44,7 @@ async function check(): Promise<void> {
   await fixture(office, 'docx', [imageBuffer])
   const officeHash = await hashFile(office)
   const pdf = join(directory, 'generated.pdf')
-  const ps = join(directory, 'generated.ps')
-  await writeFile(
-    ps,
-    '%!PS\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Real model PDF fixture) show\nshowpage\n'
-  )
-  assert.equal(
-    (
-      await runBundledTool('ghostscript', [
-        '-dBATCH',
-        '-dNOPAUSE',
-        '-sDEVICE=pdfwrite',
-        `-sOutputFile=${pdf}`,
-        ps
-      ])
-    ).exitCode,
-    0
-  )
+  await writePdfFixture(pdf, 'Real model PDF fixture')
   const pdfHash = await hashFile(pdf)
   const video = join(directory, 'generated.mov')
   assert.equal(

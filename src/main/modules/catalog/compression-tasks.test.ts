@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { writePdfFixture } from '../pdf-compression/test-fixture'
 import { app } from 'electron'
 import { copyFile, mkdir, mkdtemp, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -58,23 +59,7 @@ async function check(): Promise<void> {
     const input = await image('image.png')
     const originalHash = await hashFile(input)
     const pdf = file('input.pdf')
-    const ps = file('input.ps')
-    await writeFile(
-      ps,
-      '%!PS\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Generated task fixture) show\nshowpage\n'
-    )
-    assert.equal(
-      (
-        await runBundledTool('ghostscript', [
-          '-dBATCH',
-          '-dNOPAUSE',
-          '-sDEVICE=pdfwrite',
-          `-sOutputFile=${pdf}`,
-          ps
-        ])
-      ).exitCode,
-      0
-    )
+    await writePdfFixture(pdf, 'Generated task fixture')
     const video = file('input.mov')
     assert.equal(
       (
@@ -201,6 +186,90 @@ async function check(): Promise<void> {
     assert.equal(catalog.get(noSavings.catalog.id).archivePath, null)
     assert.equal(await hashFile(tinyInput), tinyHash)
     console.log('PASS: no-savings image keeps the original and skips requested candidate archiving')
+
+    const optimizedPdf = file('already-optimized.pdf')
+    assert.equal(
+      (
+        await runBundledTool('qpdf', [
+          '--object-streams=generate',
+          '--compress-streams=y',
+          '--recompress-flate',
+          pdfResult.outputPath,
+          optimizedPdf
+        ])
+      ).exitCode,
+      0
+    )
+    const optimizedHash = await hashFile(optimizedPdf)
+    const retainedPdf = await compressPdfAndBackup({
+      inputPath: optimizedPdf,
+      outputPath: file('larger-pdf-candidate.pdf'),
+      preset: 'lossless',
+      archive: true,
+      autoTag: false
+    })
+    assert.equal(retainedPdf.status, 'no-savings')
+    assert.equal(
+      retainedPdf.outputPath,
+      optimizedPdf,
+      'No-savings PDF must adopt the original, not its candidate'
+    )
+    assert.equal(retainedPdf.outputBytes, (await stat(optimizedPdf)).size)
+    assert.equal(retainedPdf.catalog.backupStatus, 'skipped')
+    const retainedItem = catalog.get(retainedPdf.catalog.id)
+    assert.equal(retainedItem.outputPath, optimizedPdf)
+    assert.equal(await hashFile(retainedItem.archivePath ?? ''), optimizedHash)
+    console.log(
+      'PASS: no-savings PDF archives the unchanged original instead of an equal/larger candidate'
+    )
+
+    const tinyVideo = file('already-small.mp4')
+    assert.equal(
+      (
+        await runBundledTool('ffmpeg', [
+          '-nostdin',
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-f',
+          'lavfi',
+          '-i',
+          'testsrc2=size=640x480:rate=30:duration=1',
+          '-c:v',
+          'hevc_videotoolbox',
+          '-allow_sw',
+          '0',
+          '-q:v',
+          '1',
+          '-tag:v',
+          'hvc1',
+          tinyVideo
+        ])
+      ).exitCode,
+      0
+    )
+    const tinyVideoHash = await hashFile(tinyVideo)
+    const retainedVideo = await compressVideoAndBackup({
+      inputPath: tinyVideo,
+      outputPath: file('larger-video-candidate.mp4'),
+      preset: 'quality',
+      archive: true,
+      autoTag: false
+    })
+    assert.equal(retainedVideo.status, 'no-savings')
+    assert.equal(
+      retainedVideo.outputPath,
+      tinyVideo,
+      'No-savings video must adopt the original, not its candidate'
+    )
+    assert.equal(retainedVideo.outputBytes, (await stat(tinyVideo)).size)
+    assert.equal(retainedVideo.catalog.backupStatus, 'skipped')
+    const retainedVideoItem = catalog.get(retainedVideo.catalog.id)
+    assert.equal(retainedVideoItem.outputPath, tinyVideo)
+    assert.equal(await hashFile(retainedVideoItem.archivePath ?? ''), tinyVideoHash)
+    console.log(
+      'PASS: no-savings video archives the unchanged original instead of a larger candidate'
+    )
 
     const cancelledInput = await image('queued-cancel.png')
     const pause = deferred()

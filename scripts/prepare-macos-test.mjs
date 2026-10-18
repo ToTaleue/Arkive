@@ -74,7 +74,7 @@ for (const [name, flag] of [
   ['ab-av1', '--version'],
   ['czkawka_cli', '--version'],
   ['qpdf/bin/qpdf', '--version'],
-  ['gs', '--version'],
+  ['--version'],
   ['pngquant', '--version'],
   ['arkive-apfs-dedupe', '--version']
 ]) {

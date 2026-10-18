@@ -5,51 +5,16 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { runBundledTool } from '../../../execution/process'
 import { compressPdf, inspectPdf } from './service'
+import { writePdfFixture } from './test-fixture'
 
 async function makePdf(
   path: string,
   name: string,
   options: { image: boolean; text: boolean }
 ): Promise<string> {
-  const postScript = join(path, `${name}.ps`)
-  const content = ['%!PS-Adobe-3.0']
-  if (options.image) {
-    const width = 128
-    const height = 128
-    const pixels = Array.from({ length: width * height }, (_, index) => {
-      const x = index % width
-      const y = Math.floor(index / width)
-      return `${((x * 2) % 256).toString(16).padStart(2, '0')}${((y * 2) % 256)
-        .toString(16)
-        .padStart(2, '0')}${((x + y) % 256).toString(16).padStart(2, '0')}`
-    }).join('')
-    content.push(
-      `/picstr ${String(width * 3)} string def`,
-      `${String(width)} ${String(height)} 8`,
-      `[${String(width)} 0 0 -${String(height)} 0 ${String(height)}]`,
-      '{ currentfile picstr readhexstring pop }',
-      'false 3 colorimage',
-      pixels
-    )
-  }
-  if (options.text) {
-    content.push(
-      '/Helvetica findfont 18 scalefont setfont',
-      '72 720 moveto (Arkive PDF compression fixture) show',
-      '72 680 moveto (Text and metadata are generated for service checks.) show'
-    )
-  }
-  content.push('showpage')
-  await writeFile(postScript, content.join('\n'))
   const outputPath = join(path, `${name}.pdf`)
-  const result = await runBundledTool('ghostscript', [
-    '-dBATCH',
-    '-dNOPAUSE',
-    '-sDEVICE=pdfwrite',
-    `-sOutputFile=${outputPath}`,
-    postScript
-  ])
-  assert.equal(result.exitCode, 0, result.stderr)
+  const kind = options.image ? 'image' : options.text ? 'text' : 'blank'
+  await writePdfFixture(outputPath, `Arkive PDF compression fixture: ${name} ${kind}`)
   return outputPath
 }
 
@@ -68,6 +33,32 @@ async function check(): Promise<void> {
     assert.equal(inspection.pageCount, 1)
     assert.equal(inspection.features.encrypted, false)
     assert.equal(inspection.features.hasSignatures, false)
+
+    const warningPath = join(directory, 'recoverable-xref-warning.pdf')
+    const warningBytes = Buffer.from(
+      (await readFile(inputPath)).toString('latin1').replace(/startxref\s+\d+/, 'startxref\n0'),
+      'latin1'
+    )
+    await writeFile(warningPath, warningBytes)
+    const warningCheck = await runBundledTool('qpdf', ['--check', warningPath])
+    assert.equal(
+      warningCheck.exitCode,
+      3,
+      'Fixture must reproduce successful qpdf recovery with warnings'
+    )
+    const warningInspection = await inspectPdf({ inputPath: warningPath })
+    assert.ok(warningInspection.warnings?.length)
+    const recovered = await compressPdf({
+      inputPath: warningPath,
+      outputPath: join(directory, 'recovered.pdf'),
+      preset: 'lossless'
+    })
+    assert.equal(recovered.validation.pageCountPreserved, true)
+    assert.equal(recovered.validation.featuresPreserved, true)
+    assert.deepEqual(await readFile(warningPath), warningBytes)
+    console.log(
+      'PASS: recoverable qpdf warning exit 3 is validated instead of rejected as a failed optimization'
+    )
 
     for (const preset of ['lossless', 'deep-lossless', 'balanced', 'size'] as const) {
       const outputPath = join(directory, `${preset}.pdf`)
@@ -130,9 +121,7 @@ async function check(): Promise<void> {
     ])
     assert.equal(encrypted.exitCode, 0, encrypted.stderr)
     await assert.rejects(inspectPdf({ inputPath: encryptedPath }), /加密 PDF/)
-    console.log(
-      'PASS: PDF inspection, qpdf/Ghostscript presets, validation, no-overwrite and cancellation'
-    )
+    console.log('PASS: PDF inspection, qpdf presets, validation, no-overwrite and cancellation')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

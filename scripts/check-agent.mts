@@ -24,6 +24,7 @@ import type { AgentService as Service } from '../src/main/modules/agent/service'
 import type { AgentResult, AgentUpdate } from '../src/shared/contracts/agent'
 import type { Catalog as CatalogService } from '../src/main/modules/catalog/service'
 import type { OfficeReplacementResult } from '../src/shared/contracts/office'
+import { writePdfFixture } from '../src/main/modules/pdf-compression/test-fixture'
 
 type FixtureMessage = { role: string; content: string | { type: string; text?: string }[] }
 type FixtureRequest = {
@@ -335,7 +336,6 @@ if (mode === 'slow') {
     'ffmpeg',
     'ffprobe',
     'ab-av1',
-    'gs',
     'qpdf',
     'pngquant',
     'ssimulacra2',
@@ -689,19 +689,8 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   )
   assert.match(await callTool('mkdir', { path: 'relative' }), /绝对路径/)
 
-  const pdfPostScript = resolve(workspaceDir, 'source.ps')
-  await writeFile(
-    pdfPostScript,
-    '%!PS-Adobe-3.0\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Arkive Agent PDF fixture) show\nshowpage\n'
-  )
   const pdfInput = resolve(workspaceDir, 'source.pdf')
-  await promisify(execFile)(resolve('resources/tools/darwin-arm64/gs'), [
-    '-dBATCH',
-    '-dNOPAUSE',
-    '-sDEVICE=pdfwrite',
-    `-sOutputFile=${pdfInput}`,
-    pdfPostScript
-  ])
+  await writePdfFixture(pdfInput, 'Arkive Agent PDF fixture')
   const pdfBytes = await readFile(pdfInput)
   assert.match(await callTool('inspect_pdf', { inputPath: pdfInput }), /"pageCount":1/)
   assert.deepEqual(await readFile(pdfInput), pdfBytes)

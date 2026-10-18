@@ -29,7 +29,7 @@ const resources=${JSON.stringify(resources)}, directory=${JSON.stringify(directo
   const tags=(request)=>JSON.parse(cp.execFileSync('/usr/bin/osascript',['-l','JavaScript',script,JSON.stringify(request)],{encoding:'utf8',timeout:20000}));
   assert.deepEqual(tags({path:image,tags:['打包验证']}),['打包验证']);
   assert.deepEqual(tags({path:image}),['打包验证']);
-  for(const [name,flag] of [['ffmpeg','-version'],['ffprobe','-version'],['gs','-version'],['qpdf/bin/qpdf','--version'],['pngquant','--version'],['ab-av1','--version'],['czkawka_cli','--version'],['arkive-apfs-dedupe','--version']]){
+  for(const [name,flag] of [['ffmpeg','-version'],['ffprobe','-version'],['qpdf/bin/qpdf','--version'],['pngquant','--version'],['ab-av1','--version'],['czkawka_cli','--version'],['arkive-apfs-dedupe','--version']]){
     const result=cp.spawnSync(path.join(resources,'tools',name),[flag],{encoding:'utf8',timeout:20000});
     assert.equal(result.status,0,name+': '+(result.error?.message||result.stderr));
   }

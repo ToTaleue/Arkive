@@ -44,7 +44,7 @@
     "title": "按文件类型选择压缩策略",
     "seconds": 35,
     "kicker": "03 / COMPRESSION",
-    "script": "不同文件不能套用同一组压缩参数。视频通过 FFmpeg 和 ab-av1 搜索质量参数，图片使用 Sharp 与 pngquant，PDF 结合 Ghostscript 和 qpdf，Office 则处理包内媒体并校验整个文档。我们的工作是把这些能力统一接到文件级校验、原件处理和状态反馈上。",
+    "script": "不同文件不能套用同一组压缩参数。视频通过 FFmpeg 和 ab-av1 搜索质量参数，图片使用 Sharp 与 pngquant，PDF 使用 qpdf 做无损结构优化，Office 则处理包内媒体并校验整个文档。我们的工作是把这些能力统一接到文件级校验、原件处理和状态反馈上。",
     "sources": [
       "C:/Users/steph/Desktop/arkive-demo/src/main/modules/image-compression/README.md",
       "C:/Users/steph/Desktop/arkive-demo/resources/tools/darwin-arm64/AB-AV1.md",
@@ -180,7 +180,7 @@
       "C:/Users/steph/Desktop/arkive-demo/src/main/modules/catalog/README.md",
       "C:/Users/steph/Desktop/arkive-demo/src/main/modules/clone-deduplication/README.md"
     ],
-    "extraNotes": "FFmpeg/FFprobe、Mole、Ghostscript、pngquant 等许可不同，应以随包 manifest 与各工具许可证原文为准。不把集成已有编解码器写成自研算法。部署方式见项目 README 与 macOS 安装检查文档，签名、公证和生产安装仍需独立验证。",
+    "extraNotes": "FFmpeg/FFprobe、Mole、pngquant 等许可不同，应以随包 manifest 与各工具许可证原文为准。不把集成已有编解码器写成自研算法。部署方式见项目 README 与 macOS 安装检查文档，签名、公证和生产安装仍需独立验证。",
     "appendix": true
   }
 ]

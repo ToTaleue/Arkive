@@ -1,4 +1,4 @@
-// Run the real bundled qpdf and Ghostscript through the PDF Service in Electron.
+// Run the real bundled qpdf through the PDF Service in Electron.
 // Run with: rtk proxy node scripts/check-pdf-compression.mjs
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'

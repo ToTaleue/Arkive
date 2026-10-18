@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile, stat, copyFile } from 'node:fs/promises'
+import { writePdfFixture } from '../pdf-compression/test-fixture'
+import { mkdir, mkdtemp, readFile, writeFile, stat, copyFile, readlink } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { crc32 } from 'node:zlib'
@@ -37,19 +38,7 @@ async function check(): Promise<void> {
   setCatalog(catalog)
   await catalog.start()
   const pdf = join(directory, '测试 PDF with spaces.pdf')
-  const ps = join(directory, 'fixture.ps')
-  await writeFile(
-    ps,
-    '%!PS\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Generated PDF integration fixture) show\nshowpage\n'
-  )
-  const made = await runBundledTool('ghostscript', [
-    '-dBATCH',
-    '-dNOPAUSE',
-    '-sDEVICE=pdfwrite',
-    `-sOutputFile=${pdf}`,
-    ps
-  ])
-  assert.equal(made.exitCode, 0, made.stderr)
+  await writePdfFixture(pdf, 'Generated PDF integration fixture')
   let choice = pdf
   const output = join(directory, 'result.pdf')
   let savePath = output
@@ -112,6 +101,69 @@ async function check(): Promise<void> {
   }
   try {
     await window.loadFile(join(built, 'renderer/index.html'))
+    if (process.env.ARKIVE_PRECOMPRESSION_LINK_CHECK === '1') {
+      const linkedInput = join(directory, 'pre-compression-link.png')
+      await sharp({ create: { width: 1000, height: 800, channels: 3, background: '#aaccdd' } })
+        .png()
+        .toFile(linkedInput)
+      const linkedHash = await hashFile(linkedInput)
+      savePath = join(directory, 'pre-compression-link-output.webp')
+      await evaluate('document.querySelector(\'[aria-label="压缩"]\').click()')
+      await wait("Boolean(document.querySelector('.compression-drop'))")
+      window.webContents.debugger.attach('1.3')
+      const document: unknown = await window.webContents.debugger.sendCommand('DOM.getDocument')
+      assert.ok(document && typeof document === 'object' && 'root' in document)
+      const root: unknown = document.root
+      assert.ok(
+        root && typeof root === 'object' && 'nodeId' in root && typeof root.nodeId === 'number'
+      )
+      const input: unknown = await window.webContents.debugger.sendCommand('DOM.querySelector', {
+        nodeId: root.nodeId,
+        selector: '.compression-page input[type=file]'
+      })
+      assert.ok(
+        input && typeof input === 'object' && 'nodeId' in input && typeof input.nodeId === 'number'
+      )
+      await window.webContents.debugger.sendCommand('DOM.setFileInputFiles', {
+        nodeId: input.nodeId,
+        files: [linkedInput]
+      })
+      await wait("document.querySelectorAll('.compression-row').length === 1")
+      await evaluate(`(() => {
+        const option = (text) => [...document.querySelectorAll('.compression-confirm')]
+          .find(label => label.querySelector('span')?.textContent === text).querySelector('input');
+        option('压缩完成后归档').click();
+        option('在原位置保留访问入口（试用）').click();
+      })()`)
+      await writeFile(
+        join(directory, 'pre-compression-options.png'),
+        (await window.webContents.capturePage()).toPNG()
+      )
+      await evaluate("document.querySelector('.compression-primary').click()")
+      await wait(
+        "document.querySelector('.compression-status.done')?.innerText.includes('原位置入口已创建')"
+      )
+      const linkedItem = catalog
+        .query({})
+        .items.find((item) => item.originalName === 'pre-compression-link.png')
+      assert.ok(linkedItem?.archivePath)
+      assert.equal(linkedItem.originalLink?.status, 'ready')
+      assert.equal(
+        await readlink(join(directory, 'pre-compression-link.webp')),
+        linkedItem.archivePath
+      )
+      assert.equal(await hashFile(linkedItem.backupPath ?? ''), linkedHash)
+      assert.equal(await hashFile(linkedItem.archivePath), await hashFile(savePath))
+      await writeFile(
+        join(directory, 'pre-compression-result.png'),
+        (await window.webContents.capturePage()).toPNG()
+      )
+      window.webContents.debugger.detach()
+      console.log(
+        `PASS: pre-compression checkbox → real preload/IPC → compression/Backup/Archive/link. Evidence: ${directory}`
+      )
+      return
+    }
     assert.equal(
       await evaluate('typeof window.api?.processing?.select'),
       'function',

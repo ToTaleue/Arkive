@@ -214,48 +214,25 @@ async function runCompression(
   inputPath: string,
   outputPath: string,
   signal?: AbortSignal
-): Promise<'qpdf' | 'ghostscript'> {
-  if (preset === 'lossless' || preset === 'deep-lossless') {
-    const qpdfArguments = [
-      '--object-streams=generate',
-      '--compress-streams=y',
-      '--recompress-flate',
-      ...(preset === 'deep-lossless' ? ['--compression-level=9'] : []),
-      inputPath,
-      outputPath
-    ]
-    const result = await runBundledTool('qpdf', qpdfArguments, {
-      signal,
-      killTreeOnAbort: true,
-      maxOutputChars: 64 * 1024
-    })
-    if (result.exitCode !== 0 || result.signal) {
-      const details = (result.stderr || result.stdout).slice(-4096)
-      throw new Error(`qpdf 无损优化失败：${details || 'qpdf 处理失败。'}`)
-    }
-    return 'qpdf'
-  }
-  const settings = preset === 'size' ? '/screen' : '/ebook'
-  const result = await runBundledTool(
-    'ghostscript',
-    [
-      '-dSAFER',
-      '-dBATCH',
-      '-dNOPAUSE',
-      '-dQUIET',
-      '-sDEVICE=pdfwrite',
-      '-dCompatibilityLevel=1.7',
-      `-dPDFSETTINGS=${settings}`,
-      `-sOutputFile=${outputPath}`,
-      inputPath
-    ],
-    { signal, killTreeOnAbort: true, maxOutputChars: 64 * 1024 }
-  )
-  if (result.exitCode !== 0 || result.signal) {
+): Promise<'qpdf'> {
+  const qpdfArguments = [
+    '--object-streams=generate',
+    '--compress-streams=y',
+    '--recompress-flate',
+    ...(preset === 'deep-lossless' || preset === 'size' ? ['--compression-level=9'] : []),
+    inputPath,
+    outputPath
+  ]
+  const result = await runBundledTool('qpdf', qpdfArguments, {
+    signal,
+    killTreeOnAbort: true,
+    maxOutputChars: 64 * 1024
+  })
+  if (!qpdfSucceeded(result)) {
     const details = (result.stderr || result.stdout).slice(-4096)
-    throw new Error(`Ghostscript PDF 压缩失败：${details || 'Ghostscript 处理失败。'}`)
+    throw new Error(`qpdf PDF 优化失败：${details || 'qpdf 处理失败。'}`)
   }
-  return 'ghostscript'
+  return 'qpdf'
 }
 
 /** Read-only main-process API used by UI proposals and Agent planning. */

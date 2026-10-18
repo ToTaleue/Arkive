@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { writePdfFixture } from '../modules/pdf-compression/test-fixture'
 import {
   chmod,
   mkdir,
@@ -86,26 +87,9 @@ export async function checkScheduledServices(root: string): Promise<void> {
   await writeFile(png, media)
   const office = join(root, 'document.docx')
   await fixture(office, 'docx', [media])
-  const ps = join(root, 'source.ps'),
-    pdf = join(root, 'document.pdf'),
+  const pdf = join(root, 'document.pdf'),
     video = join(root, 'video.mp4')
-  await writeFile(
-    ps,
-    '%!PS\n/Helvetica findfont 18 scalefont setfont\n72 720 moveto (Task probe fixture) show\nshowpage\n'
-  )
-  assert.equal(
-    (
-      await runBundledTool('ghostscript', [
-        '-q',
-        '-dBATCH',
-        '-dNOPAUSE',
-        '-sDEVICE=pdfwrite',
-        `-sOutputFile=${pdf}`,
-        ps
-      ])
-    ).exitCode,
-    0
-  )
+  await writePdfFixture(pdf, 'Task probe fixture')
   assert.equal(
     (
       await runBundledTool('ffmpeg', [

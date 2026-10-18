@@ -252,9 +252,9 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
     }),
     defineTool({
       name: 'compress_office',
-      label: 'Office 原路径压缩',
+      label: 'Office 原路径压缩（实验性）',
       description:
-        '用户明确授权后，压缩普通 DOCX／PPTX 内嵌媒体并替换原路径上的整份文档，保持文件名及文档格式。调用前说明有损压缩、原路径替换和完整原件移动到 Arkive Backup。JPEG／PNG 保持格式，MP4 输出 H.264 8bit 并复制 AAC；外链不访问；图片评分仅供参考，图片只要变小且校验通过就回填，不因评分低而跳过。不支持或视频质量未达标的媒体保留原样。默认质量优先，只有媒体和完整文档变小且校验通过才替换；无收益返回 unchanged。必须检查 replacementStatus、replacementError、media 和 catalog.backupStatus，不能只根据 status 宣称替换成功。选参和编码可取消；进入备份发布提交阶段后完成提交。归档须在 replaced 后用返回的 catalog.id 调用 archive_file，不再压缩。',
+        '实验性功能，复杂版式和嵌入媒体兼容性仍在验证，处理后须用 Word／PowerPoint 验看。用户明确授权后，压缩普通 DOCX／PPTX 内嵌媒体并替换原路径上的整份文档，保持文件名及文档格式。调用前说明有损压缩、原路径替换和完整原件移动到 Arkive Backup。JPEG／PNG 保持格式，MP4 输出 H.264 8bit 并复制 AAC；外链不访问；图片评分仅供参考，图片只要变小且校验通过就回填，不因评分低而跳过。不支持或视频质量未达标的媒体保留原样。默认质量优先，只有媒体和完整文档变小且校验通过才替换；无收益返回 unchanged。必须检查 replacementStatus、replacementError、media 和 catalog.backupStatus，不能只根据 status 宣称替换成功。选参和编码可取消；进入备份发布提交阶段后完成提交。归档须在 replaced 后用返回的 catalog.id 调用 archive_file，不再压缩。',
       parameters: Type.Object(
         {
           inputPath: Type.String({ description: '已授权原路径替换的 DOCX／PPTX 文档绝对路径。' }),
@@ -395,7 +395,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'compress_pdf',
       label: 'PDF 压缩',
       description:
-        '复用 Arkive PDF 压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。lossless 使用 qpdf 做结构优化；deep-lossless 使用 qpdf 压缩等级 9，仍然无损但更慢；balanced 使用 Ghostscript ebook 预设；size 使用 Ghostscript screen 预设。生成新 PDF，成功且有体积收益后按共用归档生命周期将原件校验后备份到 Arkive Backup，不覆盖已有文件。加密、数字签名和 PDF/A 暂不处理；balanced／size 不处理表单、批注和附件。输出会通过 qpdf 结构检查并比较页面数量与 PDF 特征。',
+        '复用 Arkive PDF 压缩业务，仅在用户已授权输入、输出位置和压缩操作后调用。lossless 使用 qpdf 做结构优化；deep-lossless 使用 qpdf 压缩等级 9，仍然无损但更慢；balanced 和 size 也使用 qpdf 做无损结构优化。生成新 PDF，成功且有体积收益后按共用归档生命周期将原件校验后备份到 Arkive Backup，不覆盖已有文件。加密、数字签名和 PDF/A 暂不处理；balanced／size 不处理表单、批注和附件。输出会通过 qpdf 结构检查并比较页面数量与 PDF 特征。',
       parameters: Type.Object({
         inputPath: Type.String({ description: '源 PDF 绝对路径。' }),
         outputPath: Type.String({ description: '用户授权的新 PDF 输出绝对路径，父目录须已存在。' }),
