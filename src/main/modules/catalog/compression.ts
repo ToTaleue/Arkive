@@ -43,6 +43,8 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
   signal?.throwIfAborted()
   if (request.archive !== undefined && typeof request.archive !== 'boolean')
     throw new Error('归档选项必须为布尔值。')
+  if (request.autoTag !== undefined && typeof request.autoTag !== 'boolean')
+    throw new Error('自动打标选项必须为布尔值。')
   if (
     request.keepLinkAtOriginalLocation !== undefined &&
     typeof request.keepLinkAtOriginalLocation !== 'boolean'
@@ -80,9 +82,11 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
             let archive: ArchiveAttempt | undefined
             let automaticTags: CompressionLifecycleResult['automaticTags']
             if (request.archive && (result.status === 'compressed' || archiveOnNoSavings)) {
-              report({ message: '正在读取元数据并生成归档标签…' })
-              automaticTags = await recommendArchiveTags(catalog, id, input, taskSignal)
-              const recommendedTags = automaticTags.status === 'ready' ? automaticTags.tags : []
+              if (request.autoTag !== false) {
+                report({ message: '正在读取元数据并生成归档标签…' })
+                automaticTags = await recommendArchiveTags(catalog, id, input, taskSignal)
+              }
+              const recommendedTags = automaticTags?.status === 'ready' ? automaticTags.tags : []
               report({ message: '正在归档…' })
               try {
                 if (record.backupStatus === 'error')

@@ -45,6 +45,8 @@ export function archiveFile(
   signal?: AbortSignal,
   options: ArchiveOptions = {}
 ): Promise<ArchiveItem> {
+  if (options.autoTag !== undefined && typeof options.autoTag !== 'boolean')
+    throw new Error('自动打标选项必须为布尔值。')
   const chosen = normalizeTags(tags)
   options = structuredClone(options)
   return schedule(
@@ -53,7 +55,7 @@ export function archiveFile(
     async () => {
       const row = catalog.repo.get(id)
       const automaticTags =
-        row.archive_status === 'ready'
+        options.autoTag === false || row.archive_status === 'ready'
           ? undefined
           : await recommendArchiveTags(catalog, id, row.original_path, signal)
       const recommendedTags = automaticTags?.status === 'ready' ? automaticTags.tags : []
@@ -83,6 +85,8 @@ export function archivePath(
   options: ArchiveOptions = {}
 ): Promise<ArchiveItem> {
   signal?.throwIfAborted()
+  if (options.autoTag !== undefined && typeof options.autoTag !== 'boolean')
+    throw new Error('自动打标选项必须为布尔值。')
   return catalog
     .prepareFileArchive(inputPath)
     .then((id) => archiveFile(catalog, id, tags, signal, options))

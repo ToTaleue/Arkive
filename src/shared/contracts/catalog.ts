@@ -6,6 +6,8 @@ export interface CompressionRecord {
 }
 
 export interface ArchiveOptions {
+  /** Defaults to true. False skips AI recommendations without removing existing or explicit tags. */
+  autoTag?: boolean
   /** Opt-in: create an entry in the original folder pointing to the verified archive. */
   keepLinkAtOriginalLocation?: boolean
   /** Move an unchanged, verified source into Archive and leave a link at its path. */

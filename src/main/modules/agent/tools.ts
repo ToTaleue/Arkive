@@ -24,11 +24,18 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
   ])
   const tags = Type.Array(Type.String({ minLength: 1, maxLength: 100 }), { maxItems: 100 })
   const recordId = Type.String({ pattern: '^[a-fA-F0-9-]{36}$' })
+  const autoTag = Type.Optional(
+    Type.Boolean({
+      description:
+        '归档时是否自动推荐并写入标签，默认 true。用户要求不加标签或仅用指定标签时设为 false；不删除已有标签，显式 tags 仍会应用。'
+    })
+  )
   const archiveOptions = {
     archive: Type.Optional(
       Type.Boolean({ description: '用户要求压缩后归档时设为 true，默认只压缩并备份原件。' })
     ),
     tags: Type.Optional({ ...tags, description: '归档标签，与 archive=true 一起使用；可省略。' }),
+    autoTag,
     keepLinkAtOriginalLocation: Type.Optional(
       Type.Boolean({
         description:
@@ -124,6 +131,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
         {
           inputPath: Type.String({ description: '已授权归档的普通文件绝对路径。' }),
           tags: Type.Optional(tags),
+          autoTag,
           moveToArchive: Type.Optional(
             Type.Boolean({
               description: '用户要求搬入归档并在原路径保留软链接时启用；默认只复制归档。'
@@ -151,6 +159,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       parameters: Type.Object({
         id: { ...recordId, description: '压缩工具返回的 catalog.id，或检索结果中的 id。' },
         tags: Type.Optional(tags),
+        autoTag,
         moveToArchive: Type.Optional(
           Type.Boolean({
             description:

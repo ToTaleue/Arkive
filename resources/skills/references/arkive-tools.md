@@ -89,6 +89,8 @@ PDF 加密、数字签名和 PDF/A 当前不处理；含表单、批注、附件
 
 ## 标签、日期与找回
 
+`archive_path`、`archive_file` 及带 `archive=true` 的图片／视频／PDF 压缩工具共用 `autoTag`，默认 `true`。用户要求“不加标签”“不额外加标签”或“只用指定标签”时传 `autoTag: false`：跳过自动推荐，保留已有标签，仍应用显式 `tags`。仅省略 `tags` 或传空数组不会关闭自动打标。Office 在后续 `archive_file` 中传该选项。
+
 推荐标签前用 `search_archives({})` 取得 `tags` 词库；含义相同时复用已有词。根据用户说明、文件名和实际探测信息建议具体事件、课程、项目等标签，未知信息留空。当前流程没有自动 OCR、演唱者识别或邮件解析。组合压缩归档会尝试读取文件名、路径及支持的描述性元数据，调用独立 AI 标签推荐；检查 automaticTags 的 ready／error／cancelled，推荐失败不代表归档失败，也不表示已识别照片人物或画面。
 
 - 新归档：用用户已授权的 `tags`。
