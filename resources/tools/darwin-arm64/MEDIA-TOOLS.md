@@ -13,6 +13,6 @@
 
 `ssimulacra2` 为 2.4 MB 的自包含 Rust CLI（仅使用 macOS 系统库），支持 PNG、JPEG 和 WebP 的静态图片比较。Rust 版本用于产品内评估，Cloudinary/libjxl 的 C++ 版本保留为分数校准参考；两者在同一 RGB PNG 样本上的结果接近，但仍应在接入时固定实现和阈值。
 
-本机临时样本检查已通过：pngquant 输出 PNG，输出尺寸可读取。Ghostscript 的历史 PDF 评估记录已不再作为当前工具清单或最终交付依据。
+本机临时样本检查已通过：pngquant 输出 PNG，输出尺寸可读取。当前目录只记录仍随包提供的图片工具；PDF 工具 qpdf 的来源和许可见交付目录中的第三方说明。
 
-目录内的 pngquant 和 ssimulacra2 已接入图片压缩；Ghostscript 已从随包资源删除。现有 electron-builder 的 `extraResources` 会将本目录复制到应用 `Contents/Resources/tools`，签名、公证和安装后运行尚未验证。
+目录内的 pngquant 和 ssimulacra2 已接入图片压缩。Ghostscript 不在当前随包资源中。现有 electron-builder 的 `extraResources` 会将本目录复制到应用 `Contents/Resources/tools`，签名、公证和安装后运行尚未验证。
