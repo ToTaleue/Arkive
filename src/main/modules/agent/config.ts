@@ -7,11 +7,26 @@ export type AgentConfig = { provider: string; model: string; apiKey: string; bas
 
 // Runtime main-process configuration. Never use VITE_ / MAIN_VITE_ for secrets.
 export function loadAgentEnvironment(appPath: string, packaged: boolean): void {
-  if (packaged) return
-  try {
-    loadEnvFile(join(appPath, '.env.local'))
-  } catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+  const hasRuntimeConfig = Boolean(
+    process.env.ARKIVE_AI_API_KEY?.trim() && process.env.ARKIVE_AI_MODEL?.trim()
+  )
+  if (hasRuntimeConfig) return
+
+  // Development uses the project root. A locally unpacked packaged build has
+  // the same project root six levels above app.asar; allow that external file
+  // without bundling or exposing credentials in the renderer.
+  const envPaths = packaged
+    ? [
+        join(process.cwd(), '.env.local'),
+        join(appPath, '..', '..', '..', '..', '..', '..', '.env.local')
+      ]
+    : [join(appPath, '.env.local')]
+  for (const envPath of envPaths) {
+    try {
+      loadEnvFile(envPath)
+      return
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue
       throw new Error('无法读取 .env.local，请检查文件格式和读取权限。')
     }
   }
