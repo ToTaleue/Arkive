@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import sharp from 'sharp'
 import { fileTags } from './finder-tags'
 import { compressImageAndBackup } from './compression'
+import { archiveFile } from './operations'
 import { Catalog, setCatalog } from './service'
 
 async function body(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -93,8 +94,20 @@ async function check(): Promise<void> {
     assert.ok(catalog.get(result.catalog.id).tags.includes('旅行'))
     assert.ok(result.archive.item.archivePath)
     assert.ok((await fileTags(result.archive.item.archivePath)).includes('旅行'))
+    const laterInput = join(directory, '后续归档.png')
+    const laterOutput = join(directory, '后续归档.webp')
+    await sharp({ create: { width: 256, height: 256, channels: 3, background: '#c0d0e0' } })
+      .png({ compressionLevel: 0 })
+      .toFile(laterInput)
+    const later = await compressImageAndBackup({
+      inputPath: laterInput,
+      outputPath: laterOutput
+    })
+    const laterArchived = await archiveFile(catalog, later.catalog.id)
+    assert.equal(laterArchived.automaticTags?.status, 'ready')
+    assert.ok(laterArchived.tags.includes('旅行'))
     console.log(
-      'PASS: compression archive calls AI metadata tagging and writes the recommended tag'
+      'PASS: compression and later archive both call AI metadata tagging and write the recommendation'
     )
   } finally {
     await catalog.close()

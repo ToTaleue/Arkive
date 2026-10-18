@@ -41,6 +41,8 @@ export interface ArchiveItem extends CompressionRecord {
   tags: string[]
   tagStatus: 'synced' | 'pending' | 'error'
   tagError: string | null
+  /** Present on an archive operation response when AI tagging was attempted. */
+  automaticTags?: AutomaticTagAttempt
   originalLink?: {
     path: string
     status: 'pending' | 'ready' | 'error'

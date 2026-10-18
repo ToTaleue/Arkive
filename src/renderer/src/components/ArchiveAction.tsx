@@ -68,6 +68,9 @@ export function ArchiveAction({ record }: { record: CompressionRecord }): React.
           {item.tagStatus === 'error' && (
             <p role="alert">文件已归档，标签待同步：{item.tagError}</p>
           )}
+          {item.automaticTags?.status === 'error' && (
+            <p role="alert">文件已归档，AI 标签生成失败：{item.automaticTags.error}</p>
+          )}
           {item.originalLink && (
             <div>
               <p role={item.originalLink.status === 'error' ? 'alert' : 'status'}>

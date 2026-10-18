@@ -1,6 +1,7 @@
 import type { ArchiveItem, ArchiveOptions } from '../../../shared/contracts/catalog'
 import { runTask, TaskFailure } from '../../tasks/service'
 import { normalizeTags } from './finder-tags'
+import { recommendArchiveTags } from './automatic-tags'
 import type { Catalog } from './service'
 
 /** Schedule explicit product operations; compression follow-ups use Catalog directly. */
@@ -49,7 +50,20 @@ export function archiveFile(
   return schedule(
     '正在归档文件',
     `catalog:${id}`,
-    () => catalog.archive(id, chosen, options),
+    async () => {
+      const row = catalog.repo.get(id)
+      const automaticTags =
+        row.archive_status === 'ready'
+          ? undefined
+          : await recommendArchiveTags(catalog, id, row.original_path, signal)
+      const recommendedTags = automaticTags?.status === 'ready' ? automaticTags.tags : []
+      const item = await catalog.archive(
+        id,
+        normalizeTags([...chosen, ...recommendedTags]),
+        options
+      )
+      return automaticTags ? { ...item, automaticTags } : item
+    },
     (item) =>
       item.tagStatus === 'error'
         ? (item.tagError ?? '归档完成，但标签同步失败。')

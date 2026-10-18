@@ -22,7 +22,6 @@ import { inspectPdf, inspectOffice } from './operations'
 import { compressOfficeInPlace } from '../office-compression/in-place'
 import { compressPdfAndBackup } from '../catalog/compression'
 import { archiveFile } from '../catalog/operations'
-import { recommendArchiveTags } from '../catalog/automatic-tags'
 import { getCatalog } from '../catalog/service'
 import { TaskCancelled, TaskFailure } from '../../tasks/service'
 import { scanDuplicates } from '../duplicate-detection/operations'
@@ -215,27 +214,16 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
           result.value.replacementStatus !== 'error'
         ) {
           const catalog = getCatalog()
-          const automaticTags = await recommendArchiveTags(
-            catalog,
-            result.value.catalog.id,
-            selected.path,
-            controller.signal
-          )
           try {
-            const recommendedTags = automaticTags.status === 'ready' ? automaticTags.tags : []
+            const item = await archiveFile(catalog, result.value.catalog.id, [], controller.signal)
             result = {
               kind: 'office',
               value: {
                 ...result.value,
-                automaticTags,
+                automaticTags: item.automaticTags,
                 archive: {
                   status: 'ready',
-                  item: await archiveFile(
-                    catalog,
-                    result.value.catalog.id,
-                    recommendedTags,
-                    controller.signal
-                  )
+                  item
                 }
               }
             }
@@ -244,7 +232,6 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
               kind: 'office',
               value: {
                 ...result.value,
-                automaticTags,
                 archive: {
                   status: 'error',
                   error: error instanceof Error ? error.message : String(error)
