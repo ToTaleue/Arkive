@@ -131,6 +131,29 @@ void test('scan_duplicates summaries report logical duplicate facts', () => {
   assert.match(result.summary, /未执行删除或移动/)
 })
 
+void test('mole_analyze summaries separate scan status from display truncation', () => {
+  const details = {
+    report: {
+      scan_status: 'complete',
+      total_size: 12_777_758_831,
+      total_files: 7241,
+      entries: [{ path: '/tmp/large', size: 10, is_dir: true }]
+    },
+    stderr: '',
+    stderrTruncated: false
+  }
+  const result = toolResult(
+    'mole_analyze',
+    { content: [{ type: 'text', text: JSON.stringify(details) + 'x'.repeat(9000) }], details },
+    false
+  )
+  assert.equal(result.title, 'Mole 占用分析完成')
+  assert.match(result.summary, /scan_status|complete/)
+  assert.match(result.summary, /11\.9 GB/)
+  assert.match(result.summary, /7241/)
+  assert.match(result.summary, /展示已截断/)
+})
+
 void test('a failed model summary still has a local execution summary', () => {
   const summary = executionFallback({
     phase: 'summary-error',

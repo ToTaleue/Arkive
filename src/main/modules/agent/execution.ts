@@ -198,6 +198,35 @@ export function toolResult(
       details: boundedText(raw)
     }
   }
+  if (name === 'mole_analyze') {
+    const report = object(details.report)
+    const scanStatus = typeof report.scan_status === 'string' ? report.scan_status : undefined
+    const totalSize = formatBytes(report.total_size)
+    const totalFiles =
+      typeof report.total_files === 'number' ? String(report.total_files) : undefined
+    const entries = Array.isArray(report.entries) ? String(report.entries.length) : undefined
+    const displayTruncated = boundedText(raw).includes('[内容已截断]')
+    const incomplete =
+      details.stderrTruncated === true || (scanStatus !== undefined && scanStatus !== 'complete')
+    const facts = [
+      scanStatus === 'complete'
+        ? '扫描状态 complete。'
+        : scanStatus
+          ? `扫描状态 ${scanStatus}。`
+          : '',
+      totalSize ? `总占用 ${totalSize}。` : '',
+      totalFiles ? `文件数 ${totalFiles}。` : '',
+      entries !== undefined ? `返回 ${entries} 个顶层条目。` : '',
+      incomplete ? '分析结果不完整，请查看详情。' : '',
+      displayTruncated ? '结果详情展示已截断，不能据此判断未列出的条目。' : '未发现结果详情截断。',
+      details.stderrTruncated === true ? 'stderr 也已截断。' : ''
+    ].filter(Boolean)
+    return {
+      title: incomplete ? 'Mole 占用分析不完整' : 'Mole 占用分析完成',
+      summary: facts.join(' ') || '已返回 Mole 占用分析结果。',
+      details: boundedText(raw)
+    }
+  }
   const nativeSummary = nativeToolSummary(name, raw)
   if (nativeSummary)
     return {
