@@ -110,6 +110,27 @@ void test('inspect_office summaries report embedded media counts', () => {
   assert.match(result.summary, /正文图片 1 个/)
 })
 
+void test('scan_duplicates summaries report logical duplicate facts', () => {
+  const result = toolResult(
+    'scan_duplicates',
+    {
+      content: [{ type: 'text', text: '{}' }],
+      details: {
+        status: 'completed',
+        groups: [{ hash: 'hash', sizeBytes: 2048, files: [] }],
+        duplicateFileCount: 3,
+        redundantBytes: 6144,
+        warnings: []
+      }
+    },
+    false
+  )
+  assert.equal(result.title, '重复扫描完成')
+  assert.match(result.summary, /1 组重复内容/)
+  assert.match(result.summary, /6\.00 KB/)
+  assert.match(result.summary, /未执行删除或移动/)
+})
+
 void test('a failed model summary still has a local execution summary', () => {
   const summary = executionFallback({
     phase: 'summary-error',

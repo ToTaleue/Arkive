@@ -185,6 +185,19 @@ export function toolResult(
       details: boundedText(raw)
     }
   }
+  if (name === 'scan_duplicates') {
+    const groups = Array.isArray(details.groups) ? details.groups.length : 0
+    const duplicateFileCount =
+      typeof details.duplicateFileCount === 'number' ? details.duplicateFileCount : 0
+    const redundant = formatBytes(details.redundantBytes)
+    const warnings = Array.isArray(details.warnings) ? details.warnings.length : 0
+    const partial = details.status === 'partial'
+    return {
+      title: partial ? '重复扫描不完整' : '重复扫描完成',
+      summary: `发现 ${String(groups)} 组重复内容，${String(duplicateFileCount)} 个重复副本${redundant ? `，逻辑重复量 ${redundant}` : ''}。${partial || warnings > 0 ? '存在扫描警告，请查看详情，不能视为完整扫描。' : '未执行删除或移动。'}`,
+      details: boundedText(raw)
+    }
+  }
   const nativeSummary = nativeToolSummary(name, raw)
   if (nativeSummary)
     return {
