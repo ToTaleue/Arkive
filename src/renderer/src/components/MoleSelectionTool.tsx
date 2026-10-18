@@ -261,6 +261,64 @@ export function MoleSelectionTool({
         .map(candidateBytes) ?? [])
     : []
   const completedBytes = completedSize.reduce<number>((total, value) => total + (value ?? 0), 0)
+  const selectionControls = preview && (
+    <>
+      <footer className="mole-selection-footer">
+        <div>
+          {result
+            ? `已移入回收站 ${String(result.completed.length)} 项 · 失败 ${String(result.failed.length)} 项 · 未处理 ${String(result.unprocessed.length)} 项`
+            : `已选 ${String(selected.length)} 项 · 预计文件容量 ${selectionSize}`}
+          <small>
+            {kind === 'purge'
+              ? '恢复产物可能需要联网安装依赖或重新构建。'
+              : '移入回收站后，磁盘空间可能尚未释放。'}
+          </small>
+        </div>
+        {!result && (
+          <button
+            className="mole-tool-button primary"
+            disabled={!preview.id || !selected.length || run.busy}
+            onClick={() => {
+              setConfirming(true)
+            }}
+          >
+            <Trash2 size={14} />
+            {kind === 'uninstall' ? '确认卸载…' : '移入回收站…'}
+          </button>
+        )}
+      </footer>
+      {selected.length >= 100 && !result && (
+        <p className="mole-tool-note">每批最多处理 100 项，其余项目可重新预览后处理。</p>
+      )}
+    </>
+  )
+  const confirmation = confirming && !run.busy && (
+    <section className="mole-selection-confirm" role="region" aria-label="确认处理所选文件">
+      <h3>将以下 {selected.length} 项移入回收站？</h3>
+      <p>仅处理本次选择的文件。应用数据、偏好设置等内容以以下清单为准。</p>
+      <ul>
+        {selectedItems.map((item) => (
+          <li key={item.id}>
+            {item.path}
+            {item.role === 'app-data' && <strong> · 应用数据</strong>}
+          </li>
+        ))}
+      </ul>
+      <div>
+        <button
+          className="mole-tool-button"
+          onClick={() => {
+            setConfirming(false)
+          }}
+        >
+          返回调整
+        </button>
+        <button className="mole-tool-button primary" onClick={() => void execute()}>
+          确认移入回收站
+        </button>
+      </div>
+    </section>
+  )
   const candidateList = preview && (
     <>
       {kind === 'purge' ? (
@@ -319,60 +377,8 @@ export function MoleSelectionTool({
           {failure.path}：{failure.error}
         </p>
       ))}
-      <footer className="mole-selection-footer">
-        <div>
-          {result
-            ? `已移入回收站 ${String(result.completed.length)} 项 · 失败 ${String(result.failed.length)} 项 · 未处理 ${String(result.unprocessed.length)} 项`
-            : `已选 ${String(selected.length)} 项 · 预计文件容量 ${selectionSize}`}
-          <small>
-            {kind === 'purge'
-              ? '恢复产物可能需要联网安装依赖或重新构建。'
-              : '移入回收站后，磁盘空间可能尚未释放。'}
-          </small>
-        </div>
-        {!result && (
-          <button
-            className="mole-tool-button primary"
-            disabled={!preview.id || !selected.length || run.busy}
-            onClick={() => {
-              setConfirming(true)
-            }}
-          >
-            <Trash2 size={14} />
-            {kind === 'uninstall' ? '确认卸载…' : '移入回收站…'}
-          </button>
-        )}
-      </footer>
-      {selected.length >= 100 && !result && (
-        <p className="mole-tool-note">每批最多处理 100 项，其余项目可重新预览后处理。</p>
-      )}
-      {confirming && !run.busy && (
-        <section className="mole-selection-confirm" role="region" aria-label="确认处理所选文件">
-          <h3>将以下 {selected.length} 项移入回收站？</h3>
-          <p>仅处理本次选择的文件。应用数据、偏好设置等内容以以下清单为准。</p>
-          <ul>
-            {selectedItems.map((item) => (
-              <li key={item.id}>
-                {item.path}
-                {item.role === 'app-data' && <strong> · 应用数据</strong>}
-              </li>
-            ))}
-          </ul>
-          <div>
-            <button
-              className="mole-tool-button"
-              onClick={() => {
-                setConfirming(false)
-              }}
-            >
-              返回调整
-            </button>
-            <button className="mole-tool-button primary" onClick={() => void execute()}>
-              确认移入回收站
-            </button>
-          </div>
-        </section>
-      )}
+      {kind !== 'purge' && selectionControls}
+      {kind !== 'purge' && confirmation}
     </>
   )
   return (
@@ -419,6 +425,7 @@ export function MoleSelectionTool({
                 ? '处理已停止'
                 : '部分项目未完成'
           }
+          actions={kind === 'purge' ? selectionControls : undefined}
           label="已移入回收站"
           value={`${String(result.completed.length)} 项`}
         >
@@ -430,6 +437,7 @@ export function MoleSelectionTool({
       ) : (
         preview && (
           <MoleToolHero
+            actions={kind === 'purge' ? selectionControls : undefined}
             warning={!preview.id}
             title={preview.id ? '预览已完成' : '预览结果不完整'}
             label={kind === 'uninstall' ? '应用及关联文件' : '发现候选项目'}
@@ -439,6 +447,7 @@ export function MoleSelectionTool({
           </MoleToolHero>
         )
       )}
+      {kind === 'purge' && confirmation}
       {kind === 'purge' && preview && (
         <p className="mole-tool-warning">
           当前预览未提供可靠的活动时间，构建产物默认不勾选。请确认项目近期不需要这些产物后再选择。
@@ -447,6 +456,7 @@ export function MoleSelectionTool({
       {kind === 'uninstall' ? (
         <div className="mole-uninstall-layout">
           <aside className="mole-app-list">
+            <p className="mole-tool-note">久未使用优先</p>
             <input
               aria-label="搜索应用"
               placeholder="搜索应用"

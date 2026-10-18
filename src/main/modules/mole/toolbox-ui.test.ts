@@ -237,8 +237,32 @@ async function check(): Promise<void> {
       [[p3, p1], [p2], [p4]],
       'Projects must sort by total known size descending, artifacts by size descending, unknown sizes last'
     )
+    const purgeHero = `${section('项目瘦身')}.querySelector('.mole-tool-hero')`
+    const purgeButton = `${purgeHero}.querySelector('.mole-selection-footer button')`
+    assert.equal(await evaluate(`${purgeButton}.disabled`), true)
     await choose('项目瘦身', p1)
-    await click('移入回收站…', section('项目瘦身'))
+    assert.match(String(await evaluate(`${purgeHero}.innerText`)), /已选 1 项 · 预计文件容量 600/)
+    assert.equal(await evaluate(`${purgeButton}.disabled`), false)
+    assert.equal(
+      await evaluate(`${section('项目瘦身')}.querySelectorAll('.mole-selection-footer').length`),
+      1
+    )
+    await evaluate(`${purgeHero}.scrollIntoView({block:'start'})`)
+    await screenshot('purge-selected-top')
+    await evaluate('document.querySelector(\'[title="夜间模式"]\').click()')
+    window.setSize(620, 850)
+    await screenshot('purge-selected-top-narrow-night')
+    assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false)
+    await evaluate('document.querySelector(\'[title="日间模式"]\').click()')
+    window.setSize(1280, 1000)
+    await click('移入回收站…', purgeHero)
+    assert.equal(
+      await evaluate(
+        `${section('项目瘦身')}.querySelector('.mole-selection-confirm').compareDocumentPosition(${section('项目瘦身')}.querySelector('.mole-project')) & Node.DOCUMENT_POSITION_FOLLOWING`
+      ),
+      4,
+      'Purge confirmation must appear above the candidate list'
+    )
     assert.ok(await exists(p1), 'Review step must not move files')
     await screenshot('purge-confirm')
     await click('确认移入回收站', section('项目瘦身'))
@@ -253,6 +277,12 @@ async function check(): Promise<void> {
       ),
       '1 项'
     )
+    assert.match(
+      String(await evaluate(`${purgeHero}.innerText`)),
+      /已移入回收站 1 项 · 失败 0 项 · 未处理 0 项/
+    )
+    assert.equal(await evaluate(`${purgeButton} === null`), true)
+    await screenshot('purge-completed-top')
     console.log(
       'PASS Purge: projects and artifacts sorted by size, unknown sizes last, separate full paths, no auto-selection, explicit review and only selected artifact moved'
     )

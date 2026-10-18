@@ -104,6 +104,7 @@
 }
 .mole-tool-hero > div:last-child {
   min-width: 0;
+  flex: 1;
 }
 .mole-tool-hero-icon {
   display: grid;

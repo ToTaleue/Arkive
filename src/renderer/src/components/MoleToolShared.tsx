@@ -26,12 +26,14 @@ export function MoleToolHero({
   label,
   value,
   warning = false,
+  actions,
   children
 }: {
   title: string
   label: string
   value: ReactNode
   warning?: boolean
+  actions?: ReactNode
   children: ReactNode
 }): React.JSX.Element {
   return (
@@ -50,6 +52,7 @@ export function MoleToolHero({
           <strong>{value}</strong>
         </div>
         <p>{children}</p>
+        {actions}
       </div>
     </section>
   )
