@@ -1,18 +1,64 @@
 @charset "UTF-8";
 
-:root {
-  color-scheme: dark;
+:root,
+:root[data-theme='day'] {
+  color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
-  color: #e3e3e3;
-  background: #191919;
+  color: var(--ink);
+  background: var(--page);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --surface: #191919;
-  --sidebar: #202020;
-  --line: #303030;
-  --muted: #8d8d8d;
-  --accent: #b5caba;
+  --page: #f3f5f3;
+  --rail: #e9eeea;
+  --sidebar: #edf1ee;
+  --surface: #ffffff;
+  --surface-soft: #f7f9f7;
+  --panel: #ffffff;
+  --panel-soft: #f1f5f2;
+  --input: #ffffff;
+  --ink: #202923;
+  --muted: #6f7b73;
+  --faint: #9ca79f;
+  --line: #dce3dd;
+  --hover: #e5ece6;
+  --accent: #3d7757;
+  --accent-soft: #e4f0e7;
+  --accent-line: #a9c8af;
+  --accent-ink: #ffffff;
+  --user-bubble: #e7f0e9;
+  --warning: #8d6d2c;
+  --warning-soft: #f6efdf;
+  --danger: #b42318;
+  --danger-soft: #fceceb;
+  --shadow: #2031261a;
+}
+
+:root[data-theme='night'] {
+  color-scheme: dark;
+  --page: #111416;
+  --rail: #171a1d;
+  --sidebar: #191d20;
+  --surface: #1b2023;
+  --surface-soft: #202629;
+  --panel: #202629;
+  --panel-soft: #252c2f;
+  --input: #202629;
+  --ink: #eff3ef;
+  --muted: #a0aba4;
+  --faint: #727d76;
+  --line: #30383a;
+  --hover: #252c2f;
+  --accent: #a4d986;
+  --accent-soft: #263a2b;
+  --accent-line: #5d8152;
+  --accent-ink: #172117;
+  --user-bubble: #2a3a2d;
+  --warning: #dfbf7e;
+  --warning-soft: #403622;
+  --danger: #e7aaaa;
+  --danger-soft: #40302f;
+  --shadow: #00000055;
 }
 
 *,
@@ -40,7 +86,7 @@ textarea {
 }
 button:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #a9c9b1;
+  outline: 2px solid var(--accent-line);
   outline-offset: 4px;
 }
 button {
@@ -67,15 +113,15 @@ button {
   display: none !important;
 }
 ::selection {
-  background: #48604d;
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #464646;
+  background: var(--faint);
   border-radius: 6px;
 }
 ::-webkit-scrollbar-track {

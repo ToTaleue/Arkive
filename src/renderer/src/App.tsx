@@ -17,6 +17,8 @@ import {
   Plus,
   ShieldCheck,
   SquarePen,
+  Moon,
+  Sun,
   X
 } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
@@ -37,6 +39,10 @@ function App(): React.JSX.Element {
   >('chat')
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 680)
   const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 960)
+  const [theme, setTheme] = useState<'day' | 'night'>(() => {
+    const saved = window.localStorage.getItem('arkive-theme')
+    return saved === 'night' ? 'night' : 'day'
+  })
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
   const [activeId, setActiveId] = useState('welcome')
   const [moleRunning, setMoleRunning] = useState(false)
@@ -98,6 +104,11 @@ function App(): React.JSX.Element {
       moleRunId.current = null
     }
   }, [])
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    window.localStorage.setItem('arkive-theme', theme)
+  }, [theme])
+
   const activeConversation = conversations.find((conversation) => conversation.id === activeId)
   if (!activeConversation) throw new Error('Active conversation is missing')
 
@@ -334,6 +345,32 @@ function App(): React.JSX.Element {
                   ? 'Pi 对话'
                   : '待配置模型'}
         </span>
+        <div className="theme-switcher" aria-label="日间与夜间主题">
+          <button
+            type="button"
+            className={theme === 'day' ? 'active' : ''}
+            aria-pressed={theme === 'day'}
+            title="日间模式"
+            onClick={() => {
+              setTheme('day')
+            }}
+          >
+            <Sun size={13} />
+            <span>日间</span>
+          </button>
+          <button
+            type="button"
+            className={theme === 'night' ? 'active' : ''}
+            aria-pressed={theme === 'night'}
+            title="夜间模式"
+            onClick={() => {
+              setTheme('night')
+            }}
+          >
+            <Moon size={13} />
+            <span>夜间</span>
+          </button>
+        </div>
       </header>
       <div className="workspace">
         <nav className="icon-rail" aria-label="主导航">

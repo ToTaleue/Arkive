@@ -6,13 +6,13 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  background: #191c1a;
+  background: var(--page);
 }
 .video-page {
   max-width: 1000px;
   margin: 0 auto;
   padding: 44px 42px 56px;
-  color: #d7dfd9;
+  color: var(--ink);
 }
 .video-page-heading {
   display: flex;
@@ -25,10 +25,10 @@
   height: 52px;
   display: grid;
   place-items: center;
-  border: 1px solid #405548;
+  border: 1px solid var(--accent-line);
   border-radius: 15px;
-  color: #b1d2b9;
-  background: #2b3b30;
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .video-page h1 {
   font-size: 25px;
@@ -37,23 +37,23 @@
 }
 .video-page-heading p {
   margin-top: 6px;
-  color: #89988e;
+  color: var(--muted);
   font-size: 12px;
 }
 .video-format {
   margin-left: auto;
   padding: 6px 10px;
-  border: 1px solid #39463d;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  color: #a8b9ad;
+  color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
 }
 .video-card {
   margin-top: 18px;
   padding: 24px;
-  background: #202622;
-  border: 1px solid #343d37;
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-radius: 13px;
 }
 .video-section-heading {
@@ -65,7 +65,7 @@
 .video-section-heading > span {
   font-size: 11px;
   font-family: ui-monospace, monospace;
-  color: #7e9c87;
+  color: var(--accent);
 }
 .video-page h2 {
   font-size: 14px;
@@ -79,25 +79,25 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border: 1px dashed #596d5f;
+  border: 1px dashed var(--accent-line);
   border-radius: 10px;
-  background: #242e27;
-  color: #a7c4af;
+  background: var(--panel-soft);
+  color: var(--accent);
 }
 .video-file-picker:hover:not(:disabled) {
-  background: #2a392e;
-  border-color: #91b59a;
+  background: var(--hover);
+  border-color: var(--accent-line);
 }
 .video-file-picker strong {
   margin-top: 4px;
   font-size: 14px;
   font-weight: 500;
-  color: #d5e2d9;
+  color: var(--ink);
 }
 .video-file-picker span,
 .video-hint {
   font-size: 11px;
-  color: #87978c;
+  color: var(--muted);
 }
 .video-hint {
   margin-top: 12px;
@@ -107,12 +107,12 @@
   align-items: center;
   gap: 15px;
   padding: 20px;
-  border: 1px solid #435849;
+  border: 1px solid var(--accent-line);
   border-radius: 10px;
-  background: #26322a;
+  background: var(--panel-soft);
 }
 .video-selected-file > svg {
-  color: #99bba3;
+  color: var(--accent);
   flex-shrink: 0;
 }
 .video-selected-file > div {
@@ -129,12 +129,12 @@
   display: block;
   font-size: 12px;
   margin-top: 5px;
-  color: #a0b3a6;
+  color: var(--muted);
 }
 .video-selected-file p,
 .video-output-path {
   margin-top: 7px;
-  color: #87988d;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -151,20 +151,20 @@
 .video-preset {
   position: relative;
   padding: 18px 16px;
-  border: 1px solid #424b45;
+  border: 1px solid var(--line);
   border-radius: 9px;
   cursor: pointer;
-  background: #252c27;
+  background: var(--panel-soft);
 }
 .video-preset.selected {
-  border-color: #89b094;
-  background: #2c3d31;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 .video-preset input {
   width: 14px;
   height: 14px;
   margin: 0 8px 0 0;
-  accent-color: #aed3b9;
+  accent-color: var(--accent);
   vertical-align: middle;
 }
 .video-preset strong {
@@ -173,7 +173,7 @@
 }
 .video-preset > span {
   display: block;
-  color: #93a399;
+  color: var(--muted);
   margin-top: 11px;
   font-size: 11px;
   line-height: 1.7;
@@ -185,15 +185,15 @@
   gap: 20px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #37423a;
+  border-top: 1px solid var(--line);
 }
 .video-actions p {
   font-size: 12px;
   line-height: 1.9;
-  color: #acbbb1;
+  color: var(--muted);
 }
 .video-actions p > span {
-  color: #7f9285;
+  color: var(--faint);
   font-size: 11px;
 }
 .video-primary-button,
@@ -208,20 +208,20 @@
 }
 .video-primary-button {
   padding: 12px 22px;
-  color: #16231a;
-  background: #afd2b8;
+  color: var(--accent-ink);
+  background: var(--accent);
   font-weight: 600;
 }
 .video-primary-button:hover:not(:disabled) {
-  background: #c1e1c9;
+  background: var(--accent-line);
 }
 .video-text-button {
   padding: 8px 10px;
-  color: #bbd7c3;
-  border: 1px solid #526a59;
+  color: var(--accent);
+  border: 1px solid var(--accent-line);
 }
 .video-text-button:hover:not(:disabled) {
-  background: #344a3b;
+  background: var(--hover);
 }
 .video-page button:disabled,
 .video-presets:disabled {
@@ -230,12 +230,12 @@
 }
 .video-page button:focus-visible,
 .video-preset:focus-within {
-  outline: 2px solid #b4d6bd;
+  outline: 2px solid var(--accent-line);
   outline-offset: 4px;
 }
 .video-running {
   margin-top: 22px;
-  color: #b4cbbd;
+  color: var(--accent);
   font-size: 12px;
 }
 .video-running progress {
@@ -243,11 +243,11 @@
   width: 100%;
   height: 5px;
   margin: 14px 0;
-  accent-color: #a7cdb2;
+  accent-color: var(--accent);
 }
 .video-feedback {
   padding: 18px 22px;
-  border: 1px solid #465449;
+  border: 1px solid var(--line);
   border-radius: 10px;
   margin-top: 18px;
   font-size: 12px;
@@ -261,16 +261,16 @@
   line-height: 1.7;
 }
 .video-progress-details strong {
-  color: #c3dfcc;
+  color: var(--accent);
   font-weight: 500;
 }
 .video-progress-details p {
   flex-basis: 100%;
-  color: #93a399;
+  color: var(--muted);
   font-size: 11px;
 }
 .video-error {
-  color: #edb4ad;
+  color: var(--danger);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 220px;
@@ -280,7 +280,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #c3dfcc;
+  color: var(--accent);
 }
 .video-size-comparison {
   display: flex;
@@ -293,10 +293,10 @@
 }
 .video-size-comparison > svg {
   transform: rotate(-90deg);
-  color: #728e7b;
+  color: var(--muted);
 }
 .video-size-comparison span {
-  color: #8da496;
+  color: var(--muted);
   font-size: 11px;
 }
 .video-size-comparison strong {
@@ -307,7 +307,7 @@
 }
 .video-result > p:not(.video-output-path) {
   font-size: 12px;
-  color: #a3b9ab;
+  color: var(--muted);
   line-height: 1.8;
 }
 .video-result > button {

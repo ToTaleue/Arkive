@@ -5,8 +5,8 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  background: #191c1a;
-  color: #d7dfd9;
+  background: var(--page);
+  color: var(--ink);
 }
 .documents-page {
   max-width: 960px;
@@ -33,10 +33,10 @@
 }
 .documents-page button,
 .documents-page select {
-  border: 1px solid #435347;
+  border: 1px solid var(--accent-line);
   border-radius: 8px;
   padding: 10px 14px;
-  background: #29382d;
+  background: var(--panel-soft);
   color: inherit;
   cursor: pointer;
 }
@@ -45,15 +45,15 @@
   cursor: default;
 }
 .document-tabs button[aria-pressed='true'] {
-  background: #435d49;
+  background: var(--accent-soft);
 }
 .documents-page button:focus-visible,
 .documents-page select:focus-visible {
-  outline: 2px solid #adceab;
+  outline: 2px solid var(--accent-line);
   outline-offset: 3px;
 }
 .document-card {
-  border-top: 1px solid #37443b;
+  border-top: 1px solid var(--line);
   padding: 24px 0;
 }
 .document-select {
@@ -64,7 +64,7 @@
 }
 .document-selected {
   padding: 14px;
-  background: #232b25;
+  background: var(--panel-soft);
   border-radius: 8px;
   margin-bottom: 18px;
 }
@@ -89,14 +89,14 @@
   margin-left: 12px;
 }
 .document-error {
-  color: #ffa7a1;
+  color: var(--danger);
 }
 .document-running {
   position: sticky;
   bottom: 0;
-  background: #29382d;
+  background: var(--panel-soft);
   padding: 12px 18px;
-  border: 1px solid #667d6a;
+  border: 1px solid var(--accent-line);
   border-radius: 8px;
 }
 @media (max-width: 800px) {
