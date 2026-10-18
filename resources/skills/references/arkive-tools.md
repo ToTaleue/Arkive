@@ -25,11 +25,13 @@
 | 图片       | `inspect_image({ inputPath })`  | `compress_image({ inputPath, outputPath, preset?, preserveFormat?, outputFormat? })` | 默认 WebP；仅 JPEG／PNG／WebP 可用 `preserveFormat: true`；其他输入由探测结果决定是否支持 |
 | PDF        | `inspect_pdf({ inputPath })`    | `compress_pdf({ inputPath, outputPath, preset? })`                                   | `lossless`、`deep-lossless`、`balanced`、`size`；保真需求优先无损档位                     |
 | DOCX／PPTX | `inspect_office({ inputPath })` | `compress_office({ inputPath, preset? })`                                            | 原路径整份替换；`quality`、`balanced`、`size`；不接受 `outputPath`、`archive` 或 `tags`   |
-| 其他格式   | 用现有只读工具确认文件身份      | 保留并列为当前未支持项                                                               | 不压缩直接归档尚未开放；普通复制不能代替 Catalog 归档                                     |
+| 其他格式   | 用现有只读工具确认文件身份      | 普通素材用 `archive_path({ inputPath, tags?, moveToArchive? })` 原样归档             | 无需压缩收益；数据库、未知用途文件与场景排除项不自动搬移                                  |
 
 输出目录须已存在，必要时在方案授权范围内调用 `mkdir({ path })`；图片、视频和 PDF 的输出使用新路径并匹配真实格式，保留文件名主体，已有目标不覆盖。现有压缩工具处理单文件，多文件整理通过逐项调用实现，没有目录批量压缩参数。
 
 图片使用 `preserveFormat: true` 时让输出扩展名与输入一致；选择其他输出时使用匹配的扩展名。透明图片转 JPEG 必须先确定背景色再传 `jpegBackground`，否则保留透明格式。体积收益是图片采用条件，`qualityAnalysis` 分数只是参考，低分或评分不可用不能据此宣称工具失败；对外观要求高的用户仍须说明有损处理并由用户验看。根据 `metadataWarnings` 报告无法承载的元数据，不声称保留了全部信息。
+
+`quality` 是编码档位名，不是图片评分硬门槛；当前先采用第一个变小的候选，再给出评分，不能承诺“质量不足一定不会采用”。JPEG 编码参数与 SSIMULACRA2 评分不是同一标尺。用户接受约 80 分时沿用其偏好，不为达到默认参考分自行重跑。
 
 PDF 加密、数字签名和 PDF/A 当前不处理；含表单、批注、附件时不使用 `balanced`／`size`。Office 仅支持普通 DOCX／PPTX 嵌入媒体，不处理旧版 DOC／PPT、宏、签名、加密文档或外链。Office 图片保持格式，嵌入 MP4 使用 H.264 8bit 和受支持的 AAC 音轨；原生 Word／PowerPoint 打开和播放效果需要另行验看。
 
@@ -67,6 +69,12 @@ PDF 加密、数字签名和 PDF/A 当前不处理；含表单、批注、附件
 
 已授权归档的文档，在替换成功后调用 `archive_file({ id: catalog.id, tags })`。归档不是 `compress_office` 的参数。
 
+### 不压缩直接归档
+
+用户授权整批归档时，TXT、表格、压缩包以及无压缩收益的普通文件也需要一起进入 Archive，使用 `archive_path({ inputPath, tags? })` 校验复制、登记和同步标签；不能只做普通 `copy` 后声称已登记。默认保留源文件、不创建额外 Backup。已有压缩记录优先按 ID 归档。
+
+用户明确要求搬过去并保留软链接时，对 `archive_path` 或 `archive_file` 传 `moveToArchive: true`：归档校验后，将内容完全一致的原路径普通文件换为指向 Archive 的软链接；不覆盖不同内容、目录或其他链接。此选项隐含创建入口，默认关闭，检查 `originalLink.status`。内容保存在 Archive，直接归档没有独立 Backup；已有压缩原件 Backup 继续保留。单纯 `keepLinkAtOriginalLocation: true` 仍不搬移原位置文件。原路径指向工作副本时，只在工作副本上留链接。
+
 ### 稍后归档与失败续做
 
 `archive_file({ id, tags? })` 只接受已有压缩记录 ID，不接受任意文件路径。它会核对或重试原件备份，再归档现有输出；其直接返回值是归档条目，检查 `backupStatus`、`archivePath`、`tagStatus`，不要按组合压缩结果的 `archive.status` 解析。
@@ -74,6 +82,8 @@ PDF 加密、数字签名和 PDF/A 当前不处理；含表单、批注、附件
 压缩已完成但备份／归档失败时，保存 `catalog.id`。已有归档授权时用 `archive_file` 按 ID 续做，不能重新编码已经移走的输入。用户只授权压缩时，不能为了重试 Backup 调用会同时归档的 `archive_file`；当前 Agent 未暴露独立备份重试工具，应报告记录 ID 与备份错误，说明可在应用的备份重试入口处理，或在用户另行授权归档后续做。
 
 会话丢失时，使用 `search_archives({ state: "pending", name })` 查找待归档记录，核对路径和名称，不将同名结果自动视为同一来源。未得到 ID 时报告当前状态，避免猜测生成新任务。
+
+写工具抛错且没有结构化结果或记录 ID 时，停止该项并报告错误；不要对同一输入反复调用写工具试运气。允许必要的只读核对，其他已授权且不受影响的文件继续处理。`pending` 搜索只覆盖可查询的待归档结果，空结果不能证明没有失败记录、未发生任何副作用或没有恢复线索；缺少证据时明确状态未知。修复后或用户明确要求重试时，先核对原件、既有输出和记录再决定续做。
 
 标签失败单独列为待同步；已确认标签可通过 `tag_archives` 应用差量。默认保留现有压缩输出和 Backup，不把清空它们纳入归档的默认结束动作。`keepLinkAtOriginalLocation` 默认省略，只在用户要求时启用；软链接不是额外备份，不能据此承诺来源应用仍能正常引用附件。
 

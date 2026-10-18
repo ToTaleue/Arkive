@@ -248,12 +248,13 @@ async function check(): Promise<void> {
       ALTER TABLE catalog_items DROP COLUMN original_link_path;
       ALTER TABLE catalog_items DROP COLUMN original_link_status;
       ALTER TABLE catalog_items DROP COLUMN original_link_error;
+      ALTER TABLE catalog_items DROP COLUMN original_link_replace;
       PRAGMA user_version = 2;`)
     await catalog.close()
     catalog = new Catalog(options)
     setCatalog(catalog)
     await catalog.start()
-    assert.equal(catalog.repo.db.prepare('PRAGMA user_version').get()?.user_version, 4)
+    assert.equal(catalog.repo.db.prepare('PRAGMA user_version').get()?.user_version, 5)
     assert.equal(catalog.get(replacement.catalog.id).outputPath, inPlace)
     assert.ok(catalog.get(replacement.catalog.id).archivePath)
     console.log('PASS: v2 database upgrade preserves existing compression/archive records')

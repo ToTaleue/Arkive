@@ -8,7 +8,7 @@ import {
 } from '../catalog/compression'
 import { createMoleTools } from '../mole/agent-tools'
 import { getCatalog } from '../catalog/service'
-import { archiveFile, tagArchives } from '../catalog/operations'
+import { archiveFile, archivePath, tagArchives } from '../catalog/operations'
 import { normalizeTags } from '../catalog/finder-tags'
 import { compressOfficeInPlace } from '../office-compression/in-place'
 import { inspectImage, inspectVideo, inspectPdf, inspectOffice } from '../processing/operations'
@@ -116,6 +116,34 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       }
     }),
     defineTool({
+      name: 'archive_path',
+      label: '不压缩直接归档',
+      description:
+        '用户授权后，将一个普通文件原样校验复制到 Arkive Archive 并登记、打标签；不要求压缩收益，可用于 TXT、表格、压缩包、无收益文档等混合素材。默认保留原路径文件。用户要求搬过去并保留软链接时传 moveToArchive=true：正式归档校验后，仅将与归档内容一致的原路径文件换为软链接；内容保存在 Archive，不另建 Backup。不能对正在写入的数据库或未知用途文件自动执行。按每个文件调用，检查 archivePath、tagStatus、originalLink；已有路径冲突不覆盖，失败保留恢复记录。重复调用复用相同记录，不重新压缩。',
+      parameters: Type.Object(
+        {
+          inputPath: Type.String({ description: '已授权归档的普通文件绝对路径。' }),
+          tags: Type.Optional(tags),
+          moveToArchive: Type.Optional(
+            Type.Boolean({
+              description: '用户要求搬入归档并在原路径保留软链接时启用；默认只复制归档。'
+            })
+          )
+        },
+        { additionalProperties: false }
+      ),
+      execute: async (_toolCallId, request, signal) => {
+        const result = await archivePath(
+          getCatalog(),
+          request.inputPath,
+          request.tags ?? [],
+          signal,
+          request
+        )
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+      }
+    }),
+    defineTool({
       name: 'archive_file',
       label: '归档与原件备份',
       description:
@@ -123,6 +151,12 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       parameters: Type.Object({
         id: { ...recordId, description: '压缩工具返回的 catalog.id，或检索结果中的 id。' },
         tags: Type.Optional(tags),
+        moveToArchive: Type.Optional(
+          Type.Boolean({
+            description:
+              '用户要求搬过去并留软链接时启用，允许将与归档内容完全一致的原位置文件换为链接，适用于 Office 原位结果；不同内容或其他链接不覆盖。'
+          })
+        ),
         keepLinkAtOriginalLocation: Type.Optional(
           Type.Boolean({
             description:

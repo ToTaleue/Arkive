@@ -8,6 +8,8 @@ export interface CompressionRecord {
 export interface ArchiveOptions {
   /** Opt-in: create an entry in the original folder pointing to the verified archive. */
   keepLinkAtOriginalLocation?: boolean
+  /** Move an unchanged, verified source into Archive and leave a link at its path. */
+  moveToArchive?: boolean
 }
 
 export interface CompressionFollowUp extends ArchiveOptions {

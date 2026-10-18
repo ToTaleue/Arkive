@@ -232,6 +232,7 @@ async function check(): Promise<void> {
       'compress_pdf',
       'search_archives',
       'archive_file',
+      'archive_path',
       'tag_archives',
       'open_archive'
     ])

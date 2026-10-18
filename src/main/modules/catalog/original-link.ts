@@ -1,7 +1,7 @@
-import { lstat, readlink, realpath, symlink } from 'node:fs/promises'
+import { lstat, readlink, realpath, symlink, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { assertSystemWriteAllowed } from '../../system-paths'
-import { hasCode } from './files'
+import { hasCode, hashFile } from './files'
 
 export function originalLinkPath(original: string, output: string): string {
   // A converted file must keep its actual format, e.g. photo.png becomes photo.webp.
@@ -10,11 +10,37 @@ export function originalLinkPath(original: string, output: string): string {
   return join(dirname(original), `${basename(original, extname(original))}${extension}`)
 }
 
-/** Exclusive creation: never unlink or replace an existing directory entry. */
-export async function createOriginalLink(path: string, target: string): Promise<void> {
+/** Exclusive link creation; source replacement requires explicit move intent and equal content. */
+export async function createOriginalLink(
+  path: string,
+  target: string,
+  move = false
+): Promise<void> {
   await assertSystemWriteAllowed(path)
   if ((await realpath(dirname(path))) !== dirname(path)) {
     throw new Error('原目录位置已变化，请核对后重试。')
+  }
+  if (move) {
+    // The caller has already published and verified the formal archive. Only remove
+    // the exact source content it contains; new files and foreign links stay intact.
+    try {
+      const before = await lstat(path)
+      if (before.isFile() && !before.isSymbolicLink()) {
+        if ((await hashFile(path)) !== (await hashFile(target)))
+          throw new Error('原位置文件与归档内容不同，未搬移或覆盖。')
+        const after = await lstat(path)
+        if (
+          before.ino !== after.ino ||
+          before.dev !== after.dev ||
+          before.size !== after.size ||
+          before.mtimeMs !== after.mtimeMs
+        )
+          throw new Error('原位置文件发生变化，未搬移。')
+        await unlink(path)
+      }
+    } catch (error) {
+      if (!hasCode(error, 'ENOENT')) throw error
+    }
   }
   try {
     await symlink(target, path)

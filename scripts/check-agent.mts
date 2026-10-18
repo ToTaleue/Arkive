@@ -67,6 +67,7 @@ const enabledTools = [
   'trash',
   'compress_pdf',
   'archive_file',
+  'archive_path',
   'search_archives',
   'tag_archives',
   'inspect_image',
@@ -132,6 +133,23 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const body = JSON.parse(Buffer.concat(chunks).toString()) as FixtureRequest
     requests.push(body)
     assert.equal(body.stream, true)
+    if (!body.tools) {
+      // Automatic tagging uses a separate, deliberately tool-free Pi completion.
+      const user = body.messages.find((message) => message.role === 'user')
+      assert.ok(user)
+      const payload = JSON.parse(messageText(user)) as { files: { fileId: string }[] }
+      assert.ok(payload.files.length)
+      const content = JSON.stringify({
+        items: payload.files.map((file) => ({ fileId: file.fileId, tags: [] }))
+      })
+      response.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`)
+      response.write(
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`
+      )
+      response.end('data: [DONE]\n\n')
+      return
+    }
     assert.deepEqual(
       body.tools?.map((tool) => tool.function.name).sort(),
       [...enabledTools].sort(),
@@ -273,6 +291,7 @@ try {
   // Exercise the real process/adapter/service/tool chain without scanning the user's Mac.
   const moleDir = resolve(buildDir, 'resources/tools/darwin-arm64/mole')
   await mkdir(moleDir, { recursive: true })
+  await symlink(resolve('resources/skills'), resolve(buildDir, 'resources/skills'), 'dir')
   await writeFile(
     resolve(moleDir, 'mo'),
     `#!${process.execPath}
@@ -795,6 +814,27 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
   assert.match(await callTool('inspect_image', { inputPath: imageInput }), /"width":96/)
   assert.deepEqual(await readFile(imageInput), imageBytes)
   const imageOutput = resolve(workspaceDir, 'compressed.webp')
+  const mixedText = resolve(workspaceDir, 'mixed-material.txt')
+  await writeFile(mixedText, 'TXT needs no compression to enter Archive')
+  const directText = JSON.parse(
+    await callTool('archive_path', {
+      inputPath: mixedText,
+      tags: ['混合素材'],
+      moveToArchive: true
+    })
+  ) as { id: string; archivePath: string; tagStatus: string; originalLink: { status: string } }
+  assert.equal(directText.tagStatus, 'synced')
+  assert.equal(directText.originalLink.status, 'ready')
+  assert.equal(await readFile(mixedText, 'utf8'), 'TXT needs no compression to enter Archive')
+  const directAgain = JSON.parse(
+    await callTool('archive_path', {
+      inputPath: mixedText,
+      tags: ['混合素材'],
+      moveToArchive: true
+    })
+  ) as { id: string }
+  assert.equal(directAgain.id, directText.id)
+  assert.match(await callTool('search_archives', { tags: ['混合素材'] }), /mixed-material/)
   const unavailableBackup = `${currentCatalog.backupRoot}.offline`
   await rename(currentCatalog.backupRoot, unavailableBackup)
   await writeFile(currentCatalog.backupRoot, 'simulate an unavailable backup root')

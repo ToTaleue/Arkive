@@ -74,6 +74,20 @@ export function archiveFile(
   )
 }
 
+/** Direct archiving shares publication, tags, task reporting and restart recovery. */
+export function archivePath(
+  catalog: Catalog,
+  inputPath: string,
+  tags: string[] = [],
+  signal?: AbortSignal,
+  options: ArchiveOptions = {}
+): Promise<ArchiveItem> {
+  signal?.throwIfAborted()
+  return catalog
+    .prepareFileArchive(inputPath)
+    .then((id) => archiveFile(catalog, id, tags, signal, options))
+}
+
 export function retryBackup(
   catalog: Catalog,
   id: string,

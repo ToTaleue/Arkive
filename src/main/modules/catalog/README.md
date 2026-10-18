@@ -8,7 +8,9 @@
 
 归档区提供默认关闭的“在原位置保留访问入口（试用）”开关。勾选后，共用 Catalog 归档流程在正式副本校验成功后调用 Node `symlink`，入口只指向 Archive，不指向 Backup。同格式沿用原路径；格式转换时保留原文件名主体、使用输出扩展名。已有普通文件、目录或其他链接一律不覆盖（包括 Office 原位发布后仍在原路径的压缩文档）；归档照常成功，`originalLink` 单独报告入口失败并可重试。保留原件及当前压缩输出的既有策略不变，本开关不负责清理这些文件，也不承诺额外空间收益。
 
-`CatalogApi.archive(id, tags, { keepLinkAtOriginalLocation: true })`、现有 `archive_file` 及带 `archive=true` 的压缩工具共用该开关，无新增 Agent 工具。入口意图、路径及状态通过数据库 v4 迁移持久化；启动时恢复尚未完成的入口创建，已有相同软链接视为成功，失败不覆盖且保留显式重试。普通软链接不会追踪外部移动／重命名；这轮未增加归档移动、删除及链接自动维护能力。
+`CatalogApi.archive(id, tags, { keepLinkAtOriginalLocation: true })`、`archive_file` 及带 `archive=true` 的压缩工具共用该开关。入口意图、路径及状态通过数据库迁移持久化；启动时恢复尚未完成的入口创建，已有相同软链接视为成功，失败不覆盖且保留显式重试。普通软链接不会追踪外部移动／重命名，尚无链接自动维护能力。
+
+`archive_path({ inputPath, tags?, moveToArchive? })` 支持 TXT、表格、压缩包及无收益文档等普通素材不压缩直接归档，共用 SHA-256 校验、自动标签、Finder 标签和 Catalog 检索；默认复制归档，原文件保留，不另建 Backup。用户明确要求搬过去并留链接时，对 `archive_path` 或 `archive_file` 传 `moveToArchive: true`：正式归档校验后，仅将与归档内容一致的原路径普通文件换为链接，Office 原位结果也适用；不同内容、目录与其他链接不覆盖。既有压缩原件 Backup 保留。该搬移意图用 v5 的 `original_link_replace` 持久化，重启继续创建入口。直接归档没有额外 Backup，内容原样保存在 Archive。微信独立图片仍留原位，数据库、索引与未知加密文件不随混合素材搬移。
 
 Agent 有两种共用入口：`compress_image`／`compress_video`／`compress_pdf` 接受可选 `archive: true` 和 `tags`，在同一次调用内完成压缩、备份及归档；普通压缩省略该选项。`archive_file({ id, tags? })` 对已有压缩记录执行同一归档流程，并可核对／重试未完成的原件备份，不重新编码、不接受任意文件路径。无体积收益时保留原件原位的默认规则继续有效。
 
@@ -24,7 +26,7 @@ Agent 有两种共用入口：`compress_image`／`compress_video`／`compress_pd
 
 Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation 的 `NSURLTagNamesKey` 读写；固定系统工具调用仍经过 `src/execution/process.ts`，不拼接 shell。首次归档继承原件标签，应用编辑提交增删差量，重读当前 Finder 标签后合并。写入核对失败保留待重试差量。启动、目录事件、窗口激活和手动刷新核对 Finder 标签，包括删除；只同步归档副本，不把后续修改传播到备份或输出。
 
-“我的归档”支持原文件名／输出文件名子串匹配、标签 AND、源修改日期和归档日期（本地日期、含起始日和结束日）、每页 50 条、打开及 Finder 定位。SQLite `lower()` 默认只保证 ASCII 大小写转换。无正文、OCR、语义搜索或文件移动／重命名同步；不压缩直接归档未开放。
+“我的归档”支持原文件名／输出文件名子串匹配、标签 AND、源修改日期和归档日期（本地日期、含起始日和结束日）、每页 50 条、打开及 Finder 定位。SQLite `lower()` 默认只保证 ASCII 大小写转换。无正文、OCR、语义搜索或外部文件移动／重命名同步；不压缩直接归档已开放 Agent 入口，尚无独立的拖拽导入界面。
 
 记录状态可切换为“待归档压缩结果”，对应 `query({ state: 'pending' })`；默认 `archived` 保留原有查询语义。只展示已完成压缩且尚未完成归档的记录，Office 还须完成原路径发布；可直接按原记录归档或重试，无需重新压缩。Agent 的 `search_archives` 使用相同状态参数，`open_archive({ id, action: 'open' | 'reveal' })` 复用归档路径校验，不能打开未归档记录。
 

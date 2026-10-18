@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { watch, type FSWatcher } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { openDatabase } from '../../storage/database'
@@ -211,6 +211,41 @@ export class Catalog {
   get(id: string): ArchiveItem {
     return this.repo.item(id)
   }
+
+  /** Register ordinary files without an encoder; publication still uses the shared archive flow. */
+  prepareFileArchive(inputPath: string): Promise<string> {
+    return this.exclusive(async () => {
+      const path = join(await realpath(dirname(resolve(inputPath))), basename(inputPath))
+      await assertSystemWriteAllowed(path, true)
+      // A retry after moving the file may encounter our own link. Reuse its record,
+      // never resolve the link into Archive and register the managed file again.
+      const previous = this.repo.db
+        .prepare(
+          `SELECT id FROM catalog_items WHERE original_path = ? AND output_path = ?
+          AND compression_status = 'ready' ORDER BY rowid DESC LIMIT 1`
+        )
+        .get(path, path)
+      if (previous) {
+        const row = this.repo.get(String(previous.id))
+        try {
+          if ((await hashFile(path)) === row.output_hash) return row.id
+        } catch {
+          if (row.original_link_path && row.archive_status === 'ready') return row.id
+        }
+      }
+      await fileInfo(path) // Reject directories and links supplied as new inputs.
+      const id = await this.beginCompression(path, path)
+      const row = this.repo.get(id)
+      this.repo.update(id, {
+        compression_status: 'ready',
+        output_hash: row.source_hash,
+        output_bytes: row.source_size,
+        backup_status: 'skipped'
+      })
+      this.changed()
+      return id
+    })
+  }
   query(query: CatalogQuery): ReturnType<CatalogRepository['query']> {
     return this.repo.query(query)
   }
@@ -228,7 +263,12 @@ export class Catalog {
     )
     const target = row.archive_path ?? destination(directory, basename(row.output_path), id)
     this.repo.update(id, { archive_path: target, archive_status: 'copying' })
-    await copyVerified(row.output_path, target, row.output_hash)
+    await copyVerified(
+      row.output_path,
+      target,
+      row.output_hash,
+      row.output_path === row.original_path
+    )
     this.repo.update(id, { archive_status: 'ready', archived_at: Date.now() })
   }
 
@@ -239,7 +279,7 @@ export class Catalog {
       const target = await this.archivePath(id)
       if (!row.output_hash || (await hashFile(target)) !== row.output_hash)
         throw new Error('归档内容已变化，未创建原位置入口。')
-      await createOriginalLink(row.original_link_path, target)
+      await createOriginalLink(row.original_link_path, target, Boolean(row.original_link_replace))
       this.repo.update(id, { original_link_status: 'ready', original_link_error: null })
     } catch (error) {
       this.repo.update(id, {
@@ -255,14 +295,17 @@ export class Catalog {
       typeof options.keepLinkAtOriginalLocation !== 'boolean'
     )
       throw new Error('原位置入口选项必须为布尔值。')
+    if (options.moveToArchive !== undefined && typeof options.moveToArchive !== 'boolean')
+      throw new Error('搬入归档选项必须为布尔值。')
     const chosen = normalizeTags(tags)
     return this.exclusive(async () => {
       const before = this.repo.get(id)
-      if (options.keepLinkAtOriginalLocation) {
+      if (options.keepLinkAtOriginalLocation || options.moveToArchive) {
         this.repo.update(id, {
           original_link_path: originalLinkPath(before.original_path, before.output_path),
           original_link_status: 'pending',
-          original_link_error: null
+          original_link_error: null,
+          original_link_replace: options.moveToArchive ? 1 : before.original_link_replace
         })
       }
       if (

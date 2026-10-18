@@ -1,7 +1,7 @@
 // Real Electron UI, IPC, Pi loop and Mole adapter; only model HTTP and Mole binary are fixtures.
 import assert from 'node:assert/strict'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -44,6 +44,7 @@ exit 0
     { mode: 0o755 }
   )
   const oldGetAppPath = app.getAppPath.bind(app)
+  await symlink(resolve('resources/skills'), join(moleRoot, 'resources/skills'), 'dir')
   app.getAppPath = () => moleRoot
   let fixtureFailure: Error | undefined
   let releaseSummary: (() => void) | undefined

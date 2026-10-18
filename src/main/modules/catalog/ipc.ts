@@ -56,10 +56,17 @@ function archiveOptions(value: unknown): ArchiveOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('无效的归档选项。')
   const request = value as Record<string, unknown>
-  if (request.keepLinkAtOriginalLocation === undefined) return {}
-  if (typeof request.keepLinkAtOriginalLocation !== 'boolean')
+  if (
+    request.keepLinkAtOriginalLocation !== undefined &&
+    typeof request.keepLinkAtOriginalLocation !== 'boolean'
+  )
     throw new Error('原位置入口选项必须为布尔值。')
-  return { keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation }
+  if (request.moveToArchive !== undefined && typeof request.moveToArchive !== 'boolean')
+    throw new Error('搬入归档选项必须为布尔值。')
+  return {
+    keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation,
+    moveToArchive: request.moveToArchive
+  }
 }
 
 export function registerCatalogIpc(catalog: Catalog): (contents: WebContents) => void {

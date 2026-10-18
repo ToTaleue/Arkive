@@ -29,6 +29,7 @@ export interface CatalogRow {
   original_link_path: string | null
   original_link_status: 'none' | 'pending' | 'ready' | 'error'
   original_link_error: string | null
+  original_link_replace: number
 }
 
 export class CatalogRepository {
