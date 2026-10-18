@@ -68,7 +68,6 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
         id: randomUUID(),
         name: basename(path),
         path,
-        sizeBytes: info.size,
         ...inspection
       }
       state.selection = selected

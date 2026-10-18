@@ -22,6 +22,20 @@ function resultText(value: unknown): string {
     : ''
 }
 
+function formatBytes(value: unknown): string | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined
+  if (value < 1024) return `${String(value)} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let size = value
+  let unit = units[0]
+  for (const candidate of units) {
+    size /= 1024
+    unit = candidate
+    if (size < 1024 || candidate === units.at(-1)) break
+  }
+  return `${size.toFixed(size >= 10 ? 1 : 2)} ${unit}`
+}
+
 const nativeFileTools = new Set(['read', 'grep', 'find', 'ls'])
 
 function nativeToolSummary(name: string, raw: string): string | undefined {
@@ -129,6 +143,33 @@ export function toolResult(
     return {
       title: warnings > 0 ? 'PDF 探测完成（有警告）' : 'PDF 探测完成',
       summary: `${typeof details.pageCount === 'number' ? `检测到 ${String(details.pageCount)} 页。` : '已返回 PDF 结构信息。'}${warnings > 0 ? `qpdf 返回 ${String(warnings)} 条结构警告，结果仍可用于审阅。` : '未报告结构警告。'}`,
+      details: boundedText(raw)
+    }
+  }
+  if (name === 'inspect_video') {
+    const size = formatBytes(details.sizeBytes)
+    const audioCodecs = Array.isArray(details.audioCodecs)
+      ? details.audioCodecs.filter((value): value is string => typeof value === 'string')
+      : []
+    const removedContents = Array.isArray(details.removedContents)
+      ? details.removedContents.filter((value): value is string => typeof value === 'string')
+      : []
+    const facts = [
+      size ? `文件 ${size}。` : '',
+      typeof details.width === 'number' && typeof details.height === 'number'
+        ? `${String(details.width)}×${String(details.height)}。`
+        : '',
+      typeof details.duration === 'number' ? `时长 ${String(details.duration)} 秒。` : '',
+      typeof details.codec === 'string' ? `视频编码 ${details.codec}。` : '',
+      typeof details.bitDepth === 'number' ? `${String(details.bitDepth)}bit。` : '',
+      `音频 ${String(typeof details.audioCount === 'number' ? details.audioCount : audioCodecs.length)} 条${audioCodecs.length > 0 ? `（${audioCodecs.join('、')}）` : ''}。`,
+      removedContents.length > 0
+        ? `压缩时将移除：${removedContents.join('、')}。`
+        : '未发现会被移除的附加内容。'
+    ].filter(Boolean)
+    return {
+      title: '视频探测完成',
+      summary: facts.join(' '),
       details: boundedText(raw)
     }
   }

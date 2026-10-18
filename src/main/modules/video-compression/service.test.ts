@@ -88,6 +88,9 @@ async function check(): Promise<void> {
     const originalHash = createHash('sha256')
       .update(await readFile(source))
       .digest('hex')
+    const sourceInspection = await inspectVideo(source)
+    assert.equal(sourceInspection.sizeBytes, (await stat(source)).size)
+    assert.deepEqual(sourceInspection.audioCodecs, ['aac'])
     for (const compatibility of [false, true]) {
       for (const preset of ['quality', 'balanced', 'size'] as const) {
         const outputPath = join(directory, `${compatibility ? 'h264' : 'hevc'}-${preset}.mp4`)

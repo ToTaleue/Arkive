@@ -101,6 +101,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function probeVideo(path: string, signal?: AbortSignal): Promise<VideoInfo> {
+  const inputStat = await stat(path)
+  if (!inputStat.isFile()) throw new Error('输入须为普通视频文件。')
   const result = await runBundledTool(
     'ffprobe',
     ['-v', 'error', '-show_streams', '-show_format', '-show_chapters', '-of', 'json', path],
@@ -178,6 +180,7 @@ async function probeVideo(path: string, signal?: AbortSignal): Promise<VideoInfo
   )
     removedContents.push('其他附加流')
   return {
+    sizeBytes: inputStat.size,
     videoIndex: video.index,
     width: video.width,
     height: video.height,
@@ -200,6 +203,7 @@ async function probeVideo(path: string, signal?: AbortSignal): Promise<VideoInfo
         ? [{ option, value }]
         : []
     }),
+    audioCodecs: audios.map((audio) => String(audio.codec_name)),
     removedContents,
     metadata: {
       format: retainedMetadata(isRecord(data.format) ? data.format.tags : undefined),
@@ -212,9 +216,28 @@ async function probeVideo(path: string, signal?: AbortSignal): Promise<VideoInfo
 export async function inspectVideo(path: string, signal?: AbortSignal): Promise<VideoInspection> {
   signal?.throwIfAborted()
   if (!isAbsolute(path) || path.includes('\0')) throw new Error('视频路径须为本地绝对路径。')
-  const { width, height, duration, codec, bitDepth, audioCount, removedContents } =
-    await probeVideo(path, signal)
-  return { width, height, duration, codec, bitDepth, audioCount, removedContents }
+  const {
+    sizeBytes,
+    width,
+    height,
+    duration,
+    codec,
+    bitDepth,
+    audioCount,
+    audioCodecs,
+    removedContents
+  } = await probeVideo(path, signal)
+  return {
+    sizeBytes,
+    width,
+    height,
+    duration,
+    codec,
+    bitDepth,
+    audioCount,
+    audioCodecs,
+    removedContents
+  }
 }
 
 /** 消费两路输出；进程出错或取消后等 close，再允许清理临时文件。 */

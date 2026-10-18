@@ -65,6 +65,31 @@ void test('inspect_pdf summaries preserve warning state and page count', () => {
   assert.match(result.summary, /1 条结构警告/)
 })
 
+void test('inspect_video summaries include audio codecs and discarded contents', () => {
+  const result = toolResult(
+    'inspect_video',
+    {
+      content: [{ type: 'text', text: '{}' }],
+      details: {
+        sizeBytes: 4_459_702,
+        width: 3840,
+        height: 2160,
+        duration: 28.98,
+        codec: 'hevc',
+        bitDepth: 10,
+        audioCount: 1,
+        audioCodecs: ['aac'],
+        removedContents: ['DJI 附加数据', '时间码', '封面／缩略图']
+      }
+    },
+    false
+  )
+  assert.equal(result.title, '视频探测完成')
+  assert.match(result.summary, /4\.25 MB/)
+  assert.match(result.summary, /aac/)
+  assert.match(result.summary, /DJI 附加数据/)
+})
+
 void test('a failed model summary still has a local execution summary', () => {
   const summary = executionFallback({
     phase: 'summary-error',

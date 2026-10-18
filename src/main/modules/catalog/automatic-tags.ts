@@ -60,6 +60,7 @@ async function collectMetadata(
       add(metadata, 'codec', video.codec)
       add(metadata, 'bitDepth', video.bitDepth)
       add(metadata, 'audioCount', video.audioCount)
+      add(metadata, 'audioCodecs', video.audioCodecs)
       add(metadata, 'removedContents', video.removedContents)
     } else if (extension === '.pdf') {
       const pdf = await inspectPdf({ inputPath }, signal)

@@ -41,19 +41,20 @@ export interface VideoCompressionProgress {
   remainingSeconds: number | null
 }
 export interface VideoInspection {
+  sizeBytes: number
   width: number
   height: number
   duration: number
   codec: string
   bitDepth: 8 | 10
   audioCount: number
+  audioCodecs: string[]
   removedContents: string[]
 }
 export interface SelectedVideo extends VideoInspection {
   id: string
   name: string
   path: string
-  sizeBytes: number
 }
 export interface VideoStartRequest {
   runId: string
