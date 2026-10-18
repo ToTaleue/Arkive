@@ -120,10 +120,17 @@ function extractFeatures(document: JsonRecord, hasPdfA: boolean): PdfFeatures {
   const acroform = isRecord(document.acroform) ? document.acroform : undefined
   const attachments = isRecord(document.attachments) ? document.attachments : undefined
   const fields = acroform?.fields
+  // qpdf reports an empty /AcroForm dictionary as hasacroform=true. Treat it
+  // as a real form only when fields, widgets, or XFA data are present.
   const hasForms =
-    acroform?.hasacroform === true ||
     (Array.isArray(fields) && fields.length > 0) ||
-    hasNestedEntry(document, (key) => key === '/AcroForm')
+    hasNestedEntry(
+      document,
+      (key, value) =>
+        (key === '/FT' && value !== '/Sig') ||
+        (key === '/Subtype' && value === '/Widget') ||
+        key === '/XFA'
+    )
   const hasSignatures = hasNestedEntry(
     document,
     (key, value) => (key === '/FT' && value === '/Sig') || (key === '/Type' && value === '/Sig')

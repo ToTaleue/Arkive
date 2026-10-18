@@ -5,7 +5,11 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { runBundledTool } from '../../../execution/process'
 import { compressPdf, inspectPdf } from './service'
-import { writePdfFixture } from './test-fixture'
+import {
+  writePdfFixture,
+  writePdfFixtureWithEmptyAcroForm,
+  writePdfFixtureWithTextField
+} from './test-fixture'
 
 async function makePdf(
   path: string,
@@ -26,6 +30,10 @@ async function check(): Promise<void> {
     const inputPath = await makePdf(directory, 'text', { image: false, text: true })
     const scannedPath = await makePdf(directory, 'scanned', { image: true, text: false })
     const mixedPath = await makePdf(directory, 'mixed', { image: true, text: true })
+    const emptyAcroFormPath = join(directory, 'empty-acroform.pdf')
+    await writePdfFixtureWithEmptyAcroForm(emptyAcroFormPath)
+    const textFieldPath = join(directory, 'text-field.pdf')
+    await writePdfFixtureWithTextField(textFieldPath)
     const sourceHash = createHash('sha256')
       .update(await readFile(inputPath))
       .digest('hex')
@@ -33,6 +41,27 @@ async function check(): Promise<void> {
     assert.equal(inspection.pageCount, 1)
     assert.equal(inspection.features.encrypted, false)
     assert.equal(inspection.features.hasSignatures, false)
+
+    const emptyAcroFormInspection = await inspectPdf({ inputPath: emptyAcroFormPath })
+    assert.equal(emptyAcroFormInspection.features.hasForms, false)
+    const emptyAcroFormOutput = join(directory, 'empty-acroform-compressed.pdf')
+    const emptyAcroFormResult = await compressPdf({
+      inputPath: emptyAcroFormPath,
+      outputPath: emptyAcroFormOutput,
+      preset: 'balanced'
+    })
+    assert.equal(emptyAcroFormResult.validation.featuresPreserved, true)
+
+    const textFieldInspection = await inspectPdf({ inputPath: textFieldPath })
+    assert.equal(textFieldInspection.features.hasForms, true)
+    await assert.rejects(
+      compressPdf({
+        inputPath: textFieldPath,
+        outputPath: join(directory, 'text-field-compressed.pdf'),
+        preset: 'balanced'
+      }),
+      /暂不支持安全重写的内容：表单/
+    )
 
     const warningPath = join(directory, 'recoverable-xref-warning.pdf')
     const warningBytes = Buffer.from(

@@ -16,7 +16,7 @@ const result = await compressPdf({
 - `size` 使用 qpdf 做无损结构优化并使用 Flate 压缩等级 9。
 - 输出始终写入同目录临时文件，通过 qpdf 结构检查、页数检查和特征检查后，以不覆盖方式发布。
 - 原件内容会保留；通过共用归档入口执行且有体积收益时，原件会在校验后备份到 Arkive Backup。输出没有体积收益时仍发布并返回 `status: 'no-savings'`。
-- 加密 PDF、数字签名和 PDF/A 暂不处理；`balanced` 与 `size` 暂不处理表单、批注和附件。
+- 加密 PDF、数字签名和 PDF/A 暂不处理；`balanced` 与 `size` 暂不处理真实表单字段、Widget、XFA、批注和附件。只带空 `/AcroForm` 字典而没有字段或 Widget 的 PDF 可以正常压缩。
 - 支持 `AbortSignal`，取消后清理临时目录，不发布未完成输出。
 
 验证：
