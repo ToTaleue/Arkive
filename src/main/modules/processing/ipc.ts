@@ -21,6 +21,8 @@ import type { DuplicateScanResult } from '../../../shared/contracts/duplicates'
 import { inspectPdf, inspectOffice } from './operations'
 import { compressOfficeInPlace } from '../office-compression/in-place'
 import { compressPdfAndBackup } from '../catalog/compression'
+import { archiveFile } from '../catalog/operations'
+import { getCatalog } from '../catalog/service'
 import { TaskCancelled, TaskFailure } from '../../tasks/service'
 import { scanDuplicates } from '../duplicate-detection/operations'
 import { cloneDuplicates } from '../clone-deduplication/operations'
@@ -52,6 +54,7 @@ function start(value: unknown): DocumentStart {
     !['lossless', 'deep-lossless', 'quality', 'balanced', 'size'].includes(
       String(request.preset)
     ) ||
+    (request.archive !== undefined && typeof request.archive !== 'boolean') ||
     (request.replaceConfirmed !== undefined && typeof request.replaceConfirmed !== 'boolean')
   )
     throw new Error('无效的文档参数。')
@@ -59,7 +62,8 @@ function start(value: unknown): DocumentStart {
     runId: request.runId,
     fileId: request.fileId,
     preset: request.preset as DocumentStart['preset'],
-    replaceConfirmed: request.replaceConfirmed
+    replaceConfirmed: request.replaceConfirmed,
+    archive: request.archive
   }
 }
 
@@ -177,7 +181,12 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
           result = {
             kind: 'pdf',
             value: await compressPdfAndBackup(
-              { inputPath: selected.path, outputPath: destination.filePath, preset },
+              {
+                inputPath: selected.path,
+                outputPath: destination.filePath,
+                preset,
+                ...(request.archive ? { archive: true } : {})
+              },
               controller.signal,
               request.runId
             )
@@ -196,6 +205,41 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
               controller.signal,
               request.runId
             )
+          }
+        }
+        if (
+          request.archive &&
+          result.kind === 'office' &&
+          result.value.catalog &&
+          result.value.replacementStatus !== 'error'
+        ) {
+          try {
+            result = {
+              kind: 'office',
+              value: {
+                ...result.value,
+                archive: {
+                  status: 'ready',
+                  item: await archiveFile(
+                    getCatalog(),
+                    result.value.catalog.id,
+                    [],
+                    controller.signal
+                  )
+                }
+              }
+            }
+          } catch (error) {
+            result = {
+              kind: 'office',
+              value: {
+                ...result.value,
+                archive: {
+                  status: 'error',
+                  error: error instanceof Error ? error.message : String(error)
+                }
+              }
+            }
           }
         }
         // A commit that finished after a cancellation request remains a completed operation.

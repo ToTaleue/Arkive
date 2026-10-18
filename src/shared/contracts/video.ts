@@ -1,4 +1,4 @@
-import type { CompressionRecord } from './catalog'
+import type { ArchiveAttempt, CompressionRecord } from './catalog'
 
 export type VideoCompressionPreset = 'quality' | 'balanced' | 'size'
 
@@ -12,6 +12,7 @@ export interface VideoCompressionRequest {
 
 export interface VideoCompressionResult {
   catalog?: CompressionRecord
+  archive?: ArchiveAttempt
   status: 'compressed' | 'no-savings'
   outputPath: string
   inputBytes: number
@@ -57,6 +58,8 @@ export interface VideoStartRequest {
   runId: string
   fileId: string
   preset: VideoCompressionPreset
+  /** Archive the verified result after compression when explicitly selected in the UI. */
+  archive?: boolean
 }
 export type VideoCompressionOutcome =
   | { status: 'completed'; result: VideoCompressionResult }

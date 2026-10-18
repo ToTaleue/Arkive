@@ -610,6 +610,7 @@ async function main() {
   await check('ui-compress-real', '真实前端文件选择→图片压缩→原件备份', async () => {
     dialog.showSaveDialog = () =>
       Promise.resolve({ canceled: false, filePath: join(root, 'ui-compressed.webp') })
+    await evaluate("document.querySelector('.compression-confirm input').click()")
     await evaluate("document.querySelector('.compression-primary').click()")
     await wait(
       () =>
@@ -625,6 +626,17 @@ async function main() {
     )
     assert.equal(await exists(image), false)
     assert.equal(await exists(join(root, 'ui-compressed.webp')), true)
+    assert.equal(
+      await evaluate(
+        "document.querySelector('.compression-status').textContent.includes('已归档')"
+      ),
+      true
+    )
+    const archived = catalog
+      .query({ state: 'archived' })
+      .items.find((item) => item.outputPath === join(root, 'ui-compressed.webp'))
+    assert.ok(archived?.archivePath)
+    assert.equal(await exists(archived.archivePath), true)
     await screenshot('ui-compression.png')
   })
   await check('sqlite-restart', '关闭并重开数据库后压缩记录和失败恢复状态保留', async () => {

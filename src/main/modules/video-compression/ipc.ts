@@ -30,18 +30,16 @@ interface WindowState {
 }
 
 function isStartRequest(value: unknown): value is VideoStartRequest {
+  if (!value || typeof value !== 'object') return false
+  const request = value as Record<string, unknown>
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'runId' in value &&
-    typeof value.runId === 'string' &&
-    /^[\w-]{1,100}$/.test(value.runId) &&
-    'fileId' in value &&
-    typeof value.fileId === 'string' &&
-    'preset' in value &&
-    typeof value.preset === 'string' &&
-    ['quality', 'balanced', 'size'].includes(value.preset) &&
-    !('compatibility' in value)
+    typeof request.runId === 'string' &&
+    /^[\w-]{1,100}$/.test(request.runId) &&
+    typeof request.fileId === 'string' &&
+    typeof request.preset === 'string' &&
+    ['quality', 'balanced', 'size'].includes(request.preset) &&
+    (request.archive === undefined || typeof request.archive === 'boolean') &&
+    !('compatibility' in request)
   )
 }
 
@@ -145,7 +143,8 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
           {
             inputPath: input,
             outputPath: output,
-            preset: request.preset
+            preset: request.preset,
+            ...(request.archive ? { archive: true } : {})
           },
           controller.signal,
           (progress) => {

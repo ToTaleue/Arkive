@@ -1,4 +1,4 @@
-import type { CompressionRecord } from './catalog'
+import type { ArchiveAttempt, CompressionRecord } from './catalog'
 import type { ImageCompressionPreset, ImageQualityAnalysis } from './image'
 
 export type OfficeFormat = 'docx' | 'pptx'
@@ -42,4 +42,5 @@ export interface OfficeReplacementResult extends OfficeCompressionResult {
   replacementStatus: 'replaced' | 'unchanged' | 'error'
   replacementError?: string
   catalog?: CompressionRecord
+  archive?: ArchiveAttempt
 }

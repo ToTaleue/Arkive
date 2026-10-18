@@ -1,4 +1,4 @@
-import type { CompressionRecord } from './catalog'
+import type { ArchiveAttempt, CompressionRecord } from './catalog'
 
 export type ImageOutputFormat = 'webp' | 'jpeg' | 'png'
 export type ImageCompressionPreset = 'quality' | 'balanced' | 'size'
@@ -37,6 +37,8 @@ export interface SelectedImage extends ImageInspection {
 export interface ImageStartRequest {
   runId: string
   fileId: string
+  /** Archive the verified result after compression when explicitly selected in the UI. */
+  archive?: boolean
   outputFormat?: ImageOutputFormat
   preserveFormat?: boolean
   preset?: ImageCompressionPreset
@@ -46,6 +48,7 @@ export interface ImageStartRequest {
 
 export interface ImageCompressionResult {
   catalog?: CompressionRecord
+  archive?: ArchiveAttempt
   status: 'compressed' | 'no-savings'
   inputPath: string
   outputPath: string

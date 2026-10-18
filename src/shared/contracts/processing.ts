@@ -18,6 +18,8 @@ export interface DocumentStart {
   fileId: string
   preset: 'lossless' | 'deep-lossless' | 'quality' | 'balanced' | 'size'
   replaceConfirmed?: boolean
+  /** Archive the verified result after compression when explicitly selected in the UI. */
+  archive?: boolean
 }
 export const processingChannels = {
   select: 'processing:select',

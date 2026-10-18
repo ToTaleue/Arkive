@@ -77,6 +77,7 @@ export function CompressionPage(): React.JSX.Element {
   const [preset, setPreset] = useState<'quality' | 'balanced' | 'size'>('balanced')
   const [imageOutput, setImageOutput] = useState<'webp' | 'original'>('webp')
   const [imageQuality, setImageQuality] = useState(80)
+  const [archiveAfterCompression, setArchiveAfterCompression] = useState(false)
   const [officeReplaceConfirmed, setOfficeReplaceConfirmed] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -172,9 +173,22 @@ export function CompressionPage(): React.JSX.Element {
     try {
       if (item.kind === 'video') {
         const selected = await api.video.selectPath(item.path)
-        const outcome = await api.video.compress({ runId, fileId: selected.id, preset })
+        const outcome = await api.video.compress({
+          runId,
+          fileId: selected.id,
+          preset,
+          ...(archiveAfterCompression ? { archive: true } : {})
+        })
         if (outcome.status === 'completed') {
-          updateItem(item.id, { status: 'done', message: '压缩完成 · 原件已保留' })
+          updateItem(item.id, {
+            status: 'done',
+            message:
+              outcome.result.archive?.status === 'ready'
+                ? '压缩完成 · 已归档'
+                : outcome.result.archive?.status === 'error'
+                  ? `压缩完成 · 归档失败：${outcome.result.archive.error}`
+                  : '压缩完成 · 原件已保留'
+          })
           return 'done'
         }
         if (outcome.status === 'cancelled') {
@@ -190,12 +204,21 @@ export function CompressionPage(): React.JSX.Element {
           fileId: selected.id,
           preset,
           quality: imageQuality,
+          ...(archiveAfterCompression ? { archive: true } : {}),
           ...(imageOutput === 'original'
             ? { preserveFormat: true }
             : { outputFormat: 'webp' as const })
         })
         if (outcome.status === 'completed') {
-          updateItem(item.id, { status: 'done', message: '压缩完成 · 原件已保留' })
+          updateItem(item.id, {
+            status: 'done',
+            message:
+              outcome.result.archive?.status === 'ready'
+                ? '压缩完成 · 已归档'
+                : outcome.result.archive?.status === 'error'
+                  ? `压缩完成 · 归档失败：${outcome.result.archive.error}`
+                  : '压缩完成 · 原件已保留'
+          })
           return 'done'
         }
         if (outcome.status === 'cancelled') {
@@ -210,10 +233,20 @@ export function CompressionPage(): React.JSX.Element {
           runId,
           fileId: selected.id,
           preset: item.kind === 'pdf' ? (preset === 'quality' ? 'balanced' : preset) : preset,
+          ...(archiveAfterCompression ? { archive: true } : {}),
           ...(item.kind === 'office' ? { replaceConfirmed: officeReplaceConfirmed } : {})
         })
         if (outcome.status === 'completed') {
-          updateItem(item.id, { status: 'done', message: '压缩完成 · 原件已处理' })
+          const archive = outcome.result.value.archive
+          updateItem(item.id, {
+            status: 'done',
+            message:
+              archive?.status === 'ready'
+                ? '压缩完成 · 已归档'
+                : archive?.status === 'error'
+                  ? `压缩完成 · 归档失败：${archive.error}`
+                  : '压缩完成 · 原件已处理'
+          })
           return 'done'
         }
         if (outcome.status === 'cancelled') {
@@ -403,6 +436,18 @@ export function CompressionPage(): React.JSX.Element {
             />
             <output>{imageQuality}</output>
           </span>
+        </label>
+        <label className="compression-confirm">
+          <input
+            type="checkbox"
+            checked={archiveAfterCompression}
+            disabled={busy}
+            onChange={(event) => {
+              setArchiveAfterCompression(event.target.checked)
+            }}
+          />
+          <span>压缩完成后归档</span>
+          <small>复制压缩结果到 Arkive Archive；完成后可在“我的归档”添加标签。</small>
         </label>
       </section>
 
