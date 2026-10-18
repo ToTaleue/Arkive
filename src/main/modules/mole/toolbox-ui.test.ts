@@ -6,6 +6,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { registerMoleIpc } from './ipc'
 import { tasks } from '../../tasks/service'
 import { registerTasksIpc } from '../../tasks/ipc'
+import type { AgentRequest } from '../../../shared/contracts/agent'
 
 app.on('window-all-closed', () => {})
 async function check(): Promise<void> {
@@ -71,7 +72,12 @@ async function check(): Promise<void> {
   app.setPath('userData', join(root, 'electron-user-data'))
   await app.whenReady()
   registerMoleIpc()
-  ipcMain.handle('agent:status', () => ({ configured: false, model: '' }))
+  const agentRequests: AgentRequest[] = []
+  ipcMain.handle('agent:status', () => ({ configured: true, model: 'local-fixture' }))
+  ipcMain.handle('agent:send', (_event, request: AgentRequest) => {
+    agentRequests.push(request)
+    return { status: 'completed', text: '已收到只读检查请求，等待后续确认。' }
+  })
   ipcMain.handle('catalog:query', () => ({ items: [], total: 0, tags: [] }))
   ipcMain.handle('processing:select-folder', () => root)
   const window = new BrowserWindow({
@@ -137,7 +143,7 @@ async function check(): Promise<void> {
     )
     assert.match(String(await text('空间分析')), /未知/)
     await screenshot('analyze-complete')
-    await click('Projects', section('空间分析'))
+    await click('继续分析', section('空间分析'))
     await until(`${section('空间分析')}.innerText.includes('此位置没有报告子项')`)
     await evaluate(
       `${section('空间分析')}.querySelectorAll('.mole-tool-breadcrumb button')[${String(root.split('/').filter(Boolean).length)}].click()`
@@ -145,10 +151,13 @@ async function check(): Promise<void> {
     await until(`${section('空间分析')}.querySelectorAll('.mole-analysis-row').length === 3`)
     await click('大文件', section('空间分析'))
     await until(`${section('空间分析')}.querySelectorAll('.mole-analysis-row').length === 1`)
+    assert.match(String(await text('空间分析')), /在 Finder 中显示/)
     await writeFile(join(root, 'partial'), '')
     await click('重新分析', section('空间分析'))
     await until(`${section('空间分析')}.innerText.includes('分析结果不完整')`)
     assert.match(String(await text('空间分析')), /至少 9.00 MB/)
+    assert.match(String(await text('空间分析')), /实际总占用可能更大/)
+    assert.match(String(await text('空间分析')), /仅分析，未清理任何文件/)
     await rm(join(root, 'partial'))
     await writeFile(join(root, 'hold'), '')
     await click('重新分析', section('空间分析'))
@@ -163,6 +172,51 @@ async function check(): Promise<void> {
     await until(`${section('空间分析')}.innerText.includes('分析已完成')`)
     console.log(
       'PASS Analyze: real IPC report, sorting, unknown sizes, drilldown, breadcrumb, large files, partial scan, cancellation and recovery'
+    )
+
+    const chat = '.conversation-view:not([hidden])'
+    const inspectFirst = (): Promise<void> => click('让 AI 检查', section('空间分析'))
+    await click('目录占用', section('空间分析'))
+    await inspectFirst()
+    await until(
+      `!document.querySelector('.chat-main').hidden && document.querySelector('${chat} .message-list').innerText.includes('已收到只读检查请求')`
+    )
+    assert.equal(agentRequests.length, 1)
+    const firstInspection = agentRequests[0]
+    assert.ok(firstInspection.text.includes(JSON.stringify(join(root, 'Projects'))))
+    assert.match(firstInspection.text, /8.00 MB/)
+    assert.match(firstInspection.text, /目标扫描状态：完整/)
+    assert.match(firstInspection.text, /当前只授权只读盘查/)
+    assert.match(firstInspection.text, /等待我确认/)
+    assert.notEqual(firstInspection.conversationId, 'welcome')
+    assert.equal(
+      await evaluate(`document.querySelector('${chat}').querySelectorAll('.user-message').length`),
+      1
+    )
+    await screenshot('analyze-agent-inspection')
+    await evaluate('document.querySelector(\'[aria-label="工具箱"]\').click()')
+    await until(`${section('空间分析')}.innerText.includes('分析已完成')`)
+    await inspectFirst()
+    await until(
+      `document.querySelector('${chat} .message-list').innerText.includes('已收到只读检查请求')`
+    )
+    assert.equal(agentRequests.length, 2)
+    assert.notEqual(agentRequests[1].conversationId, firstInspection.conversationId)
+    await evaluate('document.querySelector(\'[aria-label="工具箱"]\').click()')
+    await until(`${section('空间分析')}.innerText.includes('分析已完成')`)
+    const unknownRow = `${section('空间分析')}.querySelectorAll('.mole-analysis-row')[2]`
+    await click('让 AI 检查', unknownRow)
+    await until(
+      `document.querySelector('${chat} .message-list').innerText.includes('已收到只读检查请求')`
+    )
+    assert.equal(agentRequests.length, 3)
+    assert.match(agentRequests[2].text, /未知（不代表零占用）/)
+    assert.match(agentRequests[2].text, /目标扫描状态：未能读取/)
+    await evaluate('document.querySelector(\'[aria-label="工具箱"]\').click()')
+    await until(`${section('空间分析')}.innerText.includes('分析已完成')`)
+    assert.equal(agentRequests.length, 3, 'Returning to the toolbox must not resend inspections')
+    console.log(
+      'PASS Analyze → Agent: fresh conversations, exact path/size/status, automatic send once, unknown size and read-only instructions'
     )
 
     await navigate('项目瘦身')

@@ -13,6 +13,7 @@ export type Conversation = {
   title: string
   example: boolean
   messages: PreviewMessage[]
+  initialPrompt?: string
 }
 
 export const initialConversations: Conversation[] = [

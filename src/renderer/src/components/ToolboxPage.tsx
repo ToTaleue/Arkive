@@ -46,7 +46,11 @@ const tools = [
 
 type Tool = 'home' | (typeof tools)[number]['id']
 
-export function ToolboxPage(): React.JSX.Element {
+export function ToolboxPage({
+  onInspectWithAgent
+}: {
+  onInspectWithAgent: (prompt: string, title: string) => void
+}): React.JSX.Element {
   const [tool, setTool] = useState<Tool>('home')
   return (
     <div className="toolbox-page">
@@ -104,7 +108,7 @@ export function ToolboxPage(): React.JSX.Element {
           </div>
         </section>
         <div hidden={tool !== 'analyze'}>
-          <MoleAnalyzeTool />
+          <MoleAnalyzeTool onInspectWithAgent={onInspectWithAgent} />
         </div>
         <div hidden={tool !== 'purge'}>
           <MoleSelectionTool kind="purge" active={tool === 'purge'} />

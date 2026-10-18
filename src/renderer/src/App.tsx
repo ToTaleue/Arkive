@@ -115,7 +115,7 @@ function App(): React.JSX.Element {
   function newConversation(): void {
     setActivePage('chat')
     const emptyConversation = conversations.find(
-      (conversation) => conversation.messages.length === 0
+      (conversation) => conversation.messages.length === 0 && !conversation.initialPrompt
     )
     if (emptyConversation) {
       setActiveId(emptyConversation.id)
@@ -129,6 +129,19 @@ function App(): React.JSX.Element {
     }
     setConversations((current) => [conversation, ...current])
     setActiveId(conversation.id)
+  }
+
+  function inspectWithAgent(prompt: string, title: string): void {
+    const conversation: Conversation = {
+      id: crypto.randomUUID(),
+      title,
+      example: false,
+      messages: [],
+      initialPrompt: prompt
+    }
+    setConversations((current) => [conversation, ...current])
+    setActiveId(conversation.id)
+    setActivePage('chat')
   }
 
   async function runMoleInstallerPreview(): Promise<void> {
@@ -242,7 +255,7 @@ function App(): React.JSX.Element {
           ? {
               ...conversation,
               title:
-                conversation.messages.length === 0
+                conversation.messages.length === 0 && !conversation.initialPrompt
                   ? messages[0].content.slice(0, 24)
                   : conversation.title,
               messages: [...conversation.messages, ...messages]
@@ -556,7 +569,7 @@ function App(): React.JSX.Element {
           <CleanPage />
         </main>
         <main className="toolbox-main" id="toolbox-page" hidden={activePage !== 'toolbox'}>
-          <ToolboxPage />
+          <ToolboxPage onInspectWithAgent={inspectWithAgent} />
         </main>
         {activePage === 'chat' && rightOpen && (
           <aside id="details-sidebar" className="details-sidebar" aria-label="工作区">

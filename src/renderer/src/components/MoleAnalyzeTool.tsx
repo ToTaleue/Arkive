@@ -1,10 +1,19 @@
 import { useState } from 'react'
-import { ChevronRight, File, Folder, FolderOpen, RefreshCw } from 'lucide-react'
-import { readAnalyzeReport, formatMoleSize, type AnalyzeReport } from './mole-view'
+import { ChevronRight, File, Folder, FolderOpen, RefreshCw, Sparkles } from 'lucide-react'
+import {
+  readAnalyzeReport,
+  formatMoleSize,
+  moleInspectionPrompt,
+  type AnalyzeReport
+} from './mole-view'
 import { useMoleToolRun } from './useMoleToolRun'
 import { MoleToolFeedback, MoleToolHeading, MoleToolHero, MoleToolLogs } from './MoleToolShared'
 
-export function MoleAnalyzeTool(): React.JSX.Element {
+export function MoleAnalyzeTool({
+  onInspectWithAgent
+}: {
+  onInspectWithAgent: (prompt: string, title: string) => void
+}): React.JSX.Element {
   const api = window.api?.mole
   const available = Boolean(api?.toolboxAnalyze)
   const run = useMoleToolRun()
@@ -37,7 +46,7 @@ export function MoleAnalyzeTool(): React.JSX.Element {
   return (
     <section className="mole-tool-page" aria-label="空间分析">
       <MoleToolHeading title="空间分析" engine="Analyze">
-        查看空间分布，逐层定位大文件与大目录。
+        查看空间分布，点击“继续分析”逐层查看文件夹内部占用。
       </MoleToolHeading>
       <div className="mole-tool-scope">
         <button
@@ -80,11 +89,14 @@ export function MoleAnalyzeTool(): React.JSX.Element {
             {report.totalFiles === null
               ? '文件数量未提供'
               : `已统计 ${report.totalFiles.toLocaleString()} 个文件`}{' '}
-            · 只读查看
+            · 仅分析，未清理任何文件
           </MoleToolHero>
           {report.status !== 'complete' && (
             <p className="mole-tool-warning">
-              部分目录未能完整读取；已统计容量不代表全部占用，未知容量不等于零。
+              {report.status === 'unavailable'
+                ? '此位置未能完成读取，暂无法统计占用。'
+                : '部分内容未能统计；以上容量是已读取部分的占用下限，实际总占用可能更大。'}
+              本功能仅分析，不会清理或删除文件。
             </p>
           )}
           <nav className="mole-tool-breadcrumb" aria-label="分析路径">
@@ -133,7 +145,14 @@ export function MoleAnalyzeTool(): React.JSX.Element {
                   ) : (
                     <strong>{entry.name}</strong>
                   )}
-                  <small>{entry.path}</small>
+                  <small>
+                    {entry.path}
+                    {entry.status === 'partial'
+                      ? ' · 未完整统计'
+                      : entry.status === 'unavailable'
+                        ? ' · 未能读取'
+                        : ''}
+                  </small>
                 </div>
                 <div className="mole-analysis-bar" aria-hidden="true">
                   {entry.size !== null && (
@@ -147,13 +166,30 @@ export function MoleAnalyzeTool(): React.JSX.Element {
                     ? '未知'
                     : `${entry.status === 'partial' ? '至少 ' : ''}${formatMoleSize(entry.size)}`}
                 </span>
-                <button
-                  className="mole-tool-button mole-reveal"
-                  disabled={run.busy}
-                  onClick={() => void run.reveal(entry.path)}
-                >
-                  定位
-                </button>
+                <div className="mole-analysis-actions">
+                  <button
+                    className="mole-tool-button mole-reveal"
+                    disabled={run.busy}
+                    onClick={() =>
+                      void (entry.isDir ? analyze(entry.path) : run.reveal(entry.path))
+                    }
+                  >
+                    {entry.isDir ? '继续分析' : '在 Finder 中显示'}
+                  </button>
+                  <button
+                    className="mole-tool-button"
+                    disabled={run.busy}
+                    title={`让 AI 检查 ${entry.path}`}
+                    onClick={() => {
+                      onInspectWithAgent(
+                        moleInspectionPrompt(entry, report),
+                        `AI 检查 · ${entry.name}`
+                      )
+                    }}
+                  >
+                    <Sparkles size={13} />让 AI 检查
+                  </button>
+                </div>
               </div>
             ))}
             {!entries.length && (

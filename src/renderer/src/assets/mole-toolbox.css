@@ -267,6 +267,12 @@
 .mole-analysis-row > svg {
   color: var(--muted);
 }
+.mole-analysis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
 .mole-analysis-name {
   min-width: 0;
 }
@@ -585,7 +591,7 @@
   .mole-analysis-row {
     grid-template-columns: 17px minmax(0, 1fr) 65px;
   }
-  .mole-analysis-row .mole-reveal {
+  .mole-analysis-actions {
     grid-column: 2 / -1;
     justify-self: end;
   }

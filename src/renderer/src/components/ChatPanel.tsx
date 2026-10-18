@@ -20,7 +20,7 @@ import {
   Square
 } from 'lucide-react'
 import { type Conversation, type PreviewMessage } from '../chat-preview'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAgentChat } from './useAgentChat'
 import { MessageMarkdown } from './MessageMarkdown'
 import { AgentExecutionDetails, AgentExecutionError } from './AgentExecutionDetails'
@@ -128,6 +128,25 @@ export function ChatPanel({
     onNew: send,
     onCancel: stop
   })
+  const initialPromptSent = useRef(false)
+  useEffect(() => {
+    const prompt = conversation.initialPrompt
+    if (!prompt || initialPromptSent.current || conversation.example || !status) return
+    if (conversation.messages.length > 0) return
+    if (!status.configured) {
+      runtime.thread.composer.setText(prompt)
+      return
+    }
+    initialPromptSent.current = true
+    runtime.thread.composer.setText('')
+    runtime.thread.append(prompt)
+  }, [
+    conversation.initialPrompt,
+    conversation.example,
+    conversation.messages.length,
+    status,
+    runtime
+  ])
   const skillChoices =
     !isRunning && !conversation.example && status?.configured && /^\/\S*$/.test(skillQuery)
       ? agentSkills.filter(
