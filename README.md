@@ -1,33 +1,64 @@
-# arkive
+# Arkive
 
-An Electron + React + TypeScript app for local compression, original backup and archive.
+面向存量文件的本地压缩与归档工作空间。把不常用但仍有价值的视频、图片和文档压小，保留完整原件，再通过归档、标签和检索找回它们。
 
-## Compression and archive UI
+Arkive 使用 Electron、React 和 TypeScript 构建。界面操作与产品 Agent 共用业务服务和任务队列；文件处理在本地执行，Agent 对话和 AI 标签推荐使用用户配置的模型服务。
 
-The left rail opens image, video, document compression and the archive catalog.
-Document compression supports PDF (lossless / balanced / size) and ordinary DOCX /
-PPTX embedded media. Office requires an explicit whole-document replacement check;
-the complete old document goes to Backup before publication at its original path.
-Images and PDFs accept Finder drops through Electron's `webUtils` file-path bridge.
-The document workspace also provides read-only folder duplicate detection, including
-groups, partial-scan warnings and cancellation. It never deletes duplicate files.
+## 当前功能
 
-Successful results can be archived with optional tags. The catalog's record-state
-selector exposes pending compression results after reload or restart, so later
-archiving does not require the previous chat or another encode. Ordinary compression
-with savings moves the complete original to `~/Arkive Backup`; Archive is an
-additional copy. No-savings leaves the source in place. Folder batch compression,
-APFS clone orchestration, OCR/content classification and persistent chat history
-are not implemented.
+| 功能 | 当前实现 |
+| --- | --- |
+| 批量压缩 | 在统一压缩页选择、拖入多个文件或文件夹，按顺序处理视频、图片、PDF 和 Office 文档；逐项展示结果并支持取消当前文件。 |
+| 视频 | 使用 FFmpeg、ab-av1 和 VideoToolbox，按抽样 VMAF 自动选参，输出 HEVC，再检查输出属性及完整解码；H.264 兼容编码仅供 Office 内嵌视频使用。 |
+| 图片 | 使用 Sharp／pngquant，支持 WebP 和受支持的原格式输出，按画质、平衡、体积预设生成候选；展示体积、SSIMULACRA2 参考评分及元数据保留警告。 |
+| PDF | 使用 qpdf 做无损结构优化，支持 `lossless`、`deep-lossless`、`balanced`、`size` 四档；当前交付已移除 Ghostscript。 |
+| Office（实验性） | 压缩普通 DOCX／PPTX 中符合条件的图片和视频，校验整份文档、备份完整原件后在原路径发布；开始前需要确认替换。 |
+| 归档与检索 | 支持压缩后归档、待归档结果续做，以及通过 Agent 原样归档普通文件；按名称、标签、日期和文件类型筛选，打开或在 Finder 中定位。 |
+| 标签 | 根据文件名、路径和已提取元数据推荐 AI 标签，写入 SQLite 索引和 Finder 标签；支持手工增删，Agent 归档时可关闭自动推荐。 |
+| 重复文件 | 只读扫描重复组；经明确授权后，可通过界面或 Agent 执行同卷 APFS 克隆去重，保留路径和独立修改能力。 |
+| 清理与工具箱 | 集成 Mole：磁盘占用分析、开发产物、安装包和应用候选审阅，以及独立的完整 Clean 页面。 |
+| 原件备份管理 | 查看完整原件备份，手动选择清理 7 天前、3 天前或全部备份；核对后经原生确认移入回收站。 |
+| 产品 Agent | 流式对话、工具进度与结果、总结重试、消息复制；内置演唱会录像、微信本地文件和 Lightroom 照片三个场景。 |
+| 界面 | 日夜主题，以及独立的压缩、归档、清理和工具箱页面。 |
 
-## Pi chat
+## 文件处理方式
 
-Run `pnpm dev` to open Arkive. The chat uses `@assistant-ui/react` with Electron IPC
-and Pi SDK `1.2.0` in the main process. Each real conversation keeps an independent
-Pi session for multiple turns, with streamed replies and a stop button.
+普通图片、视频和 PDF 压缩在编码、校验成功且有体积收益后，将完整原件移入 `~/Arkive Backup/YYYY-MM-DD/`，压缩输出保留在选定位置。失败、提交前取消或无收益时不移动原件；无收益候选不作为成功压缩结果自动归档。
 
-Copy `.env.example` to `.env.local` in the project root (an empty local template may
-already exist), fill in your own values, then restart `pnpm dev`:
+Office 采用单独的原路径替换流程：保存完整旧文档，再发布压缩文档。图片和视频可能采用有损编码，质量评分只供参考；复杂版式、字体、动画和内嵌媒体需要用 Word／PowerPoint 打开检查。
+
+“压缩完成后归档”会将最终结果复制并校验到 `~/Arkive Archive/YYYY-MM-DD/`。Backup 保存完整原件，Archive 保存正式归档文件；归档失败时可按记录重试，不必重新压缩。原样归档普通文件默认复制到 Archive，保留源文件，不另建 Backup。
+
+- **原位置入口（试用）**：可在归档后创建指向 Archive 的软链接，格式转换时使用输出扩展名；默认不覆盖已有文件。Agent 在获得明确授权后也可搬移原文件并保留链接。外部移动或重命名归档后，链接不会自动修复。
+- **备份清理**：在“我的归档 → 备份”手动发起。清理前核对备份哈希，以及压缩输出或归档副本是否仍有效；冲突、失败和未完成状态会单独报告。不自动定期清理，也不在回收站失败后改为永久删除。
+- **APFS 去重**：源与副本须在同一个 APFS 卷，逐项核对内容和元数据后共享底层存储。成功时移除旧存储副本，不另存一份完整旧备份；异常事务保留恢复信息。逻辑共享量不是实测磁盘释放量。
+
+文件变小、移入 Backup、复制到 Archive 或移入回收站，都不等于已经释放了对应大小的磁盘空间。取消不会撤销已经提交的文件操作。
+
+## 清理与工具箱的区别
+
+工具箱中的 Purge、Installer 和 Uninstall 先生成候选，由用户审阅精确选择后移入回收站；Analyze 提供占用分析、目录钻取和大文件列表。扫描不完整、权限不足或超时会保留诊断，不能将部分结果当作完整扫描。
+
+独立“清理”页的完整 Clean 则沿用 Mole 的直接删除和默认清空回收站行为，可能永久删除文件。系统级清理需要管理员授权，授权本身不会自动开始清理；预览不会删除文件，已发生的删除无法通过取消回滚。
+
+详见 [Mole 模块说明](src/main/modules/mole/README.md)。
+
+## 运行环境与快速开始
+
+完整随包工具链面向 **Apple 芯片 Mac、macOS 15 及以上**。仓库内置的是 `darwin-arm64` 二进制；虽保留 Windows／Linux 的 Electron 打包脚本，这些平台尚不具备等价的完整本地工具链。APFS 去重和 Finder 标签依赖 macOS。
+
+开发使用原生 arm64 Node.js 24 和 pnpm。下方命令遵循本仓库的 RTK 约定；未安装 RTK 时，可直接执行 `rtk proxy` 后面的原始命令。
+
+```sh
+rtk proxy pnpm install --frozen-lockfile
+rtk proxy pnpm dev
+```
+
+不使用 Agent 时，可直接操作本地功能；AI 标签推荐需要模型配置，失败会单独报告，不回滚已完成的压缩或归档。
+
+### 配置模型
+
+将项目根目录的 `.env.example` 复制为 `.env.local`，填入自己的配置后重启应用：
 
 ```dotenv
 ARKIVE_AI_PROVIDER=openai-compatible
@@ -36,191 +67,86 @@ ARKIVE_AI_MODEL=your-model-id
 ARKIVE_AI_API_KEY=your-api-key
 ```
 
-Use `openai-compatible` only for endpoints implementing streaming Chat Completions.
-The URL is the API root, not `/chat/completions`. For native Pi providers such as
-`openai`, `anthropic` or `google`, set that provider and its exact model ID; leave
-`ARKIVE_AI_BASE_URL` empty for the official endpoint. The configured DeepSeek V4.1
-Flash model is declared with its 1M context window and 384K maximum output; other
-OpenAI-compatible model IDs keep a conservative fallback until their limits are
-verified. Arkive still bounds displayed tool details and retry-summary input so a
-long tool run remains readable. Other API protocols need their matching adapter.
+`openai-compatible` 用于实现流式 Chat Completions 的服务，`BASE_URL` 填 API 根地址，不含 `/chat/completions`。原生 Pi provider 使用对应 provider 和精确模型 ID；使用默认官方端点时留空 `BASE_URL`。
 
-`.env.local` is ignored by Git and read only by the main process at development
-startup. Do not prefix keys with `VITE_` or `MAIN_VITE_`, put them in renderer code,
-or commit them. Existing process environment variables take precedence. Packaged
-apps use runtime environment variables; an end-user credentials UI is not added yet.
+配置只由主进程读取，进程环境变量优先。`.env.local` 不应提交，不要给密钥加 `VITE_`／`MAIN_VITE_` 前缀或写入 Renderer。打包应用可使用运行时环境变量；本地打包开发还支持读取工作目录或构建项目根目录中的外部 `.env.local`，配置文件不进入安装包。目前没有面向终端用户的凭据设置界面。
 
-- The left rail stays visible. The conversation sidebar and right workspace panel
-  can be collapsed and reopened independently using the panel buttons.
-- Create or switch conversations, fill the composer from a suggestion, and send
-  with Enter or the arrow button. Shift+Enter inserts a newline.
-- Seeded examples are read-only and never sent to the model. New conversations use
-  the real configured provider. Messages, Pi context and drafts live in memory and
-  reset on page reload, window close or restart; durable history is not implemented.
-- Missing configuration and request errors appear in the chat. Provider messages
-  may be sent over the network; no API key is exposed by the preload interface.
-- The workspace file panel is a placeholder; the agent can read and search files,
-  then use connected compression and file-operation tools within user authorization.
-  On smaller windows, the workspace starts collapsed.
+### Agent 使用
 
-Pi enables the native `read`, `grep`, `find` and `ls` tools, plus Arkive's compression,
-archive, tag, file-operation and Mole tools. `edit`, `write` and shell tools are disabled.
-There are 33 enabled tools, including `inspect_image`, `inspect_video`, `inspect_pdf`,
-`inspect_office`, `scan_duplicates` and `open_archive` (open or Finder reveal by archive
-record ID). `search_archives` accepts `state: 'pending'` for later archive/retry.
-Chat shows each tool's running/returned/error state. A returned result can still
-contain partial business failures; stopping generation does not undo committed files.
-Office uses `inspect_office` for read-only package inspection and `compress_office`
-for DOCX/PPTX embedded media compression with whole-original backup and replacement
-at the original path. It accepts `inputPath` and optional `preset`, without a separate
-output path. Check `replacementStatus` as well as compression and backup status;
-archive successful replacements through `archive_file` using `catalog.id`.
-See [Office module details](src/main/modules/office-compression/README.md).
-The Mole tool shares `runMoleDryRun` with the preview button and runs only
-`clean --dry-run`, with a two-minute timeout and the Agent's cancellation signal.
-It accepts no command arguments and returns bounded stdout/stderr plus exit status
-and truncation flags. Preview results are not actual reclaimed space. Actual cleanup
-is not exposed. The system prompt
-requires user authorization for file access, confirmation before modifying user
-files, and preservation of originals; these are prompt instructions, not a filesystem
-sandbox or an enforced confirmation dialog. Shell tools are disabled. Pi does not
-discover local extensions, Skills or project instructions. It explicitly loads three
-bundled scenario Skills from [resources/skills](resources/skills/README.md).
-Type `/` in the chat composer to choose a scenario, or send `/concert`, `/wechat`
-or `/photos` followed by a path or request. Native `/skill:<name>` commands also work.
-Selecting a scenario fills the composer without sending or authorizing file operations.
-SDK examples: https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/sdk
+新建对话后描述目标和文件路径，Enter 发送，Shift+Enter 换行。工具操作显示运行状态和业务结果；总结失败时可以重试总结，已完成的文件操作不会因此撤销。
 
-Run `rtk proxy node scripts/check-agent.mts` (Node 22.19+ with TypeScript stripping)
-to verify the real Pi SDK against a
-local streaming fixture: the tool allowlist, actual file tool execution in a
-temporary directory, Mole preview arguments/results/failure/cancellation using a
-temporary executable fixture, multiple turns, isolated conversations, cancellation,
-request errors, configuration validation and key redaction. It also drives Office
-inspection, actual in-place document replacement, original backup, subsequent archive,
-no-savings and publication failure through the registered tools. It does not call a
-real model service or require credentials, and does not scan or clean the user's Mac.
+| 快捷命令 | 场景 |
+| --- | --- |
+| `/concert` | 演唱会／大疆本地录像的检查、压缩、备份和归档 |
+| `/wechat` | 用户指定的微信可读文件和视频；独立图片保留原位 |
+| `/photos` | Lightroom 等导出的照片，默认建议保持 JPEG、画质优先 |
 
-Additional integration checks (run `rtk proxy pnpm run build` first):
+输入 `/` 可选择场景，补充需求后再发送；选择场景本身不代表授权修改文件。也支持原生 `/skill:<name>` 命令。详见 [内置场景说明](resources/skills/README.md)。
+
+Agent 使用锁定的 Pi SDK 1.2.0，开放 `read`、`grep`、`find`、`ls` 和已注册的业务工具，不开放任意 shell、`edit` 或 `write`，也不自动发现项目或全局扩展、Skills 与指令文件。产品只加载 `resources/skills` 中的三个内置场景。
+
+聊天记录与模型上下文保存在内存中，重载或重启后不保留；归档、备份及相关恢复状态保存在 SQLite 中。任务队列与任务结果同样只在当前进程内保留，不能替代持久化文件事务恢复。
+
+### 数据边界
+
+编码、校验、备份、归档和 SQLite 在本地执行。使用 Agent 或 AI 标签时，对话、工具结果以及用于推荐的文件名、路径和元数据可能发送到所配置的模型服务。自动标签不做图片画面识别、音视频识别、OCR 或全文分析，当前也没有语义向量检索。
+
+Agent 的对话授权依赖产品提示和各项业务检查，部分操作另有原生确认；当前不是文件系统沙箱。微信场景不解密数据库或未知加密文件，照片场景不直接改写 Lightroom 图库。
+
+## 构建与验证入口
 
 ```sh
-rtk proxy node scripts/check-processing-ui.mjs
-rtk proxy node scripts/check-agent-ui.mjs
-rtk proxy node scripts/check-agent-ui.mjs --skills
-rtk proxy node scripts/check-agent-live.mjs
-rtk proxy node scripts/check-packaged-runtime.mjs
+# 类型检查并构建
+rtk proxy pnpm run build
+
+# macOS Apple Silicon 打包（先完成上面的构建）
+rtk proxy pnpm exec electron-builder --mac --arm64
 ```
 
-The first two use real Electron/preload/IPC/Services and isolated generated files in
-`~/Desktop/arkive-test`; native dialog choices or model HTTP responses are fixtures.
-The Agent UI check also drives Mole's actual UI/IPC/parser against a synthetic
-external process, checking streamed chapters, duplicate clicks and abnormal exit.
-`ARKIVE_NATIVE_UI_CHECK=1` on the processing UI script instead leaves a visible window
-for a bounded native open/save/compress/archive check. The live Agent script uses the
-configured model and records its prompts, tool activity and generated-file results;
-it requires a reachable configured endpoint and may incur model usage. It fails if
-model selection or any scenario fails, rather than falling back to fixture responses.
-As of 2026-10-17 the configured model host fails DNS resolution; the live-model
-scenarios remain unverified. No credentials are written to the test report.
+`build:mac` 当前直接调用 electron-vite 和 Electron Builder，不包含 `build` 脚本的类型检查步骤。随包工具复制到 `Contents/Resources/tools`，不放入 `app.asar`。当前配置关闭 notarization；打包成功不代表已经完成签名、公证、安装或生产入口验收。
 
-The packaged runtime check requires an existing `dist/mac-arm64/arkive.app` and runs
-its binary in Electron's Node mode: SQLite, Sharp, Finder tags, seven tool binaries
-and Pi SDK loading. To test the packaged renderer/preload/resources with isolated
-business state, run `ARKIVE_PACKAGED_RESOURCES="$PWD/dist/mac-arm64/arkive.app/Contents/Resources"`
-with the processing UI check. Build, package and then test sequentially; do not
-write to `out` while Electron Builder is constructing the ASAR. These checks do
-not certify signing, notarization, installation or production-entry GUI startup.
+以下是可手动运行的检查入口，不代表当前版本已全部执行或通过。测试生成文件使用项目约定的 `~/Desktop/arkive-test`；UI 检查前先构建，构建、打包和依赖 `out` 的检查应顺序执行。
 
-## Bundled tools (macOS Apple Silicon)
-
-FFmpeg, FFprobe, Mole, pngquant, Ghostscript, qpdf and czkawka_cli are included in
-`resources/tools/darwin-arm64`. No system installation or local compilation is needed.
-Mole includes its upstream Bash runtime and precompiled `analyze-go` / `status-go` helpers.
-Versions, download hashes, sources and licenses are recorded in
-[the tool manifest](resources/tools/darwin-arm64/manifest.json).
-
-Electron Builder copies this directory to `Contents/Resources/tools`, outside `app.asar`.
-Use an arm64 build: `pnpm exec electron-builder --mac --arm64` after `pnpm build`.
-Tool payloads for other platforms are not included.
-
-Main-process tool execution lives in `src/execution/process.ts`. Both entry points
-accept a registered tool name, a raw argument array and optional `cwd` / `signal`.
-Arguments pass through unchanged, without a shell. Tool names are `ffmpeg`, `ffprobe`,
-`mole`, `pngquant`, `ghostscript`, `qpdf` and `czkawka_cli`.
-Paths preserve the bundled directory layout, including qpdf's adjacent library.
-
-```ts
-import { runBundledTool } from '../execution/process' // example caller in src/main
-
-const result = await runBundledTool('qpdf', ['--check', inputPath], { signal })
-// Inspect result.exitCode, result.signal, result.stdout and result.stderr.
-```
-
-`runBundledTool` drains both streams and returns UTF-8 text after the process closes.
-Nonzero exits resolve with the actual exit code; path/startup errors and cancellation
-reject. Each stream retains at most 1,048,576 UTF-16 code units by default; use
-`maxOutputChars` to change the limit (zero discards all output). Check
-`stdoutTruncated` / `stderrTruncated` before parsing captured output. Tool-specific
-exit codes and output validation belong to the caller.
-
-`spawnBundledTool` returns the child process for streaming or binary output. Callers
-must consume both streams and handle `error` / `close`; cancellation uses `AbortSignal`.
-Existing `spawnFfmpeg` (adds `-nostdin`), `spawnFfprobe`, `spawnMoleAnalysis` and
-`spawnMoleStatus` remain available. Mole adapters use JSON mode for analysis and status.
-
-These entry points are internal to the main process. Renderer and product Agent
-access should go through business operations, which enforce confirmation, path
-protection and original-file preservation. The generic runner does not enforce
-those policies or interpret destructive tool options. No generic execution IPC or
-Agent tool is exposed. sharp is a Node library used by the image Service, not a
-bundled CLI.
-
-## Recommended IDE Setup
-
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-
-## Project Setup
-
-### Install
-
-```bash
-$ pnpm install
-```
-
-### Development
-
-```bash
-$ pnpm dev
-```
-
-### Lint and type checking
-
-TypeScript uses the [strict type-checked ESLint preset](https://typescript-eslint.io/users/configs/#strict-type-checked)
-on top of the Electron Toolkit defaults. Both Node and renderer TSConfigs supply type information;
-shared contracts are included in the Node project.
-
-Both TSConfigs explicitly enable compiler `strict` and `noImplicitAny`, overriding
-the Electron Toolkit template's `noImplicitAny: false`. Compiler strict checks and
-the ESLint strict preset are both required.
-
-Additional error-level rules prohibit `eval`, string timers, `Function` constructors,
-`javascript:` URLs, `__proto__`, native prototype extensions and React's
-`dangerouslySetInnerHTML`. Keep Prettier responsible for formatting.
-
-```bash
+```sh
 rtk proxy pnpm run lint
 rtk proxy pnpm run typecheck
+rtk proxy node scripts/check-tasks.mjs
+rtk proxy node scripts/check-compression-tasks.mjs
+rtk proxy node scripts/check-processing-ui.mjs
+rtk proxy node scripts/check-batch-compression-ui.mjs
+rtk proxy node scripts/check-archive-links.mjs
+rtk proxy node scripts/check-backup-cleanup.mjs
+rtk proxy node scripts/check-clone-deduplication.mjs
+rtk proxy node scripts/check-agent.mts
+rtk proxy node scripts/check-agent-ui.mjs --skills
 ```
 
-### Build
+真实模型检查入口为 `scripts/check-agent-live.mjs`，需要有效配置和可达服务，可能产生模型费用。本地固定响应测试不证明真实模型能够自主正确判断授权。`scripts/check-packaged-runtime.mjs` 依赖已构建的 `dist/mac-arm64/arkive.app`。更多专项检查见各模块文档与 `scripts/`。
 
-```bash
-# For windows
-$ pnpm build:win
+## 技术结构与随包组件
 
-# For macOS
-$ pnpm build:mac
-
-# For Linux
-$ pnpm build:linux
+```text
+src/renderer/       React 界面与交互
+src/preload/        Renderer 与主进程的受限 IPC 桥接
+src/shared/         请求、结果和事件契约
+src/main/modules/   压缩、归档、标签、去重、清理和 Agent 业务
+src/main/tasks/     共用 FIFO 任务队列、取消和防重复提交
+src/main/storage/   SQLite 数据库与迁移
+src/execution/      固定工具定位、进程执行和输出解析
+resources/skills/   产品 Agent 的内置场景
+resources/tools/    macOS arm64 随包工具及来源清单
+native/             APFS 克隆去重 helper 源码
 ```
+
+随包组件包括 FFmpeg／FFprobe、ab-av1、Mole、Czkawka、qpdf、pngquant、SSIMULACRA2 和 Arkive APFS helper。Sharp 作为 Node 库直接使用。版本、校验值、来源和许可证以 [工具 manifest](resources/tools/darwin-arm64/manifest.json) 和交付材料为准；当前不包含 Ghostscript。
+
+产品入口通过业务服务选择工具、校验结果和保护文件；通用进程执行器不向 Renderer 或 Agent 暴露任意命令执行接口。
+
+## 交付材料与详细说明
+
+- [项目说明书](docs/最后提交说明文档/Arkive项目说明书.md)：产品定位、成员分工、功能与使用范围。
+- [技术文档](docs/最后提交说明文档/Arkive技术文档.md)：架构、压缩策略、恢复与运行方式。
+- [第三方来源与依赖说明](docs/最后提交说明文档/第三方来源与依赖说明.md)：组件来源、许可及待核验事项。
+- [第三方依赖清单](docs/最后提交说明文档/第三方依赖完整清单.csv)与[随包工具清单](docs/最后提交说明文档/随包工具来源清单.json)。
+- [演示材料](docs/presentation/README.md)与[实测记录说明](docs/measurements/Arkive展示实测清单.md)。
+- 模块文档：[图片](src/main/modules/image-compression/README.md)、[PDF](src/main/modules/pdf-compression/README.md)、[Office](src/main/modules/office-compression/README.md)、[归档](src/main/modules/catalog/README.md)、[重复检测](src/main/modules/duplicate-detection/README.md)、[APFS 去重](src/main/modules/clone-deduplication/README.md)、[任务队列](src/main/tasks/README.md)。
