@@ -4,7 +4,7 @@
 
 结果页点击“确定归档”，把输出复制到 `~/Arkive Archive/YYYY-MM-DD/`。文件名附加记录 UUID，禁止覆盖；重复点击复用同一副本。先记录计划路径，再复制、SHA-256 校验并发布。Backup 保存完整原件；Archive 保存可直接打开的压缩副本。没有定期清理。
 
-统一“压缩”页面提供“压缩完成后归档”选项；勾选后，图片、视频、PDF 和已发布的 Office 结果沿用同一条 Catalog 归档流程，列表状态显示“已归档”或归档错误。该选项不自动添加标签，完成后可在“我的归档”中补充标签。
+统一“压缩”页面提供“压缩完成后归档”选项；勾选后，图片、视频、PDF 和已发布的 Office 结果沿用同一条 Catalog 归档流程。归档前从原件或 Backup 读取整理后的文件名、路径、文件属性和类型探测元数据，调用独立标签推荐函数，合并显式标签后直接写入 SQLite 与归档副本的 Finder 标签；列表状态显示已归档、自动标签数量或标签推荐错误。模型或元数据读取失败不回滚已完成的压缩归档，返回可见的自动标签错误供重试或人工补充。
 
 归档区提供默认关闭的“在原位置保留访问入口（试用）”开关。勾选后，共用 Catalog 归档流程在正式副本校验成功后调用 Node `symlink`，入口只指向 Archive，不指向 Backup。同格式沿用原路径；格式转换时保留原文件名主体、使用输出扩展名。已有普通文件、目录或其他链接一律不覆盖（包括 Office 原位发布后仍在原路径的压缩文档）；归档照常成功，`originalLink` 单独报告入口失败并可重试。保留原件及当前压缩输出的既有策略不变，本开关不负责清理这些文件，也不承诺额外空间收益。
 
@@ -18,7 +18,7 @@ Agent 有两种共用入口：`compress_image`／`compress_video`／`compress_pd
 
 主进程启动时在 Electron userData 的 `arkive.db` 打开 `node:sqlite`，记录源修改日期、原件／备份／输出／归档的位置和操作状态。重启恢复未完成的备份与归档；复制和校验不放在数据库事务中。编码函数本身不移动原件，产品调用方必须使用共用收尾入口。
 
-独立推荐入口为 `tag-recommendation.ts` 的 `recommendTags(input, signal?)`，完整 Prompt 在 `tag-recommendation-prompt.ts`，输入输出类型在 `src/shared/contracts/tag-recommendation.ts`。调用方提供整理好的文件名、原路径、扁平元数据、已有词库、相关用户说明及按文件限定的纠正；函数自动合并默认词库，复用 `agent/model.ts` 的模型初始化，通过 Pi SDK 1.2.0 的 `completeSimple` 完成一次无工具请求，不创建聊天会话、不读文件、不写标签。成功返回按输入顺序排列的 `items`，每个标签含名称、依据和程序计算的 `isNew`；只建议文件尚未拥有的标签。结构错误整次返回 `error`，取消返回 `cancelled`。不自动重试或接受截断回复；当前每次最多 10 个文件，资料 JSON 最多 24,000 UTF-8 字节，每文件最多 8 个建议，60 秒超时。元数据采集、IPC 与界面推荐尚未接线，业务流程不会自动调用。输入输出示例及完整边界见 `/Users/hu1hui/Developer/arkive-doc/proposals/ai-tag-recommendation.md`。
+独立推荐入口为 `tag-recommendation.ts` 的 `recommendTags(input, signal?)`，完整 Prompt 在 `tag-recommendation-prompt.ts`，输入输出类型在 `src/shared/contracts/tag-recommendation.ts`。调用方提供整理好的文件名、原路径、扁平元数据、已有词库、相关用户说明及按文件限定的纠正；函数自动合并默认词库，复用 `agent/model.ts` 的模型初始化，通过 Pi SDK 1.2.0 的 `completeSimple` 完成一次无工具请求，不创建聊天会话、不读文件、不写标签。成功返回按输入顺序排列的 `items`，每个标签含名称、依据和程序计算的 `isNew`；只建议文件尚未拥有的标签。结构错误整次返回 `error`，取消返回 `cancelled`。不自动重试或接受截断回复；当前每次最多 10 个文件，资料 JSON 最多 24,000 UTF-8 字节，每文件最多 8 个建议，60 秒超时。`automatic-tags.ts` 负责从原件／备份整理元数据并在压缩归档收尾时应用推荐标签；独立推荐函数仍不直接读写文件。输入输出示例及完整边界见 `/Users/hu1hui/Developer/arkive-doc/proposals/ai-tag-recommendation.md`。
 
 Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation 的 `NSURLTagNamesKey` 读写；固定系统工具调用仍经过 `src/execution/process.ts`，不拼接 shell。首次归档继承原件标签，应用编辑提交增删差量，重读当前 Finder 标签后合并。写入核对失败保留待重试差量。启动、目录事件、窗口激活和手动刷新核对 Finder 标签，包括删除；只同步归档副本，不把后续修改传播到备份或输出。
 
@@ -30,6 +30,7 @@ Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation
 
 ```sh
 rtk proxy node scripts/check-tag-recommendation.mjs
+rtk proxy node scripts/check-automatic-tags.mjs
 rtk proxy node scripts/check-archive-links.mjs
 rtk proxy pnpm run build
 rtk proxy node scripts/check-catalog.mjs

@@ -1,4 +1,4 @@
-import type { ArchiveAttempt, CompressionRecord } from './catalog'
+import type { ArchiveAttempt, AutomaticTagAttempt, CompressionRecord } from './catalog'
 
 export type VideoCompressionPreset = 'quality' | 'balanced' | 'size'
 
@@ -13,6 +13,7 @@ export interface VideoCompressionRequest {
 export interface VideoCompressionResult {
   catalog?: CompressionRecord
   archive?: ArchiveAttempt
+  automaticTags?: AutomaticTagAttempt
   status: 'compressed' | 'no-savings'
   outputPath: string
   inputBytes: number

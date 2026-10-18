@@ -14,6 +14,7 @@ import { useCompressionTask, compressionTaskMessage } from '../hooks/useCompress
 import type { SelectedVideo } from '../../../shared/contracts/video'
 import type { SelectedImage } from '../../../shared/contracts/image'
 import type { SelectedDocument } from '../../../shared/contracts/processing'
+import type { ArchiveAttempt, AutomaticTagAttempt } from '../../../shared/contracts/catalog'
 import '../assets/compression.css'
 
 type CompressionKind = 'video' | 'image' | 'pdf' | 'office'
@@ -67,6 +68,22 @@ function errorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
     : '处理失败，请重试。'
+}
+
+function completionMessage(
+  archive: ArchiveAttempt | undefined,
+  automaticTags: AutomaticTagAttempt | undefined,
+  fallback: string
+): string {
+  if (archive?.status === 'error') return `压缩完成 · 归档失败：${archive.error}`
+  if (archive?.status === 'ready' && automaticTags?.status === 'error') {
+    return `压缩完成 · 已归档 · AI 标签失败：${automaticTags.error}`
+  }
+  if (archive?.status === 'ready' && automaticTags?.status === 'ready') {
+    return `压缩完成 · 已归档 · 已添加 ${String(automaticTags.tags.length)} 个标签`
+  }
+  if (archive?.status === 'ready') return '压缩完成 · 已归档'
+  return fallback
 }
 
 export function CompressionPage(): React.JSX.Element {
@@ -182,12 +199,11 @@ export function CompressionPage(): React.JSX.Element {
         if (outcome.status === 'completed') {
           updateItem(item.id, {
             status: 'done',
-            message:
-              outcome.result.archive?.status === 'ready'
-                ? '压缩完成 · 已归档'
-                : outcome.result.archive?.status === 'error'
-                  ? `压缩完成 · 归档失败：${outcome.result.archive.error}`
-                  : '压缩完成 · 原件已保留'
+            message: completionMessage(
+              outcome.result.archive,
+              outcome.result.automaticTags,
+              '压缩完成 · 原件已保留'
+            )
           })
           return 'done'
         }
@@ -212,12 +228,11 @@ export function CompressionPage(): React.JSX.Element {
         if (outcome.status === 'completed') {
           updateItem(item.id, {
             status: 'done',
-            message:
-              outcome.result.archive?.status === 'ready'
-                ? '压缩完成 · 已归档'
-                : outcome.result.archive?.status === 'error'
-                  ? `压缩完成 · 归档失败：${outcome.result.archive.error}`
-                  : '压缩完成 · 原件已保留'
+            message: completionMessage(
+              outcome.result.archive,
+              outcome.result.automaticTags,
+              '压缩完成 · 原件已保留'
+            )
           })
           return 'done'
         }
@@ -240,12 +255,11 @@ export function CompressionPage(): React.JSX.Element {
           const archive = outcome.result.value.archive
           updateItem(item.id, {
             status: 'done',
-            message:
-              archive?.status === 'ready'
-                ? '压缩完成 · 已归档'
-                : archive?.status === 'error'
-                  ? `压缩完成 · 归档失败：${archive.error}`
-                  : '压缩完成 · 原件已处理'
+            message: completionMessage(
+              archive,
+              outcome.result.value.automaticTags,
+              '压缩完成 · 原件已处理'
+            )
           })
           return 'done'
         }
@@ -447,7 +461,7 @@ export function CompressionPage(): React.JSX.Element {
             }}
           />
           <span>压缩完成后归档</span>
-          <small>复制压缩结果到 Arkive Archive；完成后可在“我的归档”添加标签。</small>
+          <small>复制压缩结果到 Arkive Archive，并根据元数据自动生成词库标签。</small>
         </label>
       </section>
 

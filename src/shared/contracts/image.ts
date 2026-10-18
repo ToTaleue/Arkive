@@ -1,4 +1,4 @@
-import type { ArchiveAttempt, CompressionRecord } from './catalog'
+import type { ArchiveAttempt, AutomaticTagAttempt, CompressionRecord } from './catalog'
 
 export type ImageOutputFormat = 'webp' | 'jpeg' | 'png'
 export type ImageCompressionPreset = 'quality' | 'balanced' | 'size'
@@ -49,6 +49,7 @@ export interface ImageStartRequest {
 export interface ImageCompressionResult {
   catalog?: CompressionRecord
   archive?: ArchiveAttempt
+  automaticTags?: AutomaticTagAttempt
   status: 'compressed' | 'no-savings'
   inputPath: string
   outputPath: string

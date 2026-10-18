@@ -19,9 +19,13 @@ export interface CompressionFollowUp extends ArchiveOptions {
 export type ArchiveAttempt =
   { status: 'ready'; item: ArchiveItem } | { status: 'error'; error: string }
 
+export type AutomaticTagAttempt =
+  { status: 'ready'; tags: string[] } | { status: 'error'; error: string } | { status: 'cancelled' }
+
 export interface CompressionLifecycleResult {
   catalog: CompressionRecord
   archive?: ArchiveAttempt
+  automaticTags?: AutomaticTagAttempt
 }
 
 export interface ArchiveItem extends CompressionRecord {

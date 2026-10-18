@@ -8,6 +8,7 @@ import { compressPdf } from '../pdf-compression/service'
 import { compressVideo } from '../video-compression/service'
 import { getCatalog } from './service'
 import { normalizeTags } from './finder-tags'
+import { recommendArchiveTags } from './automatic-tags'
 import type {
   ArchiveAttempt,
   CompressionFollowUp,
@@ -77,12 +78,23 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
             report({ message: '正在处理原件备份…' })
             const record = await catalog.finishCompression(id, result.status === 'compressed')
             let archive: ArchiveAttempt | undefined
+            let automaticTags: CompressionLifecycleResult['automaticTags']
             if (request.archive && (result.status === 'compressed' || archiveOnNoSavings)) {
+              report({ message: '正在读取元数据并生成归档标签…' })
+              automaticTags = await recommendArchiveTags(catalog, id, input, taskSignal)
+              const recommendedTags = automaticTags.status === 'ready' ? automaticTags.tags : []
               report({ message: '正在归档…' })
               try {
                 if (record.backupStatus === 'error')
                   throw new Error(record.backupError ?? '原件备份未完成。')
-                archive = { status: 'ready', item: await catalog.archive(id, tags, request) }
+                archive = {
+                  status: 'ready',
+                  item: await catalog.archive(
+                    id,
+                    normalizeTags([...tags, ...recommendedTags]),
+                    request
+                  )
+                }
               } catch (error) {
                 archive = {
                   status: 'error',
@@ -90,7 +102,12 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
                 }
               }
             }
-            completed = { ...result, catalog: record, ...(archive ? { archive } : {}) }
+            completed = {
+              ...result,
+              catalog: record,
+              ...(archive ? { archive } : {}),
+              ...(automaticTags ? { automaticTags } : {})
+            }
             const failure =
               record.backupStatus === 'error'
                 ? `压缩已完成，但原件备份失败：${record.backupError ?? '请重试备份。'}`
