@@ -12,9 +12,11 @@ Agent 有两种共用入口：`compress_image`／`compress_video`／`compress_pd
 
 组合调用分别返回编码结果、`catalog` 备份记录与可选的 `archive` 结果。归档失败保留成功的编码结果和记录 ID，重试调用 `archive_file`，不能重新压缩已经移走的源文件。归档成功但标签失败时，通过归档资料的 `tagStatus`／`tagError` 报告。
 
-`search_archives` 返回归档结果和预设／已有标签；`tag_archives({ ids, add?, remove? })` 支持最多 100 个资料的标签增删差量，逐项返回状态。它们为后续 AI 快速打标提供业务入口。当前只按用户指令应用标签，或根据用户授权的文件名信息提出建议；没有自动内容分析、OCR 或音视频识别，也不在普通压缩时自动生成标签。用户授权一批标签方案后可一次应用。
+`search_archives` 返回归档结果和预设／已有标签；`tag_archives({ ids, add?, remove? })` 支持最多 100 个资料的标签增删差量，逐项返回状态。默认 20 个通用标签由 `src/shared/contracts/catalog.ts` 的 `presetTags` 统一定义，标签选择界面和查询共用该定义；已有自定义标签继续返回，不迁移或重命名旧标签。Agent 推荐前先查询词库，优先复用同义的已有名称；通用分类与有明确依据的具体标签可以并用，没有合适词时允许建议新词，经用户授权后写入。当前只按用户指令应用标签，或根据用户授权的文件名等已知信息提出建议；没有自动描述性元数据分析、OCR 或音视频识别，也不在普通压缩时自动生成标签。用户授权一批标签方案后可一次应用。
 
 主进程启动时在 Electron userData 的 `arkive.db` 打开 `node:sqlite`，记录源修改日期、原件／备份／输出／归档的位置和操作状态。重启恢复未完成的备份与归档；复制和校验不放在数据库事务中。编码函数本身不移动原件，产品调用方必须使用共用收尾入口。
+
+独立推荐入口为 `tag-recommendation.ts` 的 `recommendTags(input, signal?)`，完整 Prompt 在 `tag-recommendation-prompt.ts`，输入输出类型在 `src/shared/contracts/tag-recommendation.ts`。调用方提供整理好的文件名、原路径、扁平元数据、已有词库、相关用户说明及按文件限定的纠正；函数自动合并默认词库，复用 `agent/model.ts` 的模型初始化，通过 Pi SDK 1.2.0 的 `completeSimple` 完成一次无工具请求，不创建聊天会话、不读文件、不写标签。成功返回按输入顺序排列的 `items`，每个标签含名称、依据和程序计算的 `isNew`；只建议文件尚未拥有的标签。结构错误整次返回 `error`，取消返回 `cancelled`。不自动重试或接受截断回复；当前每次最多 10 个文件，资料 JSON 最多 24,000 UTF-8 字节，每文件最多 8 个建议，60 秒超时。元数据采集、IPC 与界面推荐尚未接线，业务流程不会自动调用。输入输出示例及完整边界见 `/Users/hu1hui/Developer/arkive-doc/proposals/ai-tag-recommendation.md`。
 
 Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation 的 `NSURLTagNamesKey` 读写；固定系统工具调用仍经过 `src/execution/process.ts`，不拼接 shell。首次归档继承原件标签，应用编辑提交增删差量，重读当前 Finder 标签后合并。写入核对失败保留待重试差量。启动、目录事件、窗口激活和手动刷新核对 Finder 标签，包括删除；只同步归档副本，不把后续修改传播到备份或输出。
 
@@ -25,6 +27,7 @@ Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation
 ## 验证
 
 ```sh
+rtk proxy node scripts/check-tag-recommendation.mjs
 rtk proxy node scripts/check-archive-links.mjs
 rtk proxy pnpm run build
 rtk proxy node scripts/check-catalog.mjs

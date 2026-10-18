@@ -6,6 +6,7 @@ import { watch } from 'node:fs'
 import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { crc32 } from 'node:zlib'
 import sharp, { type Sharp } from 'sharp'
 import { build } from 'vite'
 
@@ -34,6 +35,86 @@ for (let y = 0; y < height; y++) {
   }
 }
 const fixture = (): Sharp => sharp(raw, { raw: { width, height, channels: 4 } })
+
+// Independent TIFF reader for the fixture's EXIF values, including GPS rational numbers.
+function exifValues(exif: Buffer | undefined): Map<string, string | number | number[]> {
+  assert.ok(exif)
+  const data = exif.subarray(exif.toString('ascii', 0, 4) === 'Exif' ? 6 : 0)
+  const little = data.toString('ascii', 0, 2) === 'II'
+  const u16 = (at: number): number => (little ? data.readUInt16LE(at) : data.readUInt16BE(at))
+  const u32 = (at: number): number => (little ? data.readUInt32LE(at) : data.readUInt32BE(at))
+  const tags = new Map<string, string | number | number[]>()
+  function ifd(at: number, name: string): void {
+    for (let index = 0; index < u16(at); index++) {
+      const entry = at + 2 + index * 12
+      const tag = u16(entry)
+      const type = u16(entry + 2)
+      const count = u32(entry + 4)
+      const size = ({ 2: 1, 3: 2, 4: 4, 5: 8 } as Record<number, number>)[type]
+      if (!size) continue
+      const offset = count * size > 4 ? u32(entry + 8) : entry + 8
+      if (tag === 0x8769 || tag === 0x8825) {
+        ifd(u32(entry + 8), tag === 0x8769 ? 'exif' : 'gps')
+      } else if (type === 2) {
+        tags.set(
+          `${name}:${String(tag)}`,
+          data.toString('utf8', offset, offset + count).replace(/\0+$/, '')
+        )
+      } else {
+        const values = Array.from({ length: count }, (_, i) =>
+          type === 3
+            ? u16(offset + i * 2)
+            : type === 4
+              ? u32(offset + i * 4)
+              : u32(offset + i * 8) / u32(offset + i * 8 + 4)
+        )
+        tags.set(`${name}:${String(tag)}`, values.length === 1 ? values[0] : values)
+      }
+    }
+  }
+  ifd(u32(4), 'image')
+  return tags
+}
+
+function pngText(keyword: string, text: string): Buffer {
+  const body = Buffer.from(`tEXt${keyword}\0${text}`)
+  const chunk = Buffer.alloc(body.length + 8)
+  chunk.writeUInt32BE(body.length - 4)
+  body.copy(chunk, 4)
+  chunk.writeUInt32BE(crc32(body), chunk.length - 4)
+  return chunk
+}
+
+const xmp = `<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:im="http://ns.adobe.com/tiff/1.0/" xmlns:exif="http://ns.adobe.com/exif/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/" im:Orientation="6" im:ImageWidth="96" im:ImageLength="64" exif:ColorSpace="65535" dc:format="image/jpeg" photoshop:ICCProfile="Display P3"><exif:PixelXDimension>96</exif:PixelXDimension><exif:PixelYDimension>64</exif:PixelYDimension><dc:subject><rdf:Bag><rdf:li>旅行 &amp; 收藏</rdf:li><rdf:li>Arkive fixture</rdf:li></rdf:Bag></dc:subject></rdf:Description></rdf:RDF></x:xmpmeta>`
+
+async function assertPhotoMetadata(file: string, format: string): Promise<void> {
+  const metadata = await sharp(file).metadata()
+  assert.equal(metadata.orientation, 1)
+  assert.equal(metadata.width, height)
+  assert.equal(metadata.height, width)
+  assert.ok(metadata.icc)
+  const tags = exifValues(metadata.exif)
+  assert.equal(tags.get('image:315'), 'Arkive fixture') // Artist
+  assert.equal(tags.get('image:272'), 'Fixture camera') // Model
+  assert.equal(tags.get('exif:36867'), '2026:10:17 12:34:56')
+  assert.equal(tags.get('exif:40962'), height)
+  assert.equal(tags.get('exif:40963'), width)
+  assert.equal(tags.get('exif:40961'), 1) // sRGB
+  assert.equal(tags.get('gps:1'), 'N')
+  assert.deepEqual(tags.get('gps:2'), [31, 12, 0])
+  assert.equal(tags.get('gps:3'), 'E')
+  assert.deepEqual(tags.get('gps:4'), [121, 30, 0])
+  assert.match(metadata.xmp?.toString() ?? '', /im:Orientation="1"/)
+  assert.match(metadata.xmp?.toString() ?? '', /im:ImageWidth="64"/)
+  assert.match(metadata.xmp?.toString() ?? '', /im:ImageLength="96"/)
+  assert.match(metadata.xmp?.toString() ?? '', /<exif:PixelXDimension>64<\/exif:PixelXDimension>/)
+  assert.match(metadata.xmp?.toString() ?? '', /<exif:PixelYDimension>96<\/exif:PixelYDimension>/)
+  assert.match(metadata.xmp?.toString() ?? '', /exif:ColorSpace="1"/)
+  assert.ok(metadata.xmp?.includes(Buffer.from(`dc:format="image/${format}"`)))
+  assert.match(metadata.xmp?.toString() ?? '', /photoshop:ICCProfile="sRGB"/)
+  assert.ok(metadata.xmp?.includes(Buffer.from('旅行 &amp; 收藏')))
+  assert.ok(metadata.xmp?.includes(Buffer.from('Arkive fixture')))
+}
 
 try {
   await symlink(resolve('node_modules'), path('node_modules'), 'dir')
@@ -66,10 +147,18 @@ try {
   await fixture()
     .flatten({ background: '#ffffff' })
     .jpeg({ quality: 95 })
-    .withExif({ IFD0: { Artist: 'Arkive fixture' } })
-    .withIccProfile('srgb')
-    .withXmp('<x:xmpmeta xmlns:x="adobe:ns:meta/">Arkive fixture</x:xmpmeta>')
-    .withMetadata({ orientation: 6 })
+    .withExif({
+      IFD0: { Artist: 'Arkive fixture', Model: 'Fixture camera' },
+      IFD2: { DateTimeOriginal: '2026:10:17 12:34:56' },
+      IFD3: {
+        GPSLatitudeRef: 'N',
+        GPSLatitude: '31/1 12/1 0/1',
+        GPSLongitudeRef: 'E',
+        GPSLongitude: '121/1 30/1 0/1'
+      }
+    })
+    .withXmp(xmp)
+    .withMetadata({ orientation: 6, icc: 'p3' })
     .toFile(jpeg)
   const sourceHashes = await Promise.all([hash(png), hash(jpeg)])
   const info = await inspectImage({ inputPath: png })
@@ -112,11 +201,7 @@ try {
   assert.equal(jpegOriginalFormat.outputFormat, 'jpeg')
   assert.equal(jpegOriginalFormat.qualityAnalysis.metric, 'ssimulacra2')
   assert.ok(jpegOriginalFormat.qualityAnalysis.attempts >= 1)
-  const jpegOriginalMeta = await sharp(jpegOriginalFormat.outputPath).metadata()
-  assert.equal(jpegOriginalMeta.orientation, undefined)
-  assert.equal(jpegOriginalMeta.width, height)
-  assert.equal(jpegOriginalMeta.height, width)
-  assert.equal(jpegOriginalMeta.exif, undefined)
+  await assertPhotoMetadata(jpegOriginalFormat.outputPath, 'jpeg')
 
   const lossy = await compressImage({
     inputPath: jpeg,
@@ -190,13 +275,100 @@ try {
   )
   const jpegWebp = await compressImage({ inputPath: jpeg, outputPath: path('photo.webp') })
   assert.equal(jpegWebp.tool, 'sharp')
-  const jpegWebpMeta = await sharp(jpegWebp.outputPath).metadata()
-  assert.equal(jpegWebpMeta.orientation, undefined)
-  assert.equal(jpegWebpMeta.width, height)
-  assert.equal(jpegWebpMeta.height, width)
-  assert.equal(jpegWebpMeta.exif, undefined)
-  assert.equal(jpegWebpMeta.icc, undefined)
-  assert.equal(jpegWebpMeta.xmp, undefined)
+  await assertPhotoMetadata(jpegWebp.outputPath, 'webp')
+  const normalizedProfile = (
+    await sharp({ create: { width: 1, height: 1, channels: 3, background: '#000' } })
+      .withIccProfile('srgb')
+      .png()
+      .toBuffer({ resolveWithObject: true })
+  ).data
+  assert.deepEqual(
+    (await sharp(jpegWebp.outputPath).metadata()).icc,
+    (await sharp(normalizedProfile).metadata()).icc
+  )
+  // EXIF GPS and descriptive XMP remain useful independently of the original filename.
+  const taggedPng = path('tagged.png')
+  await sharp(jpeg).keepMetadata().png().toFile(taggedPng)
+  const pngBytes = await readFile(taggedPng)
+  await writeFile(
+    taggedPng,
+    Buffer.concat([
+      pngBytes.subarray(0, 33),
+      pngText('Project', 'Arkive sample'),
+      pngBytes.subarray(33)
+    ])
+  )
+  const taggedHash = await hash(taggedPng)
+  const taggedResult = await compressImage({
+    inputPath: taggedPng,
+    outputPath: path('tagged-result.png'),
+    preserveFormat: true
+  })
+  await assertPhotoMetadata(taggedResult.outputPath, 'png')
+  assert.equal((await sharp(taggedResult.outputPath).metadata()).isPalette, true)
+  assert.ok(
+    (await sharp(taggedResult.outputPath).metadata()).comments?.some(
+      (comment) => comment.keyword === 'Project' && comment.text === 'Arkive sample'
+    )
+  )
+  assert.equal(taggedResult.outputBytes, (await readFile(taggedResult.outputPath)).length)
+  assert.equal(
+    taggedResult.savedBytes,
+    Math.max(0, taggedResult.originalBytes - taggedResult.outputBytes)
+  )
+  assert.equal(await hash(taggedPng), taggedHash)
+  const taggedWebp = await compressImage({
+    inputPath: taggedPng,
+    outputPath: path('tagged-result.webp')
+  })
+  await assertPhotoMetadata(taggedWebp.outputPath, 'webp')
+  assert.ok(taggedWebp.metadataWarnings?.some((warning) => warning.includes('PNG 文本块')))
+
+  // Photoshop APP13 carries IPTC keywords; JPEG can retain it, WebP cannot.
+  const iptc = Buffer.concat([Buffer.from([0x1c, 2, 25, 0, 6]), Buffer.from('travel')])
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(iptc.length)
+  const photoshop = Buffer.concat([
+    Buffer.from('Photoshop 3.0\0'),
+    Buffer.from('8BIM'),
+    Buffer.from([4, 4, 0, 0]),
+    length,
+    iptc,
+    Buffer.alloc(iptc.length % 2)
+  ])
+  const marker = Buffer.alloc(4)
+  marker.writeUInt16BE(0xffed)
+  marker.writeUInt16BE(photoshop.length + 2, 2)
+  const photoBytes = await readFile(jpeg)
+  const iptcSource = path('iptc.jpg')
+  await writeFile(
+    iptcSource,
+    Buffer.concat([photoBytes.subarray(0, 2), marker, photoshop, photoBytes.subarray(2)])
+  )
+  const iptcBefore = (await sharp(iptcSource).metadata()).iptc
+  assert.ok(iptcBefore?.includes(Buffer.from('travel')))
+  const iptcJpeg = await compressImage({
+    inputPath: iptcSource,
+    outputPath: path('iptc-result.jpg'),
+    preserveFormat: true
+  })
+  assert.deepEqual((await sharp(iptcJpeg.outputPath).metadata()).iptc, iptcBefore)
+  assert.equal(iptcJpeg.metadataWarnings, undefined)
+  const iptcWebp = await compressImage({
+    inputPath: iptcSource,
+    outputPath: path('iptc-result.webp')
+  })
+  assert.ok(iptcWebp.metadataWarnings?.some((warning) => warning.includes('IPTC')))
+  const badXmp = path('bad-xmp.jpg')
+  await sharp(jpeg).keepMetadata().withXmp('<x:xmpmeta>').jpeg().toFile(badXmp)
+  await assert.rejects(
+    compressImage({ inputPath: badXmp, outputPath: path('bad-xmp.webp') }),
+    /XMP/
+  )
+  assert.equal(await exists(path('bad-xmp.webp')), false)
+  console.log(
+    'PASS: IPTC retained in JPEG; unsupported IPTC/PNG text reported; malformed XMP never published'
+  )
 
   const explicitJpeg = await compressImage({
     inputPath: png,
@@ -294,12 +466,15 @@ try {
     .png()
     .toFile(path('metadata.png'))
   assert.ok((await sharp(path('metadata.png')).metadata()).exif)
-  const metadataDropped = await compressImage({
+  const metadataPreserved = await compressImage({
     inputPath: path('metadata.png'),
     outputPath: path('metadata-result.webp')
   })
-  assert.equal(metadataDropped.tool, 'sharp')
-  assert.equal((await sharp(metadataDropped.outputPath).metadata()).exif, undefined)
+  assert.equal(metadataPreserved.tool, 'sharp')
+  assert.equal(
+    exifValues((await sharp(metadataPreserved.outputPath).metadata()).exif).get('image:315'),
+    'PNG metadata'
+  )
   await writeFile(path('corrupt.png'), (await readFile(png)).subarray(0, 80))
   await assert.rejects(
     compressImage({ inputPath: path('corrupt.png'), outputPath: path('corrupt.webp') })
@@ -338,7 +513,7 @@ try {
     'All task temp directories are removed'
   )
   console.log(
-    'PASS: Real Sharp/pngquant lossy routes, transparent pixels, explicit JPEG background, metadata dropping, bounded quality attempts, no-savings output, validation, cancellation, unrestricted user directories and critical system path protection, no-overwrite race and source preservation.'
+    'PASS: Real Sharp/pngquant lossy routes, EXIF date/device/GPS, XMP keywords and PNG text preserved; orientation/dimensions/ICC updated; final byte accounting, transparent pixels, bounded quality attempts, no-savings, validation, cancellation, no-overwrite and source preservation.'
   )
 } finally {
   await rm(directory, { recursive: true, force: true })

@@ -54,6 +54,8 @@ export interface ImageCompressionResult {
   savedBytes: number
   outputFormat: ImageOutputFormat
   tool: 'sharp' | 'pngquant'
+  /** Source metadata that the output format cannot carry; the original retains it. */
+  metadataWarnings?: string[]
   quality?: number
   qualityAnalysis: ImageQualityAnalysis
 }

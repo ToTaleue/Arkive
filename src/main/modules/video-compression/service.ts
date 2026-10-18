@@ -28,6 +28,42 @@ interface VideoInfo extends VideoInspection {
   codec: string
   bitDepth: 8 | 10
   color: { option: string; value: string }[]
+  metadata: {
+    format: Map<string, string>
+    streams: Map<string, string>[]
+  }
+}
+
+// These describe the old container/encoder or removed timecode, not the retained content.
+const replacedMetadata = new Set([
+  'major_brand',
+  'minor_version',
+  'compatible_brands',
+  'encoder',
+  'encoding_tool',
+  'vendor_id',
+  'timecode'
+])
+
+function retainedMetadata(value: unknown): Map<string, string> {
+  const entries: [string, string][] = []
+  if (isRecord(value)) {
+    for (const [key, text] of Object.entries(value)) {
+      if (typeof text !== 'string' || replacedMetadata.has(key.toLowerCase())) continue
+      // ffprobe can join equivalent dates from the container header and mdta with ';'.
+      // Normalize those duplicates so the new container can also write a valid header date.
+      const timestamps = text.split(';')
+      const dates = timestamps.map((date) => Date.parse(date))
+      const timestamp =
+        key.toLowerCase() === 'creation_time' &&
+        Number.isFinite(dates[0]) &&
+        dates.every((date) => date === dates[0])
+          ? timestamps[0]
+          : text
+      entries.push([key, timestamp])
+    }
+  }
+  return new Map(entries)
 }
 
 // 抽样 VMAF 试验目标，尚待更多素材标定；不是整片画质保证或画质保留百分比。
@@ -164,7 +200,11 @@ async function probeVideo(path: string, signal?: AbortSignal): Promise<VideoInfo
         ? [{ option, value }]
         : []
     }),
-    removedContents
+    removedContents,
+    metadata: {
+      format: retainedMetadata(isRecord(data.format) ? data.format.tags : undefined),
+      streams: [video, ...audios].map((stream) => retainedMetadata(stream.tags))
+    }
   }
 }
 
@@ -391,6 +431,14 @@ export async function compressVideo(
         '0:a?',
         '-map_metadata',
         '0',
+        // MP4's default iTunes metadata mapping silently drops arbitrary QuickTime/custom keys.
+        // Preserve descriptive keys in mdta, but let the muxer/encoder regenerate technical data.
+        ...[...replacedMetadata].flatMap((key) => ['-metadata', `${key}=`]),
+        ...(before.metadata.format.has('creation_time')
+          ? ['-metadata', `creation_time=${before.metadata.format.get('creation_time') ?? ''}`]
+          : []),
+        '-metadata:s:v:0',
+        'encoder=',
         '-map_chapters',
         '-1',
         // Do not let copied video metadata cause the MP4 muxer to recreate a timecode track.
@@ -423,7 +471,7 @@ export async function compressVideo(
         '-c:a',
         'copy',
         '-movflags',
-        '+faststart',
+        '+faststart+use_metadata_tags',
         '-f',
         'mp4',
         temporaryOutput
@@ -455,6 +503,23 @@ export async function compressVideo(
       (before.frames !== undefined && after.frames !== before.frames)
     ) {
       throw new Error('输出视频的编码、分辨率、时长、帧数或音轨检查未通过。')
+    }
+    for (const [index, expected] of [
+      before.metadata.format,
+      ...before.metadata.streams
+    ].entries()) {
+      const actual = [after.metadata.format, ...after.metadata.streams][index]
+      for (const [key, value] of expected) {
+        const retained = actual.get(key)
+        const sameDate =
+          key.toLowerCase() === 'creation_time' &&
+          retained !== undefined &&
+          Number.isFinite(Date.parse(value)) &&
+          Date.parse(value) === Date.parse(retained)
+        if (retained !== value && !sameDate) {
+          throw new Error(`输出视频未保留元数据 ${key}，未发布结果。`)
+        }
+      }
     }
     await runFfmpeg(
       [

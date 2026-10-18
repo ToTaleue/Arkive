@@ -300,6 +300,11 @@ export function ImageCompressionPage(): React.JSX.Element {
           <p className="image-output-path">
             {result.status === 'compressed' ? result.outputPath : result.inputPath}
           </p>
+          {result.metadataWarnings?.map((warning) => (
+            <p key={warning} className="image-hint">
+              {warning}
+            </p>
+          ))}
           <button className="image-text-button" onClick={() => void reveal()}>
             <FolderOpen size={15} />在 Finder 中显示
           </button>

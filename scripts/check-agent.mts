@@ -737,6 +737,7 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
 
   const imageInput = resolve(workspaceDir, 'image with spaces.png')
   await sharp({ create: { width: 96, height: 64, channels: 4, background: '#00998880' } })
+    .withExif({ IFD0: { Artist: 'Agent metadata fixture' } })
     .png({ compressionLevel: 0 })
     .toFile(imageInput)
   const imageBytes = await readFile(imageInput)
@@ -792,6 +793,9 @@ export const shell = { openPath: async () => '', showItemInFolder: () => {}, tra
     )
   )
   assert.equal((await sharp(imageOutput).metadata()).format, 'webp')
+  assert.ok(
+    (await sharp(imageOutput).metadata()).exif?.includes(Buffer.from('Agent metadata fixture'))
+  )
   const pendingImage = currentCatalog.repo.db
     .prepare('SELECT id FROM catalog_items WHERE output_path = ?')
     .get(imageOutput)

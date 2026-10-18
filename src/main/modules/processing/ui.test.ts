@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, writeFile, stat, copyFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { crc32 } from 'node:zlib'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { registerImageCompressionIpc } from '../image-compression/ipc'
 import sharp from 'sharp'
@@ -400,8 +401,19 @@ async function check(): Promise<void> {
     // Use a Chromium-backed File, not a synthetic File with a forged path property.
     const dragImage = join(directory, 'native-drop.png')
     await sharp({ create: { width: 300, height: 200, channels: 3, background: '#90b080' } })
+      .withExif({ IFD0: { Artist: 'UI metadata fixture' } })
       .png({ compressionLevel: 0 })
       .toFile(dragImage)
+    const pngBytes = await readFile(dragImage)
+    const textBlock = Buffer.from('tEXtProject\0Arkive UI sample')
+    const textChunk = Buffer.alloc(textBlock.length + 8)
+    textChunk.writeUInt32BE(textBlock.length - 4)
+    textBlock.copy(textChunk, 4)
+    textChunk.writeUInt32BE(crc32(textBlock), textChunk.length - 4)
+    await writeFile(
+      dragImage,
+      Buffer.concat([pngBytes.subarray(0, 33), textChunk, pngBytes.subarray(33)])
+    )
     const imageHash = await hashFile(dragImage)
     await evaluate(
       "document.querySelector('[aria-label=\"图片压缩\"]').click(); const input=document.createElement('input'); input.type='file'; input.id='native-drop-fixture'; document.body.append(input)"
@@ -453,6 +465,8 @@ async function check(): Promise<void> {
     }
     await wait("document.querySelector('.image-page .image-result') !== null")
     assert.equal((await sharp(savePath).metadata()).format, 'webp')
+    assert.ok((await sharp(savePath).metadata()).exif?.includes(Buffer.from('UI metadata fixture')))
+    await wait("document.querySelector('.image-result')?.innerText.includes('PNG 文本块')")
     const imageItem = catalog
       .query({ state: 'pending' })
       .items.find((item) => item.originalName === 'native-drop.png')

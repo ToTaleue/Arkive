@@ -182,7 +182,7 @@ export async function createArkiveTools(cwd: string): Promise<ToolDefinition[]> 
       name: 'tag_archives',
       label: '批量修改归档标签',
       description:
-        '用户授权后，按记录 id 批量增删归档副本的标签，同步 Finder 与 SQLite，不搬迁文件，不修改备份或原输出。优先复用 search_archives 返回的预设和已有标签，可使用用户指定的自定义标签。只应用明确的增删差量，不用整组旧值覆盖；逐项核对返回的 tagStatus 和 tagError。可供后续 AI 快速打标使用，但不自动读取正文或推断用户未授权的分类。',
+        '用户授权后，按记录 id 批量增删归档副本的标签，同步 Finder 与 SQLite，不搬迁文件，不修改备份或原输出。优先复用 search_archives 返回的预设和已有标签，也可使用用户指定或已确认建议中的具体标签；默认词库不是封闭名单。只应用明确的增删差量，不用整组旧值覆盖；逐项核对返回的 tagStatus 和 tagError。可供后续 AI 快速打标使用，但不自动读取正文或推断用户未授权的分类。',
       parameters: Type.Object({
         ids: Type.Array(recordId, { minItems: 1, maxItems: 100, uniqueItems: true }),
         add: Type.Optional(tags),

@@ -159,7 +159,7 @@ async function check(): Promise<void> {
     assert.equal(catalog.query({ state: 'pending' }).total, 0)
     // Submit a real UI message, then check both tool events and actual filesystem effects.
     const imageOutput = join(directory, 'result.webp')
-    const text = `这是明确的执行授权：将 ${image} 有损压缩为 WebP，输出 ${imageOutput}，质量优先；校验且变小后将完整原件移动到 Arkive Backup，并立即归档，标签“联调”。我理解元数据丢弃和原路径不再保留原件，立即执行，不需要再次确认。仅处理这个生成样本。`
+    const text = `这是明确的执行授权：将 ${image} 有损压缩为 WebP，输出 ${imageOutput}，质量优先；校验且变小后将完整原件移动到 Arkive Backup，并立即归档，标签“联调”。我理解有损压缩和原路径不再保留原件，立即执行，不需要再次确认。仅处理这个生成样本。`
     await wait(
       '!document.querySelector(\'.conversation-view:not([hidden]) [aria-label="输入消息"]\').disabled'
     )

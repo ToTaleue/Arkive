@@ -1,12 +1,14 @@
-import { link, lstat, mkdtemp, realpath, rm, stat } from 'node:fs/promises'
+import { link, lstat, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import { assertSystemWriteAllowed } from '../../system-paths'
 import { scoreImagePair } from '../../../execution/ssimulacra2'
 import {
   encodeImage,
+  outputXmp,
   readImageMetadata,
   validateImage,
-  writeQualityImage
+  writeQualityImage,
+  writeQuantizationInput
 } from '../../../execution/sharp'
 import { runBundledTool } from '../../../execution/process'
 import type {
@@ -133,6 +135,53 @@ function selectOutput(request: ImageCompressionRequest, inputFormat: string): Im
 
 type Candidate = number | string | undefined
 
+// pngquant's macOS reader drops ancillary chunks. Restore normalized metadata without
+// re-encoding its indexed pixels or restoring the old palette/transparency information.
+const pngMetadataChunks = new Set([
+  'eXIf',
+  'iCCP',
+  'sRGB',
+  'gAMA',
+  'cHRM',
+  'pHYs',
+  'iTXt',
+  'tEXt',
+  'zTXt',
+  'tIME'
+])
+
+function pngChunks(data: Buffer): { type: string; bytes: Buffer }[] {
+  const chunks: { type: string; bytes: Buffer }[] = []
+  for (let offset = 8; offset < data.length;) {
+    if (offset + 12 > data.length) throw new Error('PNG 元数据块不完整。')
+    const end = offset + data.readUInt32BE(offset) + 12
+    if (end > data.length) throw new Error('PNG 元数据块不完整。')
+    chunks.push({
+      type: data.toString('ascii', offset + 4, offset + 8),
+      bytes: data.subarray(offset, end)
+    })
+    offset = end
+  }
+  return chunks
+}
+
+async function restorePngMetadata(input: string, output: string): Promise<void> {
+  const [source, candidate] = await Promise.all([readFile(input), readFile(output)])
+  const metadata = pngChunks(source).filter(({ type }) => pngMetadataChunks.has(type))
+  const chunks = pngChunks(candidate).filter(({ type }) => !pngMetadataChunks.has(type))
+  const header = chunks.shift()
+  if (header?.type !== 'IHDR') throw new Error('PNG 文件头无效。')
+  await writeFile(
+    output,
+    Buffer.concat([
+      candidate.subarray(0, 8),
+      header.bytes,
+      ...metadata.map(({ bytes }) => bytes),
+      ...chunks.map(({ bytes }) => bytes)
+    ])
+  )
+}
+
 function candidatesFor(
   tool: 'sharp' | 'pngquant',
   request: ImageCompressionRequest,
@@ -180,6 +229,7 @@ async function encodeCandidate(
       `${tool} 压缩失败（退出码 ${String(result.exitCode)}）：${(result.stderr || result.stdout).slice(-4096)}`
     )
   }
+  await restorePngMetadata(inputPath, outputPath)
   return true
 }
 
@@ -208,15 +258,37 @@ function checkOutputImage(
     after.format !== format ||
     after.width !== expectedWidth ||
     after.height !== expectedHeight ||
+    (after.orientation !== undefined && after.orientation !== 1) ||
     (after.pages ?? 1) !== 1
   ) {
     throw new Error('输出图片的格式、尺寸、透明通道或方向检查未通过。')
   }
+  if ((before.exif && !after.exif) || (before.icc && !after.icc)) {
+    throw new Error('输出图片丢失 EXIF 或颜色配置，未发布结果。')
+  }
+  const expectedXmp = outputXmp(before, format)
+  if (expectedXmp !== undefined && after.xmp?.toString('utf8') !== expectedXmp) {
+    throw new Error('输出图片的 XMP 元数据校验未通过。')
+  }
+  if (format === 'jpeg' && before.iptc && !before.iptc.equals(after.iptc ?? Buffer.alloc(0))) {
+    throw new Error('输出图片的 IPTC 元数据校验未通过。')
+  }
+  if (
+    format === 'png' &&
+    before.comments?.some(
+      (comment) =>
+        !after.comments?.some(
+          (item) => item.keyword === comment.keyword && item.text === comment.text
+        )
+    )
+  )
+    throw new Error('输出图片丢失 PNG 文本元数据，未发布结果。')
 }
 
 /**
  * User-confirmed main-process execution API. Does not register an Agent tool or create a task queue.
- * Writes only a new, validated copy. Metadata is intentionally discarded. Lossy candidates are
+ * Writes only a new, validated copy, preserving metadata and updating normalized pixel fields.
+ * Lossy candidates are
  * selected by byte savings. SSIMULACRA2 describes the final output; its reference score is
  * never a publication gate. If no candidate is smaller, publish the smallest valid candidate
  * as no-savings so product callers retain the original.
@@ -259,6 +331,11 @@ export async function compressImage(
   signal?.throwIfAborted()
   const temporaryDirectory = await mkdtemp(join(directory, '.arkive-image-'))
   try {
+    let encodingInput = info.inputPath
+    if (tool === 'pngquant') {
+      encodingInput = join(temporaryDirectory, 'quantization-input.png')
+      await writeQuantizationInput(info.inputPath, encodingInput, before, signal)
+    }
     const metricSource = join(temporaryDirectory, 'metric-source.png')
     let selectedOutput: string | undefined
     let selectedQuality: number | undefined
@@ -271,7 +348,7 @@ export async function compressImage(
       const candidatePath = join(temporaryDirectory, `candidate-${String(index)}.${format}`)
       const encoded = await encodeCandidate(
         tool,
-        info.inputPath,
+        encodingInput,
         candidatePath,
         format,
         candidate,
@@ -332,6 +409,15 @@ export async function compressImage(
     signal?.throwIfAborted()
     // Atomic no-overwrite publication, even if a competing request created the target meanwhile.
     await link(selectedOutput, outputPath)
+    const metadataWarnings: string[] = []
+    if (format !== 'jpeg' && before.iptc)
+      metadataWarnings.push(
+        `${format.toUpperCase()} 输出不支持保留原始 IPTC 数据；完整信息保留在原件中。`
+      )
+    if (format !== 'png' && before.comments?.length)
+      metadataWarnings.push('输出格式不支持保留原始 PNG 文本块；完整信息保留在原件中。')
+    if (before.tifftagPhotoshop && format !== 'jpeg')
+      metadataWarnings.push('输出格式不支持保留原始 Photoshop 数据块；完整信息保留在原件中。')
     return {
       status: outputStat.size < info.originalBytes ? 'compressed' : 'no-savings',
       inputPath: info.inputPath,
@@ -341,6 +427,7 @@ export async function compressImage(
       savedBytes: Math.max(0, info.originalBytes - outputStat.size),
       outputFormat: format,
       tool,
+      ...(metadataWarnings.length ? { metadataWarnings } : {}),
       ...(selectedQuality === undefined ? {} : { quality: selectedQuality }),
       qualityAnalysis: {
         metric: 'ssimulacra2',

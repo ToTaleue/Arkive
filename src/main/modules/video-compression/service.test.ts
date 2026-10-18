@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { app } from 'electron'
@@ -46,7 +45,9 @@ async function check(): Promise<void> {
   await app.whenReady()
   checkProgressEstimates()
   checkAbAv1Results()
-  const directory = await mkdtemp(join(tmpdir(), 'arkive-video-check-'))
+  const testRoot = '/Users/hu1hui/Desktop/arkive-test'
+  await mkdir(testRoot, { recursive: true })
+  const directory = await mkdtemp(join(testRoot, 'video-check-'))
   try {
     const source = join(directory, 'source $ [clip].mov')
     await ffmpeg([
@@ -64,6 +65,24 @@ async function check(): Promise<void> {
       '2',
       '-c:a',
       'aac',
+      '-metadata',
+      'creation_time=2026-10-17T04:34:56Z',
+      '-metadata',
+      'title=Arkive 元数据 "样本"',
+      '-metadata',
+      'comment=Unchanged description',
+      '-metadata',
+      'keywords=旅行,收藏',
+      '-metadata',
+      'com.apple.quicktime.location.ISO6709=+31.2000+121.5000/',
+      '-metadata',
+      'com.apple.quicktime.model=Fixture camera',
+      '-metadata',
+      'arkive_custom=custom $ [value]',
+      '-metadata:s:a:0',
+      'language=zho',
+      '-movflags',
+      '+use_metadata_tags',
       source
     ])
     const originalHash = createHash('sha256')
@@ -106,6 +125,40 @@ async function check(): Promise<void> {
           outputPath
         ])
         assert.equal(video.exitCode, 0, video.stderr)
+        const metadata = await runBundledTool('ffprobe', [
+          '-v',
+          'error',
+          '-show_entries',
+          'format_tags:stream_tags=language',
+          '-of',
+          'json',
+          outputPath
+        ])
+        assert.equal(metadata.exitCode, 0, metadata.stderr)
+        const tags: unknown = JSON.parse(metadata.stdout)
+        assert.ok(typeof tags === 'object' && tags !== null && 'format' in tags)
+        assert.ok(typeof tags.format === 'object' && tags.format !== null && 'tags' in tags.format)
+        const actual = tags.format.tags
+        assert.ok(typeof actual === 'object' && actual !== null)
+        assert.ok('title' in actual && actual.title === 'Arkive 元数据 "样本"')
+        assert.ok('comment' in actual && actual.comment === 'Unchanged description')
+        assert.ok('keywords' in actual && actual.keywords === '旅行,收藏')
+        assert.ok('arkive_custom' in actual && actual.arkive_custom === 'custom $ [value]')
+        assert.ok(
+          'com.apple.quicktime.model' in actual &&
+            actual['com.apple.quicktime.model'] === 'Fixture camera'
+        )
+        assert.ok(
+          'com.apple.quicktime.location.ISO6709' in actual &&
+            actual['com.apple.quicktime.location.ISO6709'] === '+31.2000+121.5000/'
+        )
+        assert.ok(
+          'creation_time' in actual &&
+            typeof actual.creation_time === 'string' &&
+            actual.creation_time
+              .split(';')
+              .every((timestamp) => Date.parse(timestamp) === Date.parse('2026-10-17T04:34:56Z'))
+        )
         const data: unknown = JSON.parse(video.stdout)
         assert.ok(typeof data === 'object' && data !== null && 'streams' in data)
         assert.deepEqual(data.streams, [
@@ -134,7 +187,7 @@ async function check(): Promise<void> {
       }
     }
     console.log(
-      'PASS: all three HEVC and H.264 presets with real VideoToolbox, AAC and output decoding'
+      'PASS: all three HEVC and H.264 presets with real VideoToolbox, AAC, dates/GPS/device/custom metadata and output decoding'
     )
 
     const cover = join(directory, 'cover.jpg')

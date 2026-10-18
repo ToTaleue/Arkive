@@ -58,7 +58,28 @@ export interface CatalogPage {
   total: number
   tags: string[]
 }
-export const presetTags = ['旅行', '演唱会', '会议', '课程', '素材', '参考', '交付', '收藏']
+export const presetTags = [
+  '工作',
+  '学习',
+  '生活',
+  '家庭',
+  '旅行',
+  '出差',
+  '活动',
+  '演唱会',
+  '项目',
+  '会议',
+  '课程',
+  '设计',
+  '财务',
+  '合同',
+  '证件',
+  '票据',
+  '素材',
+  '参考',
+  '交付',
+  '收藏'
+]
 export const catalogChannels = {
   archive: 'catalog:archive',
   query: 'catalog:query',
