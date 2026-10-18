@@ -39,6 +39,9 @@ function isStartRequest(value: unknown): value is VideoStartRequest {
     typeof request.preset === 'string' &&
     ['quality', 'balanced', 'size'].includes(request.preset) &&
     (request.archive === undefined || typeof request.archive === 'boolean') &&
+    (request.keepLinkAtOriginalLocation === undefined ||
+      typeof request.keepLinkAtOriginalLocation === 'boolean') &&
+    (request.keepLinkAtOriginalLocation !== true || request.archive === true) &&
     !('compatibility' in request)
   )
 }
@@ -143,7 +146,8 @@ export function registerVideoCompressionIpc(): (contents: WebContents) => void {
             inputPath: input,
             outputPath: output,
             preset: request.preset,
-            ...(request.archive ? { archive: true } : {})
+            ...(request.archive ? { archive: true } : {}),
+            keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation
           },
           controller.signal,
           (progress) => {

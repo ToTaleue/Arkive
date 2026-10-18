@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useCompressionTask, compressionTaskMessage } from '../hooks/useCompressionTask'
 import type { SelectedVideo } from '../../../shared/contracts/video'
-import type { SelectedImage } from '../../../shared/contracts/image'
+import type { ImageQualityAnalysis, SelectedImage } from '../../../shared/contracts/image'
 import type { SelectedDocument } from '../../../shared/contracts/processing'
 import type { ArchiveAttempt, AutomaticTagAttempt } from '../../../shared/contracts/catalog'
 import '../assets/compression.css'
@@ -29,6 +29,7 @@ type QueueItem = {
   selected?: SelectedFile
   status: QueueStatus
   message?: string
+  details?: string[]
 }
 
 const videoExtensions = new Set(['mp4', 'mov', 'm4v', 'mkv', 'avi', 'webm'])
@@ -75,15 +76,42 @@ function completionMessage(
   automaticTags: AutomaticTagAttempt | undefined,
   fallback: string
 ): string {
-  if (archive?.status === 'error') return `压缩完成 · 归档失败：${archive.error}`
+  if (archive?.status === 'error') return `${fallback} · 归档失败：${archive.error}`
+  if (archive?.status === 'ready' && archive.item.originalLink?.status === 'error') {
+    return `${fallback} · 已归档 · 原位置入口未创建：${archive.item.originalLink.error ?? '请在归档中重试'}`
+  }
+  if (archive?.status === 'ready' && archive.item.originalLink?.status === 'ready') {
+    fallback += ' · 原位置入口已创建'
+  }
   if (archive?.status === 'ready' && automaticTags?.status === 'error') {
-    return `压缩完成 · 已归档 · AI 标签失败：${automaticTags.error}`
+    return `${fallback} · 已归档 · AI 标签失败：${automaticTags.error}`
+  }
+  if (archive?.status === 'ready' && archive.item.tagStatus === 'error') {
+    return `${fallback} · 已归档 · Finder 标签同步失败：${archive.item.tagError ?? '请在归档中重试'}`
+  }
+  if (archive?.status === 'ready' && automaticTags?.status === 'cancelled') {
+    return `${fallback} · 已归档 · AI 标签已取消`
   }
   if (archive?.status === 'ready' && automaticTags?.status === 'ready') {
-    return `压缩完成 · 已归档 · 已添加 ${String(automaticTags.tags.length)} 个标签`
+    return `${fallback} · 已归档 · 已添加 ${String(automaticTags.tags.length)} 个标签`
   }
-  if (archive?.status === 'ready') return '压缩完成 · 已归档'
+  if (archive?.status === 'ready') return `${fallback} · 已归档`
   return fallback
+}
+
+function resultSizes(inputBytes: number, outputBytes: number, status: string): string {
+  if (status === 'no-savings') return `保留原文件 ${formatSize(inputBytes)} · 采用收益 0%`
+  const reduction =
+    inputBytes > 0
+      ? ` · 体积减少 ${(((inputBytes - outputBytes) / inputBytes) * 100).toFixed(1)}%`
+      : ''
+  return `${formatSize(inputBytes)} → ${formatSize(outputBytes)}${reduction}`
+}
+
+function imageQualityMessage(analysis: ImageQualityAnalysis): string {
+  if (analysis.score === null)
+    return `画质参考评分不可用${analysis.error ? `：${analysis.error}` : ''}`
+  return `画质参考 ${analysis.score.toFixed(1)} / 目标 ${String(analysis.targetScore)}${analysis.meetsTarget === false ? ' · 低于参考目标，请查看原图对照' : ''}`
 }
 
 export function CompressionPage(): React.JSX.Element {
@@ -94,6 +122,7 @@ export function CompressionPage(): React.JSX.Element {
   const [preset, setPreset] = useState<'quality' | 'balanced' | 'size'>('balanced')
   const [imageOutput, setImageOutput] = useState<'webp' | 'original'>('webp')
   const [archiveAfterCompression, setArchiveAfterCompression] = useState(false)
+  const [keepLinkAtOriginalLocation, setKeepLinkAtOriginalLocation] = useState(false)
   const [officeReplaceConfirmed, setOfficeReplaceConfirmed] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -117,7 +146,7 @@ export function CompressionPage(): React.JSX.Element {
     const unique = paths.filter(
       (candidate, index) =>
         candidate.path &&
-        !items.some((existing) => existing.path === candidate.path) &&
+        (replace || !items.some((existing) => existing.path === candidate.path)) &&
         paths.findIndex((other) => other.path === candidate.path) === index
     )
     const candidates: QueueItem[] = []
@@ -184,6 +213,9 @@ export function CompressionPage(): React.JSX.Element {
 
   async function compressItem(item: QueueItem): Promise<'done' | 'cancelled' | 'error'> {
     const runId = crypto.randomUUID()
+    const archiveOptions = archiveAfterCompression
+      ? { archive: true, keepLinkAtOriginalLocation }
+      : {}
     setActive({ itemId: item.id, runId })
     updateItem(item.id, { status: 'running', message: '正在准备文件…' })
     try {
@@ -193,7 +225,7 @@ export function CompressionPage(): React.JSX.Element {
           runId,
           fileId: selected.id,
           preset,
-          ...(archiveAfterCompression ? { archive: true } : {})
+          ...archiveOptions
         })
         if (outcome.status === 'completed') {
           updateItem(item.id, {
@@ -201,8 +233,16 @@ export function CompressionPage(): React.JSX.Element {
             message: completionMessage(
               outcome.result.archive,
               outcome.result.automaticTags,
-              '压缩完成 · 原件已保留'
-            )
+              outcome.result.status === 'no-savings' ? '无压缩收益 · 原文件已保留' : '压缩完成'
+            ),
+            details: [
+              resultSizes(
+                outcome.result.inputBytes,
+                outcome.result.outputBytes,
+                outcome.result.status
+              ),
+              `${outcome.result.status === 'no-savings' ? '未采用候选 · ' : ''}抽样 VMAF ${outcome.result.qualityAnalysis.sampleVmaf.toFixed(1)} / 目标 ${String(outcome.result.qualityAnalysis.targetVmaf)}`
+            ]
           })
           return 'done'
         }
@@ -218,7 +258,7 @@ export function CompressionPage(): React.JSX.Element {
           runId,
           fileId: selected.id,
           preset,
-          ...(archiveAfterCompression ? { archive: true } : {}),
+          ...archiveOptions,
           ...(imageOutput === 'original'
             ? { preserveFormat: true }
             : { outputFormat: 'webp' as const })
@@ -229,8 +269,17 @@ export function CompressionPage(): React.JSX.Element {
             message: completionMessage(
               outcome.result.archive,
               outcome.result.automaticTags,
-              '压缩完成 · 原件已保留'
-            )
+              outcome.result.status === 'no-savings' ? '无压缩收益 · 原文件已保留' : '压缩完成'
+            ),
+            details: [
+              resultSizes(
+                outcome.result.originalBytes,
+                outcome.result.outputBytes,
+                outcome.result.status
+              ),
+              imageQualityMessage(outcome.result.qualityAnalysis),
+              ...(outcome.result.metadataWarnings ?? [])
+            ]
           })
           return 'done'
         }
@@ -246,18 +295,50 @@ export function CompressionPage(): React.JSX.Element {
           runId,
           fileId: selected.id,
           preset: item.kind === 'pdf' ? (preset === 'quality' ? 'balanced' : preset) : preset,
-          ...(archiveAfterCompression ? { archive: true } : {}),
+          ...archiveOptions,
           ...(item.kind === 'office' ? { replaceConfirmed: officeReplaceConfirmed } : {})
         })
         if (outcome.status === 'completed') {
+          if (
+            outcome.result.kind === 'office' &&
+            outcome.result.value.replacementStatus === 'error'
+          ) {
+            updateItem(item.id, {
+              status: 'error',
+              message: `原路径替换失败：${outcome.result.value.replacementError ?? '请查看备份与输出'}`
+            })
+            return 'error'
+          }
           const archive = outcome.result.value.archive
+          const value = outcome.result.value
+          const details = [
+            resultSizes(
+              outcome.result.kind === 'pdf'
+                ? outcome.result.value.inputBytes
+                : outcome.result.value.originalBytes,
+              value.outputBytes,
+              value.status
+            )
+          ]
+          if (outcome.result.kind === 'office') {
+            const media = outcome.result.value.media
+            details.push(
+              `内嵌媒体：${String(media.filter((part) => part.status === 'compressed').length)} 项压缩、${String(media.filter((part) => part.status === 'skipped').length)} 项保留原样`
+            )
+            const belowTarget = media.filter(
+              (part) => part.status === 'compressed' && part.qualityAnalysis?.meetsTarget === false
+            ).length
+            if (belowTarget > 0)
+              details.push(`${String(belowTarget)} 张图片低于参考画质目标，请打开文档对照`)
+          }
           updateItem(item.id, {
             status: 'done',
             message: completionMessage(
               archive,
               outcome.result.value.automaticTags,
-              '压缩完成 · 原件已处理'
-            )
+              value.status === 'no-savings' ? '无压缩收益 · 原文件已保留' : '压缩完成'
+            ),
+            details
           })
           return 'done'
         }
@@ -430,7 +511,8 @@ export function CompressionPage(): React.JSX.Element {
                 setOfficeReplaceConfirmed(event.target.checked)
               }}
             />
-            <span>Office 原路径替换，并保留完整原件备份</span>
+            <span>Office 压缩（实验性）：原路径替换，并保留完整原件备份</span>
+            <small>复杂版式和嵌入媒体兼容性仍在验证，处理后请用 Word／PowerPoint 检查。</small>
           </label>
         )}
         <label className="compression-confirm">
@@ -440,10 +522,26 @@ export function CompressionPage(): React.JSX.Element {
             disabled={busy}
             onChange={(event) => {
               setArchiveAfterCompression(event.target.checked)
+              if (!event.target.checked) setKeepLinkAtOriginalLocation(false)
             }}
           />
           <span>压缩完成后归档</span>
           <small>复制压缩结果到 Arkive Archive，并根据元数据自动生成词库标签。</small>
+        </label>
+        <label className="compression-confirm">
+          <input
+            type="checkbox"
+            checked={keepLinkAtOriginalLocation}
+            disabled={busy || !archiveAfterCompression}
+            onChange={(event) => {
+              setKeepLinkAtOriginalLocation(event.target.checked)
+            }}
+          />
+          <span>在原位置保留访问入口（试用）</span>
+          <small>
+            需开启归档；归档后创建软链接。格式转换使用新扩展名，原位置已有文件（如 Office
+            压缩结果）时保留文件并提示。
+          </small>
         </label>
       </section>
 
@@ -492,7 +590,15 @@ export function CompressionPage(): React.JSX.Element {
                   '处理中'
                 ) : item.status === 'done' ? (
                   <>
-                    <Check size={14} /> 已完成
+                    <Check size={14} />
+                    <span>
+                      {item.message || '已完成'}
+                      {item.details?.map((detail, index) => (
+                        <small className="compression-result-detail" key={index}>
+                          {detail}
+                        </small>
+                      ))}
+                    </span>
                   </>
                 ) : (
                   item.message || (item.status === 'cancelled' ? '已取消' : '处理失败')

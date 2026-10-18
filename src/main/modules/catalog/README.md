@@ -6,7 +6,7 @@
 
 统一“压缩”页面提供“压缩完成后归档”选项；勾选后，图片、视频、PDF 和已发布的 Office 结果沿用同一条 Catalog 归档流程。归档前从原件或 Backup 读取整理后的文件名、路径、文件属性和类型探测元数据，调用独立标签推荐函数，合并显式标签后直接写入 SQLite 与归档副本的 Finder 标签；列表状态显示已归档、自动标签数量或标签推荐错误。模型或元数据读取失败不回滚已完成的压缩归档，返回可见的自动标签错误供重试或人工补充。
 
-归档区提供默认关闭的“在原位置保留访问入口（试用）”开关。勾选后，共用 Catalog 归档流程在正式副本校验成功后调用 Node `symlink`，入口只指向 Archive，不指向 Backup。同格式沿用原路径；格式转换时保留原文件名主体、使用输出扩展名。已有普通文件、目录或其他链接一律不覆盖（包括 Office 原位发布后仍在原路径的压缩文档）；归档照常成功，`originalLink` 单独报告入口失败并可重试。保留原件及当前压缩输出的既有策略不变，本开关不负责清理这些文件，也不承诺额外空间收益。
+统一压缩页在开始压缩前提供默认关闭的“在原位置保留访问入口（试用）”开关，位于“压缩完成后归档”下方；仅开启归档后可选，关闭归档时清除入口选择。图片、视频、PDF 和 Office 经各自 IPC 将选择传到共用 Catalog 归档流程；正式副本校验成功后调用 Node `symlink`，入口只指向 Archive，不指向 Backup。同格式沿用原路径；格式转换时保留原文件名主体、使用输出扩展名。已有普通文件、目录或其他链接一律不覆盖（包括 Office 原位发布后仍在原路径的压缩文档）；归档照常成功，结果单独显示入口失败并可重试。结果页和待归档详情仍提供同一开关。保留原件及当前压缩输出的既有策略不变，本开关不负责清理这些文件，也不承诺额外空间收益。
 
 `CatalogApi.archive(id, tags, { keepLinkAtOriginalLocation: true })`、`archive_file` 及带 `archive=true` 的压缩工具共用该开关。入口意图、路径及状态通过数据库迁移持久化；启动时恢复尚未完成的入口创建，已有相同软链接视为成功，失败不覆盖且保留显式重试。普通软链接不会追踪外部移动／重命名，尚无链接自动维护能力。
 
@@ -33,6 +33,8 @@ Finder 标签通过随应用分发的 `resources/finder-tags.jxa` 和 Foundation
 记录状态可切换为“待归档压缩结果”，对应 `query({ state: 'pending' })`；默认 `archived` 保留原有查询语义。只展示已完成压缩且尚未完成归档的记录，Office 还须完成原路径发布；可直接按原记录归档或重试，无需重新压缩。Agent 的 `search_archives` 使用相同状态参数，`open_archive({ id, action: 'open' | 'reveal' })` 复用归档路径校验，不能打开未归档记录。
 
 ## 验证
+
+压缩前入口选择的定向检查：`rtk proxy node scripts/check-batch-compression-ui.mjs` 验证默认关闭、依赖归档、取消归档清除选择、四类请求传递和入口结果显示；使用受控 IPC 结果。先 build 后执行 `rtk proxy env ARKIVE_PRECOMPRESSION_LINK_CHECK=1 node scripts/check-processing-ui.mjs`，用生成图片验证真实统一压缩页 → preload → IPC → 压缩／Backup／Archive／软链接，并保留界面截图及内容哈希断言；不处理真实用户资料。
 
 ```sh
 rtk proxy node scripts/check-tag-recommendation.mjs

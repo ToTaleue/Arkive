@@ -39,6 +39,7 @@ export interface ImageStartRequest {
   fileId: string
   /** Archive the verified result after compression when explicitly selected in the UI. */
   archive?: boolean
+  keepLinkAtOriginalLocation?: boolean
   outputFormat?: ImageOutputFormat
   preserveFormat?: boolean
   preset?: ImageCompressionPreset

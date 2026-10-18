@@ -173,12 +173,20 @@ export class Catalog {
     this.repo.update(id, { compression_status: 'failed' })
   }
 
-  finishCompression(id: string, hasSavings: boolean): Promise<CompressionRecord> {
+  finishCompression(
+    id: string,
+    hasSavings: boolean,
+    adoptedOutputPath?: string
+  ): Promise<CompressionRecord> {
     return this.exclusive(async () => {
       const row = this.repo.get(id)
-      const info = await fileInfo(row.output_path)
-      const hash = await hashFile(row.output_path)
+      const outputPath = adoptedOutputPath ?? row.output_path
+      const info = await fileInfo(outputPath)
+      const hash = await hashFile(outputPath)
+      if (outputPath === row.original_path && hash !== row.source_hash)
+        throw new Error('原文件在处理期间发生变化，未采用或归档。')
       this.repo.update(id, {
+        output_path: outputPath,
         compression_status: 'ready',
         output_hash: hash,
         output_bytes: info.size,

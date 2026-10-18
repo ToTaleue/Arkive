@@ -18,7 +18,11 @@ export interface VideoCompressionResult {
   outputPath: string
   inputBytes: number
   outputBytes: number
+  /** Present when the product retains the original instead of adopting this candidate. */
+  candidateOutputPath?: string
+  candidateOutputBytes?: number
   savedBytes: number
+  /** Encoding details describe the unadopted candidate when status is no-savings. */
   videoCodec: 'hevc' | 'h264'
   bitDepth: 8 | 10
   qualityAnalysis: VideoQualityAnalysis
@@ -62,6 +66,7 @@ export interface VideoStartRequest {
   preset: VideoCompressionPreset
   /** Archive the verified result after compression when explicitly selected in the UI. */
   archive?: boolean
+  keepLinkAtOriginalLocation?: boolean
 }
 export type VideoCompressionOutcome =
   | { status: 'completed'; result: VideoCompressionResult }

@@ -55,6 +55,9 @@ function start(value: unknown): DocumentStart {
       String(request.preset)
     ) ||
     (request.archive !== undefined && typeof request.archive !== 'boolean') ||
+    (request.keepLinkAtOriginalLocation !== undefined &&
+      typeof request.keepLinkAtOriginalLocation !== 'boolean') ||
+    (request.keepLinkAtOriginalLocation === true && request.archive !== true) ||
     (request.replaceConfirmed !== undefined && typeof request.replaceConfirmed !== 'boolean')
   )
     throw new Error('无效的文档参数。')
@@ -63,7 +66,8 @@ function start(value: unknown): DocumentStart {
     fileId: request.fileId,
     preset: request.preset as DocumentStart['preset'],
     replaceConfirmed: request.replaceConfirmed,
-    archive: request.archive
+    archive: request.archive,
+    keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation
   }
 }
 
@@ -185,7 +189,8 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
                 inputPath: selected.path,
                 outputPath: destination.filePath,
                 preset,
-                ...(request.archive ? { archive: true } : {})
+                ...(request.archive ? { archive: true } : {}),
+                keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation
               },
               controller.signal,
               request.runId
@@ -215,7 +220,15 @@ export function registerProcessingIpc(): (contents: WebContents) => void {
         ) {
           const catalog = getCatalog()
           try {
-            const item = await archiveFile(catalog, result.value.catalog.id, [], controller.signal)
+            const item = await archiveFile(
+              catalog,
+              result.value.catalog.id,
+              [],
+              controller.signal,
+              {
+                keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation
+              }
+            )
             result = {
               kind: 'office',
               value: {

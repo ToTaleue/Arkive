@@ -40,6 +40,9 @@ function isStartRequest(value: unknown): value is ImageStartRequest {
     typeof request.fileId === 'string' &&
     /^[\w-]{1,100}$/.test(request.fileId) &&
     (request.archive === undefined || typeof request.archive === 'boolean') &&
+    (request.keepLinkAtOriginalLocation === undefined ||
+      typeof request.keepLinkAtOriginalLocation === 'boolean') &&
+    (request.keepLinkAtOriginalLocation !== true || request.archive === true) &&
     (request.outputFormat === undefined ||
       (typeof request.outputFormat === 'string' &&
         ['webp', 'jpeg', 'png'].includes(request.outputFormat))) &&
@@ -193,6 +196,7 @@ export function registerImageCompressionIpc(): (contents: WebContents) => void {
             inputPath: selected.path,
             outputPath: output,
             ...(request.archive ? { archive: true } : {}),
+            keepLinkAtOriginalLocation: request.keepLinkAtOriginalLocation,
             ...(request.outputFormat === undefined ? {} : { outputFormat: request.outputFormat }),
             ...(request.preserveFormat === undefined
               ? {}

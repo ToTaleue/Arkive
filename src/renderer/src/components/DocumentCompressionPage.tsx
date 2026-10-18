@@ -143,12 +143,15 @@ export function DocumentCompressionPage(): React.JSX.Element {
               setPreset(type === 'pdf' ? 'lossless' : 'quality')
             }}
           >
-            {type === 'pdf' ? 'PDF' : 'Word / PowerPoint'}
+            {type === 'pdf' ? 'PDF' : 'Word / PowerPoint · 实验性'}
           </button>
         ))}
       </div>
       <section aria-label="文档压缩操作" className="document-card">
-        <h2>{kind === 'pdf' ? 'PDF 压缩' : 'Office 压缩'}</h2>
+        <h2>{kind === 'pdf' ? 'PDF 压缩' : 'Office 压缩（实验性）'}</h2>
+        {kind === 'office' && (
+          <p>复杂版式和嵌入媒体兼容性仍在验证，处理后请用 Word／PowerPoint 检查。</p>
+        )}
         <button
           className="document-select"
           disabled={busy || !api}

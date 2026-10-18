@@ -324,6 +324,20 @@
   color: var(--muted);
   font-size: 12px;
 }
+.compression-status > svg {
+  flex-shrink: 0;
+}
+.compression-status > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.compression-result-detail {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
 .compression-status.done {
   color: var(--accent);
 }

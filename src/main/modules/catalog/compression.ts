@@ -27,8 +27,28 @@ import type { PdfCompressionRequest, PdfCompressionResult } from '../../../share
 
 type CompressionPaths = { inputPath: string; outputPath: string }
 
+function retainOriginalOnNoSavings<
+  T extends {
+    status: 'compressed' | 'no-savings'
+    outputPath: string
+    inputBytes: number
+    outputBytes: number
+    savedBytes: number
+  }
+>(result: T, inputPath: string): T {
+  if (result.status !== 'no-savings') return result
+  return {
+    ...result,
+    candidateOutputPath: result.outputPath,
+    candidateOutputBytes: result.outputBytes,
+    outputPath: inputPath,
+    outputBytes: result.inputBytes,
+    savedBytes: 0
+  }
+}
+
 /** Product entry points share one task; encoders remain directly usable inside Office. */
-async function complete<T extends { status: 'compressed' | 'no-savings' }>(
+async function complete<T extends { status: 'compressed' | 'no-savings'; outputPath: string }>(
   title: string,
   request: CompressionPaths & CompressionFollowUp,
   work: (
@@ -78,7 +98,11 @@ async function complete<T extends { status: 'compressed' | 'no-savings' }>(
             }
             // Publishing / backup is a commit: a late cancel must retain its actual outcome.
             report({ message: '正在处理原件备份…' })
-            const record = await catalog.finishCompression(id, result.status === 'compressed')
+            const record = await catalog.finishCompression(
+              id,
+              result.status === 'compressed',
+              result.outputPath
+            )
             let archive: ArchiveAttempt | undefined
             let automaticTags: CompressionLifecycleResult['automaticTags']
             if (request.archive && (result.status === 'compressed' || archiveOnNoSavings)) {
@@ -163,8 +187,8 @@ export function compressVideoAndBackup(
   return complete(
     '视频压缩',
     request,
-    (taskSignal, progress, paths) =>
-      compressVideo({ ...request, ...paths }, taskSignal, (update) => {
+    async (taskSignal, progress, paths) => {
+      const result = await compressVideo({ ...request, ...paths }, taskSignal, (update) => {
         const labels = {
           probing: '正在读取视频信息…',
           analyzing: '正在分析画质并自动选择压缩参数…',
@@ -173,7 +197,9 @@ export function compressVideoAndBackup(
         }
         progress({ message: labels[update.stage], percent: update.percent ?? undefined })
         report?.(update)
-      }),
+      })
+      return retainOriginalOnNoSavings(result, paths.inputPath)
+    },
     signal,
     requestId
   )
@@ -188,7 +214,10 @@ export function compressPdfAndBackup(
   return complete(
     'PDF 压缩',
     request,
-    (taskSignal, _report, paths) => compressPdf({ ...request, ...paths }, taskSignal),
+    async (taskSignal, _report, paths) => {
+      const result = await compressPdf({ ...request, ...paths }, taskSignal)
+      return retainOriginalOnNoSavings(result, paths.inputPath)
+    },
     signal,
     requestId
   )

@@ -20,6 +20,7 @@ export interface DocumentStart {
   replaceConfirmed?: boolean
   /** Archive the verified result after compression when explicitly selected in the UI. */
   archive?: boolean
+  keepLinkAtOriginalLocation?: boolean
 }
 export const processingChannels = {
   select: 'processing:select',

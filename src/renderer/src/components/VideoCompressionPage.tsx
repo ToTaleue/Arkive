@@ -338,7 +338,7 @@ export function VideoCompressionPage(): React.JSX.Element {
             </div>
             <ArrowDown size={18} />
             <div>
-              <span>压缩后</span>
+              <span>{result.status === 'compressed' ? '压缩后' : '采用原视频'}</span>
               <strong>{formatSize(result.outputBytes)}</strong>
             </div>
             <div>
@@ -349,13 +349,15 @@ export function VideoCompressionPage(): React.JSX.Element {
           <p>
             {result.status === 'compressed'
               ? '已检查文件并完成解码验证。原件位置见下方备份状态。'
-              : '本次没有体积收益；输出文件和原视频均已保留。'}
+              : '本次没有体积收益；采用原视频，未采用候选另行保留，归档使用原视频。'}
           </p>
           <p>
-            输出 MP4 · {result.videoCodec === 'h264' ? 'H.264' : 'HEVC'} · {result.bitDepth}bit。
+            {result.status === 'no-savings' ? '未采用候选' : '输出'} MP4 ·{' '}
+            {result.videoCodec === 'h264' ? 'H.264' : 'HEVC'} · {result.bitDepth}bit。
           </p>
           <p>
-            抽样画质评分 {result.qualityAnalysis.sampleVmaf.toFixed(1)} / 100 （目标{' '}
+            {result.status === 'no-savings' ? '未采用候选的' : ''}抽样画质评分{' '}
+            {result.qualityAnalysis.sampleVmaf.toFixed(1)} / 100 （目标{' '}
             {result.qualityAnalysis.targetVmaf}）。评分来自抽样分析，不代表整片画质保证。
           </p>
           <p className="video-output-path">{result.outputPath}</p>
